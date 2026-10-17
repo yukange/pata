@@ -112,8 +112,8 @@ func createTestMP3(t *testing.T, path string, mono bool) {
 	if mono {
 		modeBits = 0xC0 // 11 = single channel (mono)
 	}
-	// Frame header: 0xFF, 0xFB (MPEG 1 Layer 3, 128kbps, 44100Hz), modeBits, 0x00
-	header := []byte{0xFF, 0xFB, 0x90 | (modeBits >> 6), 0x00}
+	// Frame header: 0xFF, 0xFB (MPEG 1 Layer 3, 128kbps, 44100Hz), Byte 2: 0x90, Byte 3: modeBits
+	header := []byte{0xFF, 0xFB, 0x90, modeBits}
 	content := append(header, make([]byte, 417-4)...) // 417 bytes frame
 	if err := os.WriteFile(path, content, 0644); err != nil {
 		t.Fatalf("failed to create test MP3: %v", err)
@@ -405,6 +405,42 @@ func TestStage11_AudioTranscriptionAcceptance(t *testing.T) {
 	}
 	if len(confirmedNote.Tags) != 2 || confirmedNote.Tags[0] != "晨会" {
 		t.Errorf("tags must be preserved across replace, got %v", confirmedNote.Tags)
+	}
+
+	// 7b. Conflict protection: if external editor modifies the note while candidate is waiting, confirm must reject!
+	if err := svc.StartAudioTranscription(audioNote.ID); err != nil {
+		t.Fatalf("StartAudioTranscription for conflict test failed: %v", err)
+	}
+	for time.Now().Before(time.Now().Add(5 * time.Second)) {
+		st, _ := svc.GetASRTaskStatus(audioNote.ID)
+		if st.State == asr.StatePendingConfirmation {
+			break
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+
+	// Simulate external edit directly to file on disk
+	notePath := svc.vault.ResolveEntityPath(confirmedNote)
+	noteDiskData, err := os.ReadFile(notePath)
+	if err != nil {
+		t.Fatalf("failed to read note file: %v", err)
+	}
+	modifiedData := append(noteDiskData, []byte("\n外部编辑新增内容\n")...)
+	if err := os.WriteFile(notePath, modifiedData, 0644); err != nil {
+		t.Fatalf("failed to write external modification: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+
+	// Attempt to confirm replace: MUST FAIL and preserve external content!
+	_, conflictErr := svc.ConfirmReplaceTranscript(audioNote.ID)
+	if conflictErr == nil {
+		t.Fatalf("expected ConfirmReplaceTranscript to fail when note was externally modified, but succeeded")
+	}
+
+	// Verify disk still contains external edit
+	dataAfterConflict, _ := os.ReadFile(notePath)
+	if !strings.Contains(string(dataAfterConflict), "外部编辑新增内容") {
+		t.Errorf("external edit was overwritten despite conflict!")
 	}
 
 	// 8. Audio URL & Security:

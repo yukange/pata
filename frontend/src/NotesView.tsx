@@ -581,6 +581,15 @@ function NoteEditor({
       setAsrStatus(st);
     } catch (err: any) {
       console.error('StartAudioTranscription failed:', err);
+      const errMsg = err?.message || String(err) || '启动转写失败';
+      setAsrStatus((prev) => ({
+        ...(prev || {}),
+        note_id: noteId,
+        state: ASRTaskState.StateFailed,
+        stage_message: '重试失败',
+        error: errMsg,
+        updated_at: new Date().toISOString(),
+      }));
     }
   };
 

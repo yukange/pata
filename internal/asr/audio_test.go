@@ -1,8 +1,10 @@
 package asr
 
 import (
+	"encoding/binary"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -90,12 +92,40 @@ func TestAudio_PrepareAudioForDiarizationMono(t *testing.T) {
 	}
 }
 
+func createTestStereoWAV(t *testing.T, dir string) string {
+	t.Helper()
+	p := filepath.Join(dir, "stereo.wav")
+	sampleRate := uint32(44100)
+	numChannels := uint16(2)
+	bitsPerSample := uint16(16)
+	dataSize := uint32(4410 * 4) // 0.1s
+	data := make([]byte, 44+dataSize)
+	copy(data[0:4], "RIFF")
+	binary.LittleEndian.PutUint32(data[4:8], 36+dataSize)
+	copy(data[8:12], "WAVE")
+	copy(data[12:16], "fmt ")
+	binary.LittleEndian.PutUint32(data[16:20], 16)
+	binary.LittleEndian.PutUint16(data[20:22], 1)
+	binary.LittleEndian.PutUint16(data[22:24], numChannels)
+	binary.LittleEndian.PutUint32(data[24:28], sampleRate)
+	binary.LittleEndian.PutUint32(data[28:32], sampleRate*uint32(numChannels)*uint32(bitsPerSample/8))
+	binary.LittleEndian.PutUint16(data[32:34], numChannels*(bitsPerSample/8))
+	binary.LittleEndian.PutUint16(data[34:36], bitsPerSample)
+	copy(data[36:40], "data")
+	binary.LittleEndian.PutUint32(data[40:44], dataSize)
+	if err := os.WriteFile(p, data, 0644); err != nil {
+		t.Fatalf("failed to create test stereo wav: %v", err)
+	}
+	return p
+}
+
 func TestAudio_PrepareAudioForDiarizationStereoExtension(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("afconvert only available on macOS")
+	}
+
 	tmpDir := t.TempDir()
-	stereoPath := filepath.Join(tmpDir, "meeting-standup.mp3")
-	// Stereo frame: mode bits = 00
-	stereoFrame := []byte{0xFF, 0xFB, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00}
-	_ = os.WriteFile(stereoPath, stereoFrame, 0644)
+	stereoPath := createTestStereoWAV(t, tmpDir)
 
 	targetPath, _, cleanup, err := PrepareAudioForDiarization(stereoPath)
 	defer cleanup()
@@ -103,12 +133,30 @@ func TestAudio_PrepareAudioForDiarizationStereoExtension(t *testing.T) {
 		t.Fatalf("PrepareAudioForDiarization failed: %v", err)
 	}
 
-	// On darwin with afconvert available, targetPath should have .m4a or .wav extension, NOT .mp3
-	if targetPath != stereoPath {
-		ext := filepath.Ext(targetPath)
-		if ext != ".m4a" && ext != ".wav" {
-			t.Errorf("converted mono file must have .m4a or .wav extension, got %q (path: %s)", ext, targetPath)
-		}
+	if targetPath == stereoPath {
+		t.Errorf("expected targetPath to be converted mono file, but got original %s", stereoPath)
+	}
+	ext := filepath.Ext(targetPath)
+	if ext != ".m4a" && ext != ".wav" {
+		t.Errorf("converted mono file must have .m4a or .wav extension, got %q (path: %s)", ext, targetPath)
+	}
+}
+
+func TestAudio_PrepareAudioForDiarizationStereoFailure(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("afconvert only available on macOS")
+	}
+
+	tmpDir := t.TempDir()
+	// Invalid truncated stereo header that cannot be converted by afconvert
+	invalidStereoPath := filepath.Join(tmpDir, "invalid-stereo.mp3")
+	stereoFrame := []byte{0xFF, 0xFB, 0x90, 0x00, 0x00, 0x00, 0x00, 0x00}
+	_ = os.WriteFile(invalidStereoPath, stereoFrame, 0644)
+
+	_, _, cleanup, err := PrepareAudioForDiarization(invalidStereoPath)
+	defer cleanup()
+	if err == nil {
+		t.Fatalf("expected error when afconvert fails on invalid stereo audio, got nil")
 	}
 }
 

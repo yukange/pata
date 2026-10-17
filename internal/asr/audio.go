@@ -149,7 +149,8 @@ func PrepareAudioForDiarization(srcPath string) (targetPath string, warning stri
 		// afconvert -f m4af -d aac -c 1 srcPath monoPath
 		// DashScope accepts .m4a, .wav, .mp3
 		cmd := exec.Command("afconvert", "-f", "m4af", "-d", "aac", "-c", "1", srcPath, monoPath)
-		if _, convertErr := cmd.CombinedOutput(); convertErr == nil {
+		outM4a, convertErr := cmd.CombinedOutput()
+		if convertErr == nil {
 			cleanup = func() {
 				_ = os.Remove(monoPath)
 			}
@@ -159,14 +160,16 @@ func PrepareAudioForDiarization(srcPath string) (targetPath string, warning stri
 		// If m4a fails, try WAVE
 		wavPath := filepath.Join(tempDir, fmt.Sprintf("pata_mono_%d_%s.wav", os.Getpid(), baseNoExt))
 		cmdWav := exec.Command("afconvert", "-f", "WAVE", "-d", "LEI16", "-c", "1", srcPath, wavPath)
-		if _, wavErr := cmdWav.CombinedOutput(); wavErr == nil {
+		outWav, wavErr := cmdWav.CombinedOutput()
+		if wavErr == nil {
 			cleanup = func() {
 				_ = os.Remove(wavPath)
 			}
 			return wavPath, warning, cleanup, nil
 		}
+
+		return "", warning, cleanup, fmt.Errorf("多声道音频转单声道失败: %v (m4a: %s, wav: %s)", convertErr, strings.TrimSpace(string(outM4a)), strings.TrimSpace(string(outWav)))
 	}
 
-	// If no conversion tool available, proceed with original file
-	return srcPath, warning, cleanup, nil
+	return "", warning, cleanup, fmt.Errorf("当前系统暂不支持多声道音频转单声道")
 }

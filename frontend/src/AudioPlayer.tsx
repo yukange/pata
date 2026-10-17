@@ -310,6 +310,21 @@ export function AudioPlayer({
               setIsDragging(false);
               setPreviewMs(null);
             }}
+            onKeyDown={(e) => {
+              if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+                setIsDragging(true);
+              }
+            }}
+            onKeyUp={(e) => {
+              if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End'].includes(e.key)) {
+                handleCommitSeek(parseInt((e.target as HTMLInputElement).value, 10));
+              }
+            }}
+            onBlur={(e) => {
+              if (previewMs !== null) {
+                handleCommitSeek(parseInt((e.target as HTMLInputElement).value, 10));
+              }
+            }}
             disabled={!audioSrc || !!audioLoadError}
             className="w-full h-1.5 bg-stone-200 dark:bg-stone-800 rounded-lg appearance-none cursor-pointer accent-emerald-600 dark:accent-emerald-500 disabled:cursor-not-allowed"
           />

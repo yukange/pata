@@ -144,16 +144,22 @@ type VaultChangeEvent struct {
 	Type     string `json:"type,omitempty"`
 }
 
+type transcriptCandidate struct {
+	vault    *markdown.Vault
+	baseline *markdown.FileBaseline
+}
+
 // VaultService owns the single Vault instance; all structured file access goes through it.
 type VaultService struct {
-	mu          sync.Mutex
-	vault       *markdown.Vault
-	stopWatcher func()
-	configPath  string
-	emitEvent   func(name string, data any)
-	keychain    keychain.Store
-	launcher    func(cmd *exec.Cmd) error
-	asrManager  *asr.Manager
+	mu                 sync.Mutex
+	vault              *markdown.Vault
+	stopWatcher        func()
+	configPath         string
+	emitEvent          func(name string, data any)
+	keychain           keychain.Store
+	launcher           func(cmd *exec.Cmd) error
+	asrManager         *asr.Manager
+	candidateBaselines map[string]*transcriptCandidate
 }
 
 func NewVaultService() *VaultService {
@@ -167,16 +173,18 @@ func NewVaultService() *VaultService {
 	if err != nil {
 		log.Printf("vault: cannot resolve user config dir, persistence disabled: %v", err)
 		svc := &VaultService{
-			emitEvent: defaultEmit,
-			keychain:  keychain.NewDefaultStore(),
+			emitEvent:          defaultEmit,
+			keychain:           keychain.NewDefaultStore(),
+			candidateBaselines: make(map[string]*transcriptCandidate),
 		}
 		svc.asrManager = asr.NewManager(asr.NewClient("", ""), svc.dispatchEvent)
 		return svc
 	}
 	svc := &VaultService{
-		configPath: filepath.Join(configDir, "pata", "vault.json"),
-		emitEvent:  defaultEmit,
-		keychain:   keychain.NewDefaultStore(),
+		configPath:         filepath.Join(configDir, "pata", "vault.json"),
+		emitEvent:          defaultEmit,
+		keychain:           keychain.NewDefaultStore(),
+		candidateBaselines: make(map[string]*transcriptCandidate),
 	}
 	svc.asrManager = asr.NewManager(asr.NewClient("", ""), svc.dispatchEvent)
 	return svc
@@ -1854,11 +1862,12 @@ func (s *VaultService) CreateAudioNote(sourcePath string) (*markdown.Note, error
 	}
 
 	// 2. Start asynchronous transcription in background
+	originVault := v
 	noteID := note.ID
 	audioAbsPath := filepath.Join(v.RootPath, filepath.FromSlash(res.Path))
 	mgr := s.getASRManager()
 	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
-		return s.saveTranscriptBody(noteID, transcriptBody)
+		return s.saveTranscriptBody(originVault, noteID, transcriptBody)
 	})
 
 	return note, nil
@@ -1909,22 +1918,20 @@ func (s *VaultService) CreateAudioNoteData(name string, base64Data string) (*mar
 		return nil, fmt.Errorf("创建逐字稿笔记失败: %w", err)
 	}
 
+	originVault := v
 	noteID := note.ID
 	audioAbsPath := filepath.Join(v.RootPath, filepath.FromSlash(res.Path))
 	mgr := s.getASRManager()
 	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
-		return s.saveTranscriptBody(noteID, transcriptBody)
+		return s.saveTranscriptBody(originVault, noteID, transcriptBody)
 	})
 
 	return note, nil
 }
 
-func (s *VaultService) saveTranscriptBody(noteID string, transcriptBody string) error {
-	s.mu.Lock()
-	v := s.vault
-	s.mu.Unlock()
+func (s *VaultService) saveTranscriptBody(v *markdown.Vault, noteID string, transcriptBody string) error {
 	if v == nil {
-		return fmt.Errorf("尚未打开 Vault")
+		return fmt.Errorf("Vault 为空")
 	}
 
 	existing, ok := v.Index.GetNote(noteID)
@@ -1955,29 +1962,52 @@ func (s *VaultService) StartAudioTranscription(noteID string) error {
 		return fmt.Errorf("笔记 ID 不能为空")
 	}
 
+	mgr := s.getASRManager()
 	note, ok := v.Index.GetNote(trimmedID)
 	if !ok {
+		mgr.SetTaskFailed(trimmedID, "笔记不存在", fmt.Sprintf("笔记不存在: %s", trimmedID))
 		return fmt.Errorf("笔记不存在: %s", trimmedID)
 	}
 
 	if !note.AudioTranscript || note.AudioFile == "" {
+		mgr.SetTaskFailed(trimmedID, "类型错误", "该笔记不是音频逐字稿笔记")
 		return fmt.Errorf("该笔记不是音频逐字稿笔记")
 	}
 
 	apiKey, err := s.getASRKeyInternal()
 	if err != nil {
+		mgr.SetTaskFailed(trimmedID, "未配置 API Key", err.Error())
 		return err
 	}
 
 	audioAbsPath, err := s.resolveSafeFilePath(note.AudioFile)
 	if err != nil {
+		mgr.SetTaskFailed(trimmedID, "音频文件失效", "关联音频文件不存在或失效: "+err.Error())
 		return fmt.Errorf("关联音频文件不存在或失效: %w", err)
 	}
 
 	isRetranscribe := strings.TrimSpace(note.Body) != ""
-	mgr := s.getASRManager()
+	if isRetranscribe {
+		b := noteBaseline(v, note)
+		var bCopy *markdown.FileBaseline
+		if b != nil {
+			cp := *b
+			bCopy = &cp
+		}
+		s.mu.Lock()
+		if s.candidateBaselines == nil {
+			s.candidateBaselines = make(map[string]*transcriptCandidate)
+		}
+		s.candidateBaselines[trimmedID] = &transcriptCandidate{
+			vault:    v,
+			baseline: bCopy,
+		}
+		s.mu.Unlock()
+	}
+
+	originVault := v
 	mgr.StartTask(trimmedID, audioAbsPath, isRetranscribe, apiKey, func(transcriptBody string) error {
-		return s.saveTranscriptBody(trimmedID, transcriptBody)
+		return s.saveTranscriptBody(originVault, trimmedID, transcriptBody)
 	})
 
 	return nil
@@ -1995,30 +2025,53 @@ func (s *VaultService) GetASRTaskStatus(noteID string) (asr.ASRTaskStatus, error
 
 // ConfirmReplaceTranscript applies the candidate re-transcription result to the Note body.
 func (s *VaultService) ConfirmReplaceTranscript(noteID string) (*markdown.Note, error) {
-	s.mu.Lock()
-	v := s.vault
-	s.mu.Unlock()
-	if v == nil {
-		return nil, fmt.Errorf("尚未打开 Vault")
-	}
-
 	trimmedID := strings.TrimSpace(noteID)
 	if trimmedID == "" {
 		return nil, fmt.Errorf("笔记 ID 不能为空")
 	}
 
+	s.mu.Lock()
+	var rec *transcriptCandidate
+	if s.candidateBaselines != nil {
+		rec = s.candidateBaselines[trimmedID]
+	}
+	activeVault := s.vault
+	s.mu.Unlock()
+
+	var targetVault *markdown.Vault
+	var candidateBaseline *markdown.FileBaseline
+
+	if rec != nil && rec.vault != nil {
+		targetVault = rec.vault
+		candidateBaseline = rec.baseline
+	} else {
+		targetVault = activeVault
+	}
+
+	if targetVault == nil {
+		return nil, fmt.Errorf("尚未打开 Vault")
+	}
+
 	mgr := s.getASRManager()
 	var updatedNote *markdown.Note
 	err := mgr.ConfirmReplace(trimmedID, func(transcriptBody string) error {
-		existing, ok := v.Index.GetNote(trimmedID)
+		existing, ok := targetVault.Index.GetNote(trimmedID)
 		if !ok {
 			return fmt.Errorf("笔记不存在: %s", trimmedID)
 		}
 
+		// Reject replacement if note was modified externally since candidate was generated
+		currentBaseline := noteBaseline(targetVault, existing)
+		if candidateBaseline != nil && currentBaseline != nil {
+			if candidateBaseline.Hash != currentBaseline.Hash {
+				return fmt.Errorf("笔记在生成逐字稿候选期间已被外部修改，已取消替换以保护外部编辑")
+			}
+		}
+
 		existing.Body = transcriptBody
 		existing.UpdatedAt = time.Now()
-		baseline := noteBaseline(v, existing)
-		if _, err := v.SaveEntity(existing, baseline); err != nil {
+		// Save with candidateBaseline so disk-level concurrency check catches external edits
+		if _, err := targetVault.SaveEntity(existing, candidateBaseline); err != nil {
 			return err
 		}
 		updatedNote = existing
@@ -2027,6 +2080,12 @@ func (s *VaultService) ConfirmReplaceTranscript(noteID string) (*markdown.Note, 
 	if err != nil {
 		return nil, err
 	}
+
+	s.mu.Lock()
+	if s.candidateBaselines != nil {
+		delete(s.candidateBaselines, trimmedID)
+	}
+	s.mu.Unlock()
 
 	return updatedNote, nil
 }
@@ -2037,6 +2096,12 @@ func (s *VaultService) DiscardCandidateTranscript(noteID string) error {
 	if trimmedID == "" {
 		return fmt.Errorf("笔记 ID 不能为空")
 	}
+	s.mu.Lock()
+	if s.candidateBaselines != nil {
+		delete(s.candidateBaselines, trimmedID)
+	}
+	s.mu.Unlock()
+
 	mgr := s.getASRManager()
 	mgr.DiscardCandidate(trimmedID)
 	return nil

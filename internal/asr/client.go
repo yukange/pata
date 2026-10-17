@@ -125,17 +125,23 @@ func (c *Client) GetUploadPolicy(ctx context.Context, apiKey string) (*UploadPol
 // UploadToOSS uploads a local audio file to the temporary OSS storage specified by policy.
 // Returns the oss:// URI.
 func (c *Client) UploadToOSS(ctx context.Context, policy *UploadPolicy, filePath string) (string, error) {
-	fileData, err := os.ReadFile(filePath)
+	f, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("读取待上传音频文件失败: %w", err)
+		return "", fmt.Errorf("打开待上传音频文件失败: %w", err)
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return "", fmt.Errorf("获取待上传音频文件信息失败: %w", err)
 	}
 
 	baseName := filepath.Base(filePath)
 	cleanDir := strings.TrimRight(policy.UploadDir, "/")
 	ossKey := fmt.Sprintf("%s/%s", cleanDir, baseName)
 
-	var b bytes.Buffer
-	w := multipart.NewWriter(&b)
+	var prefix bytes.Buffer
+	w := multipart.NewWriter(&prefix)
 
 	// Required form fields according to DashScope policy upload spec:
 	// OSSAccessKeyId, policy, Signature, key, x-oss-object-acl, x-oss-forbid-overwrite, success_action_status, file
@@ -156,24 +162,26 @@ func (c *Client) UploadToOSS(ctx context.Context, policy *UploadPolicy, filePath
 	_ = w.WriteField("success_action_status", "200")
 
 	// File MUST be the last field in multipart/form-data for OSS
-	part, err := w.CreateFormFile("file", baseName)
+	_, err = w.CreateFormFile("file", baseName)
 	if err != nil {
 		return "", fmt.Errorf("创建上传表单文件字段失败: %w", err)
 	}
-	if _, err := part.Write(fileData); err != nil {
-		return "", fmt.Errorf("写入音频文件数据失败: %w", err)
-	}
-	if err := w.Close(); err != nil {
-		return "", fmt.Errorf("结束上传表单构建失败: %w", err)
-	}
+
+	// Prepare trailer and calculate exact content length so OSS receives Content-Length without chunked encoding
+	prefixBytes := prefix.Bytes()
+	trailer := fmt.Sprintf("\r\n--%s--\r\n", w.Boundary())
+	totalLength := int64(len(prefixBytes)) + fi.Size() + int64(len(trailer))
+
+	bodyReader := io.MultiReader(bytes.NewReader(prefixBytes), f, strings.NewReader(trailer))
 
 	reqCtx, cancel := withOpTimeout(ctx, 20*time.Minute)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, policy.UploadHost, &b)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, policy.UploadHost, bodyReader)
 	if err != nil {
 		return "", fmt.Errorf("构建 OSS 上传请求失败: %w", err)
 	}
+	req.ContentLength = totalLength
 	req.Header.Set("Content-Type", w.FormDataContentType())
 
 	resp, err := c.HTTPClient.Do(req)

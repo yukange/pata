@@ -368,3 +368,12 @@ func (m *Manager) DiscardCandidate(noteID string) {
 		st.Error = ""
 	})
 }
+
+// SetTaskFailed marks a note's transcription task as failed with the given stage message and error.
+func (m *Manager) SetTaskFailed(noteID string, stageMsg string, errMsg string) {
+	m.updateStatus(noteID, func(st *ASRTaskStatus) {
+		st.State = StateFailed
+		st.StageMessage = stageMsg
+		st.Error = errMsg
+	})
+}

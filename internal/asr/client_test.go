@@ -268,7 +268,8 @@ func TestManager_Flow(t *testing.T) {
 	mgr.PollInterval = 10 * time.Millisecond
 
 	tmpAudio := filepath.Join(t.TempDir(), "test.mp3")
-	_ = os.WriteFile(tmpAudio, []byte("audio"), 0644)
+	monoFrame := []byte{0xFF, 0xFB, 0x90, 0xC0, 0x00, 0x00, 0x00, 0x00}
+	_ = os.WriteFile(tmpAudio, monoFrame, 0644)
 
 	// Test 1: Initial transcription writes directly
 	noteID := "n-test1"
