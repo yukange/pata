@@ -150,6 +150,7 @@ type VaultService struct {
 	configPath  string
 	emitEvent   func(name string, data any)
 	keychain    keychain.Store
+	launcher    func(cmd *exec.Cmd) error
 }
 
 func NewVaultService() *VaultService {
@@ -1437,6 +1438,13 @@ func startAndReap(cmd *exec.Cmd) error {
 	return nil
 }
 
+func (s *VaultService) runCommand(cmd *exec.Cmd) error {
+	if s.launcher != nil {
+		return s.launcher(cmd)
+	}
+	return startAndReap(cmd)
+}
+
 // PreviewFile invokes the macOS Quick Look preview or system preview for a file in the vault.
 func (s *VaultService) PreviewFile(filePath string) error {
 	absPath, err := s.resolveSafeFilePath(filePath)
@@ -1446,7 +1454,7 @@ func (s *VaultService) PreviewFile(filePath string) error {
 
 	if runtime.GOOS == "darwin" {
 		cmd := exec.Command("qlmanage", "-p", absPath)
-		if err := startAndReap(cmd); err == nil {
+		if err := s.runCommand(cmd); err == nil {
 			return nil
 		}
 	}
@@ -1471,7 +1479,7 @@ func (s *VaultService) OpenFile(filePath string) error {
 		cmd = exec.Command("xdg-open", absPath)
 	}
 
-	return startAndReap(cmd)
+	return s.runCommand(cmd)
 }
 
 // RevealInFinder reveals a file inside Finder (or Explorer on Windows).
@@ -1491,7 +1499,7 @@ func (s *VaultService) RevealInFinder(filePath string) error {
 		cmd = exec.Command("xdg-open", filepath.Dir(absPath))
 	}
 
-	return startAndReap(cmd)
+	return s.runCommand(cmd)
 }
 
 // GetVaultHealth returns the current health status of the vault, including parse errors and dangling references.
@@ -1673,7 +1681,7 @@ func (s *VaultService) OpenVaultInFinder() error {
 		cmd = exec.Command("xdg-open", path)
 	}
 
-	return startAndReap(cmd)
+	return s.runCommand(cmd)
 }
 
 // GetASRConfigStatus returns the current transcription configuration status.

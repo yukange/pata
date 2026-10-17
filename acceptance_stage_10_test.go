@@ -33,9 +33,14 @@ func TestStage10_SettingsAcceptance(t *testing.T) {
 
 	memKeychain := keychain.NewMemoryStore()
 
+	var lastLaunchedCmd *exec.Cmd
 	svc := &VaultService{
 		configPath: configPath,
 		keychain:   memKeychain,
+		launcher: func(cmd *exec.Cmd) error {
+			lastLaunchedCmd = cmd
+			return nil
+		},
 	}
 
 	// 1. Theme preference: initial default is "system"
@@ -66,10 +71,32 @@ func TestStage10_SettingsAcceptance(t *testing.T) {
 		t.Errorf("expected theme 'dark' preserved after configuring vault, got %q (err: %v)", theme, err)
 	}
 
-	// Verify OpenVaultInFinder succeeds on opened vault
+	// Verify OpenVaultInFinder succeeds on opened vault without external GUI side effects
 	if err := svc.OpenVaultInFinder(); err != nil {
-		// In headless/CI environments, open/xdg-open may return an error, but the path check inside OpenVaultInFinder must pass
-		t.Logf("OpenVaultInFinder returned: %v (expected if running without graphical display)", err)
+		t.Fatalf("OpenVaultInFinder failed: %v", err)
+	}
+	if lastLaunchedCmd == nil || len(lastLaunchedCmd.Args) == 0 {
+		t.Fatalf("expected OpenVaultInFinder to invoke launcher")
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		if lastLaunchedCmd.Args[0] != "open" || lastLaunchedCmd.Args[1] != vaultDir1 {
+			t.Errorf("expected 'open %s', got %v", vaultDir1, lastLaunchedCmd.Args)
+		}
+	case "windows":
+		if lastLaunchedCmd.Args[0] != "explorer" || lastLaunchedCmd.Args[1] != vaultDir1 {
+			t.Errorf("expected 'explorer %s', got %v", vaultDir1, lastLaunchedCmd.Args)
+		}
+	default:
+		if lastLaunchedCmd.Args[0] != "xdg-open" || lastLaunchedCmd.Args[1] != vaultDir1 {
+			t.Errorf("expected 'xdg-open %s', got %v", vaultDir1, lastLaunchedCmd.Args)
+		}
+	}
+
+	// Verify error on closed vault
+	closedSvc := &VaultService{}
+	if err := closedSvc.OpenVaultInFinder(); err == nil || !strings.Contains(err.Error(), "Vault 尚未打开") {
+		t.Errorf("expected error on closed vault, got %v", err)
 	}
 
 	// Verify RescanVault
@@ -263,6 +290,11 @@ func TestStage10_RealMachineLiveMacOS(t *testing.T) {
 		}
 		t.Logf("Real vault health: %d parse errors, %d dangling refs, %d tasks indexed",
 			len(health.ParseErrors), len(health.DanglingRefs), len(v.Index.ListTasks()))
+
+		// Live macOS test: verify real OpenVaultInFinder launcher
+		if err := svc.OpenVaultInFinder(); err != nil {
+			t.Fatalf("OpenVaultInFinder on real vault failed: %v", err)
+		}
 	}
 
 	// 4. Test live process launch of bin/pata.app
