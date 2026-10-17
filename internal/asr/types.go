@@ -10,6 +10,9 @@ const (
 	DefaultModel    = "qwen-audio-3.1-asr-flash-filetrans"
 	DefaultRegion   = "华北2（北京）"
 	DefaultBaseURL  = "https://dashscope.aliyuncs.com"
+
+	// MaxUploadSizeBytes defines the maximum allowed audio upload size (1 GB).
+	MaxUploadSizeBytes int64 = 1024 * 1024 * 1024
 )
 
 // APIError represents an error response from the DashScope API.

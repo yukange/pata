@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -140,6 +141,16 @@ func (m *Manager) runPipeline(
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
+
+	// 0. Quick check on source audio file size before expensive preprocessing
+	if fi, err := os.Stat(audioAbsPath); err == nil && fi.Size() > MaxUploadSizeBytes {
+		m.updateStatus(noteID, func(st *ASRTaskStatus) {
+			st.State = StateFailed
+			st.StageMessage = "音频文件过大"
+			st.Error = fmt.Sprintf("音频文件大小 (%d 字节) 超过允许的最大限制 (%d 字节)", fi.Size(), MaxUploadSizeBytes)
+		})
+		return
+	}
 
 	// 1. Audio Preprocessing (channel check, mono downmixing for diarization)
 	targetAudioPath, warning, cleanup, prepErr := PrepareAudioForDiarization(audioAbsPath)

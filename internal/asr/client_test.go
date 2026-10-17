@@ -710,5 +710,137 @@ func TestManager_ConcurrentStartTaskGuard(t *testing.T) {
 	}
 }
 
+func TestParseMaxFileSizeMB(t *testing.T) {
+	cases := []struct {
+		input    any
+		expected int64
+		ok       bool
+	}{
+		{input: float64(1024), expected: 1024, ok: true},
+		{input: float32(512), expected: 512, ok: true},
+		{input: int(256), expected: 256, ok: true},
+		{input: int64(128), expected: 128, ok: true},
+		{input: json.Number("64"), expected: 64, ok: true},
+		{input: "32", expected: 32, ok: true},
+		{input: "  16  ", expected: 16, ok: true},
+		{input: nil, expected: 0, ok: false},
+		{input: -1, expected: 0, ok: false},
+		{input: "invalid", expected: 0, ok: false},
+	}
+
+	for _, c := range cases {
+		val, ok := parseMaxFileSizeMB(c.input)
+		if ok != c.ok || val != c.expected {
+			t.Errorf("parseMaxFileSizeMB(%v) = (%v, %v), want (%v, %v)", c.input, val, ok, c.expected, c.ok)
+		}
+	}
+}
+
+func TestClient_UploadToOSS_SizeLimits(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "test-model")
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+
+	// 1. Empty file (0 bytes)
+	emptyPath := filepath.Join(tmpDir, "empty.mp3")
+	if err := os.WriteFile(emptyPath, []byte{}, 0644); err != nil {
+		t.Fatal(err)
+	}
+	policy := &UploadPolicy{
+		UploadHost: server.URL,
+		UploadDir:  "test-dir",
+	}
+	_, err := client.UploadToOSS(ctx, policy, emptyPath)
+	if err == nil || !strings.Contains(err.Error(), "音频文件为空") {
+		t.Fatalf("expected empty file error, got: %v", err)
+	}
+
+	// 2. Policy MaxFileSizeMB limit exceeded
+	smallLimitPath := filepath.Join(tmpDir, "small_limit.mp3")
+	f1, err := os.Create(smallLimitPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f1.Truncate(2 * 1024 * 1024) // 2 MB
+	_ = f1.Close()
+
+	policyWithLimit := &UploadPolicy{
+		UploadHost:    server.URL,
+		UploadDir:     "test-dir",
+		MaxFileSizeMB: 1, // 1 MB limit
+	}
+	_, err = client.UploadToOSS(ctx, policyWithLimit, smallLimitPath)
+	if err == nil || !strings.Contains(err.Error(), "超过允许的最大限制") {
+		t.Fatalf("expected policy size limit error, got: %v", err)
+	}
+
+	// 3. Documented 1 GB limit exceeded
+	oversizedPath := filepath.Join(tmpDir, "oversized.mp3")
+	f2, err := os.Create(oversizedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f2.Truncate(MaxUploadSizeBytes + 1024) // 1 GB + 1 KB (sparse file)
+	_ = f2.Close()
+
+	_, err = client.UploadToOSS(ctx, policy, oversizedPath)
+	if err == nil || !strings.Contains(err.Error(), "超过允许的最大限制") {
+		t.Fatalf("expected 1 GB size limit error, got: %v", err)
+	}
+
+	// 4. File within limits succeeds
+	normalPath := filepath.Join(tmpDir, "normal.mp3")
+	if err := os.WriteFile(normalPath, []byte("fake audio content"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ossURL, err := client.UploadToOSS(ctx, policy, normalPath)
+	if err != nil {
+		t.Fatalf("expected successful upload within limit, got: %v", err)
+	}
+	if !strings.HasPrefix(ossURL, "oss://") {
+		t.Fatalf("expected oss:// URL, got %s", ossURL)
+	}
+}
+
+func TestManager_OversizedFile(t *testing.T) {
+	mgr := NewManager(nil, nil)
+	tmpDir := t.TempDir()
+	oversizedPath := filepath.Join(tmpDir, "oversized.mp3")
+	f, err := os.Create(oversizedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Truncate(MaxUploadSizeBytes + 1024)
+	_ = f.Close()
+
+	noteID := "note-oversized-1"
+	mgr.StartTask(noteID, oversizedPath, false, "fake-api-key", nil)
+
+	// Wait for pipeline to immediately fail
+	deadline := time.Now().Add(2 * time.Second)
+	var finalStatus ASRTaskStatus
+	for time.Now().Before(deadline) {
+		finalStatus = mgr.GetStatus(noteID)
+		if finalStatus.State == StateFailed {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if finalStatus.State != StateFailed {
+		t.Fatalf("expected StateFailed for oversized audio file, got %v", finalStatus.State)
+	}
+	if !strings.Contains(finalStatus.Error, "超过允许的最大限制") {
+		t.Fatalf("expected error mentioning size limit, got %s", finalStatus.Error)
+	}
+}
+
+
 
 

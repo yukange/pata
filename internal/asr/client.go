@@ -119,9 +119,50 @@ func (c *Client) GetUploadPolicy(ctx context.Context, apiKey string) (*UploadPol
 	return &policyResp.Data, nil
 }
 
+func parseMaxFileSizeMB(v any) (int64, bool) {
+	if v == nil {
+		return 0, false
+	}
+	switch val := v.(type) {
+	case float64:
+		if val > 0 {
+			return int64(val), true
+		}
+	case float32:
+		if val > 0 {
+			return int64(val), true
+		}
+	case int:
+		if val > 0 {
+			return int64(val), true
+		}
+	case int64:
+		if val > 0 {
+			return val, true
+		}
+	case json.Number:
+		if n, err := val.Int64(); err == nil && n > 0 {
+			return n, true
+		}
+		if f, err := val.Float64(); err == nil && f > 0 {
+			return int64(f), true
+		}
+	case string:
+		var n int64
+		if _, err := fmt.Sscanf(strings.TrimSpace(val), "%d", &n); err == nil && n > 0 {
+			return n, true
+		}
+	}
+	return 0, false
+}
+
 // UploadToOSS uploads a local audio file to the temporary OSS storage specified by policy.
 // Returns the oss:// URI.
 func (c *Client) UploadToOSS(ctx context.Context, policy *UploadPolicy, filePath string) (string, error) {
+	if policy == nil {
+		return "", fmt.Errorf("上传策略不能为空")
+	}
+
 	f, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("打开待上传音频文件失败: %w", err)
@@ -131,6 +172,22 @@ func (c *Client) UploadToOSS(ctx context.Context, policy *UploadPolicy, filePath
 	fi, err := f.Stat()
 	if err != nil {
 		return "", fmt.Errorf("获取待上传音频文件信息失败: %w", err)
+	}
+
+	if fi.Size() == 0 {
+		return "", fmt.Errorf("音频文件为空 (0 字节)")
+	}
+
+	effectiveLimit := MaxUploadSizeBytes
+	if maxMB, ok := parseMaxFileSizeMB(policy.MaxFileSizeMB); ok {
+		policyLimit := maxMB * 1024 * 1024
+		if policyLimit > 0 && policyLimit < effectiveLimit {
+			effectiveLimit = policyLimit
+		}
+	}
+
+	if fi.Size() > effectiveLimit {
+		return "", fmt.Errorf("音频文件大小 (%d 字节) 超过允许的最大限制 (%d 字节)", fi.Size(), effectiveLimit)
 	}
 
 	baseName := filepath.Base(filePath)
