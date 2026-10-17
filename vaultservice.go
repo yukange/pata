@@ -1359,12 +1359,30 @@ func (s *VaultService) ImportFile(sourcePath string) (*markdown.FileResource, er
 	}
 
 	baseName := filepath.Base(cleanSrc)
-	uniqueName := generateUniqueFilename(filesDir, baseName)
-	targetPath := filepath.Join(filesDir, uniqueName)
+	var (
+		uniqueName string
+		targetPath string
+		baseline   *markdown.FileBaseline
+	)
 
-	baseline, err := markdown.SafeCopyFile(cleanSrc, targetPath, v.Tracker)
-	if err != nil {
-		return nil, fmt.Errorf("保存文件至 files/ 失败: %w", err)
+	const maxRetries = 100
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		uniqueName = generateUniqueFilename(filesDir, baseName)
+		targetPath = filepath.Join(filesDir, uniqueName)
+
+		b, err := markdown.SafeCopyFile(cleanSrc, targetPath, v.Tracker)
+		if err != nil {
+			if errors.Is(err, os.ErrExist) {
+				// Target appeared concurrently during streamed copy; retry with a new unique filename
+				continue
+			}
+			return nil, fmt.Errorf("保存文件至 files/ 失败: %w", err)
+		}
+		baseline = b
+		break
+	}
+	if baseline == nil {
+		return nil, fmt.Errorf("保存文件至 files/ 失败: 无法生成唯一文件名")
 	}
 
 	relPath := "files/" + uniqueName
@@ -1416,12 +1434,30 @@ func (s *VaultService) ImportFileData(name string, base64Data string) (*markdown
 		return nil, fmt.Errorf("创建 files 目录失败: %w", err)
 	}
 
-	uniqueName := generateUniqueFilename(filesDir, cleanName)
-	targetPath := filepath.Join(filesDir, uniqueName)
+	var (
+		uniqueName string
+		targetPath string
+		baseline   *markdown.FileBaseline
+	)
 
-	baseline, err := markdown.SafeWrite(targetPath, data, nil, v.Tracker)
-	if err != nil {
-		return nil, fmt.Errorf("写入文件失败: %w", err)
+	const maxRetries = 100
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		uniqueName = generateUniqueFilename(filesDir, cleanName)
+		targetPath = filepath.Join(filesDir, uniqueName)
+
+		b, err := markdown.SafeWrite(targetPath, data, nil, v.Tracker)
+		if err != nil {
+			var conflictErr *markdown.ConflictError
+			if errors.As(err, &conflictErr) || errors.Is(err, os.ErrExist) {
+				continue
+			}
+			return nil, fmt.Errorf("写入文件失败: %w", err)
+		}
+		baseline = b
+		break
+	}
+	if baseline == nil {
+		return nil, fmt.Errorf("写入文件失败: 无法生成唯一文件名")
 	}
 
 	relPath := "files/" + uniqueName

@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/base64"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"pata/internal/storage/markdown"
@@ -113,3 +115,86 @@ func TestVaultServiceFileImportAndSearch(t *testing.T) {
 	// Ensure vault index retained all 3 files
 	_ = v
 }
+
+func TestVaultService_ConcurrentFileImport(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	svc := NewVaultService()
+	v, err := svc.openVault(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to open vault: %v", err)
+	}
+	defer func() {
+		if svc.stopWatcher != nil {
+			svc.stopWatcher()
+		}
+	}()
+
+	extDir := t.TempDir()
+	sourceFiles := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		p := filepath.Join(extDir, fmt.Sprintf("src_%d.mp3", i))
+		content := fmt.Sprintf("distinct audio stream content #%d", i)
+		if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+		sourceFiles[i] = p
+	}
+
+	// Concurrently import files that all have the same base name "recording.mp3"
+	// To do this, create symlinks or copies with the same name in separate subdirectories
+	targetSources := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		subDir := filepath.Join(extDir, fmt.Sprintf("sub_%d", i))
+		_ = os.MkdirAll(subDir, 0755)
+		srcPath := filepath.Join(subDir, "recording.mp3")
+		_ = os.WriteFile(srcPath, []byte(fmt.Sprintf("recording content #%d", i)), 0644)
+		targetSources[i] = srcPath
+	}
+
+	results := make([]*markdown.FileResource, 5)
+	errors := make([]error, 5)
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			res, err := svc.ImportFile(targetSources[idx])
+			results[idx] = res
+			errors[idx] = err
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i := 0; i < 5; i++ {
+		if errors[i] != nil {
+			t.Fatalf("concurrent import #%d failed: %v", i, errors[i])
+		}
+		if results[i] == nil {
+			t.Fatalf("concurrent import #%d returned nil result", i)
+		}
+	}
+
+	// Verify all 5 imported files have distinct names and paths
+	seenNames := make(map[string]bool)
+	for i, r := range results {
+		if seenNames[r.Name] {
+			t.Fatalf("duplicate filename generated under concurrency: %s", r.Name)
+		}
+		seenNames[r.Name] = true
+
+		// Check that the file on disk exists and contains non-empty content
+		diskPath := filepath.Join(v.RootPath, r.Path)
+		data, err := os.ReadFile(diskPath)
+		if err != nil {
+			t.Fatalf("failed to read imported file on disk: %v", err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("file %s is unexpectedly empty", diskPath)
+		}
+		_ = i
+	}
+}
+

@@ -300,6 +300,10 @@ func SafeCopyFile(srcPath string, targetPath string, tracker *WriteTracker) (*Fi
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve target path: %w", err)
 	}
+	if _, err := os.Stat(absTarget); err == nil {
+		return nil, fmt.Errorf("target file %s already exists: %w", absTarget, os.ErrExist)
+	}
+
 	dir := filepath.Dir(absTarget)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create target directory %s: %w", dir, err)
@@ -333,12 +337,27 @@ func SafeCopyFile(srcPath string, targetPath string, tracker *WriteTracker) (*Fi
 	}
 
 	newHash := hex.EncodeToString(hasher.Sum(nil))
-	if tracker != nil {
-		tracker.MarkInternalWrite(absTarget, newHash)
+
+	// Atomically ensure destination does not exist by linking tmpPath to absTarget.
+	// On POSIX (including macOS), link() fails with EEXIST if absTarget already exists,
+	// preventing concurrent imports from silently replacing each other.
+	if err := os.Link(tmpPath, absTarget); err != nil {
+		if os.IsExist(err) {
+			return nil, fmt.Errorf("target file %s already exists: %w", absTarget, os.ErrExist)
+		}
+		// If filesystem does not support hard links, check stat and fall back to rename
+		if _, statErr := os.Stat(absTarget); statErr == nil {
+			return nil, fmt.Errorf("target file %s already exists: %w", absTarget, os.ErrExist)
+		}
+		if err := os.Rename(tmpPath, absTarget); err != nil {
+			return nil, fmt.Errorf("failed to rename %s to %s: %w", tmpPath, absTarget, err)
+		}
+	} else {
+		_ = os.Remove(tmpPath)
 	}
 
-	if err := os.Rename(tmpPath, absTarget); err != nil {
-		return nil, fmt.Errorf("failed to rename %s to %s: %w", tmpPath, absTarget, err)
+	if tracker != nil {
+		tracker.MarkInternalWrite(absTarget, newHash)
 	}
 
 	parentDir, err := os.Open(dir)
