@@ -5,14 +5,10 @@ import {
   CheckSquare,
   FileText,
   Hash,
-  Sun,
-  Moon,
-  Monitor,
   Search,
   AlertTriangle,
   X,
-  FolderOpen,
-  RefreshCw,
+  Settings,
 } from 'lucide-react';
 import * as VaultService from '../bindings/pata/vaultservice';
 import { VaultStatus, VaultHealth } from '../bindings/pata/models';
@@ -21,6 +17,7 @@ import { TasksView } from './TasksView';
 import { TodayView } from './TodayView';
 import { NotesView } from './NotesView';
 import { TagView } from './TagView';
+import { SettingsView } from './SettingsView';
 import { SearchOverlay } from './SearchOverlay';
 import { PataLogo } from './components/PataLogo';
 import { registerTitlebarLogo, playLogoLaunch } from './logoAnimation';
@@ -32,12 +29,25 @@ export default function App() {
   const [sidebarCollapsed] = useState(false); // 侧栏恒展开，收起功能按走查反馈移除
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [, setIsResizing] = useState(false); // 手柄无高亮，仅保留状态位供拖拽逻辑判断扩展
-  const [themeMode, setThemeMode] = useState<'system' | 'light' | 'dark'>('system');
+
+  // Settings & Theme state
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<'appearance' | 'storage' | 'transcription' | null>(null);
+  const [themeMode, setThemeMode] = useState<'system' | 'light' | 'dark'>(() => {
+    try {
+      const cached = localStorage.getItem('pata_theme');
+      if (cached === 'light' || cached === 'dark' || cached === 'system') {
+        return cached;
+      }
+    } catch {
+      // ignore
+    }
+    return 'system';
+  });
 
   // Vault state (single vault, D18)
   const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null);
   const [vaultBusy, setVaultBusy] = useState(false);
-  const [vaultMenuOpen, setVaultMenuOpen] = useState(false);
   const [rescanError, setRescanError] = useState<string | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [focusNoteId, setFocusNoteId] = useState<string | null>(null);
@@ -94,16 +104,27 @@ export default function App() {
     go();
   };
   const goNav = (nav: 'today' | 'tasks' | 'notes') => {
-    if (nav !== activeNav) void guarded(() => setActiveNav(nav));
+    void guarded(() => {
+      setIsSettingsOpen(false);
+      if (nav !== activeNav) setActiveNav(nav);
+    });
+  };
+
+  const handleOpenSettings = (section?: 'appearance' | 'storage' | 'transcription') => {
+    void guarded(() => {
+      setSettingsSection(section || null);
+      setIsSettingsOpen(true);
+    });
   };
 
   const handleOpenTask = (taskID: string) => {
     const go = () => {
+      setIsSettingsOpen(false);
       setActiveNav('tasks');
       setFocusTaskId(taskID);
     };
-    // 已在 Tasks 时由其详情面板自行确认草稿，避免重复提示
-    if (activeNav === 'tasks') go();
+    // 已在 Tasks 且不在设置时由其详情面板自行确认草稿，避免重复提示
+    if (activeNav === 'tasks' && !isSettingsOpen) go();
     else void guarded(go);
   };
 
@@ -115,6 +136,7 @@ export default function App() {
 
   const handleOpenTodayDate = (date: string) => {
     void guarded(() => {
+      setIsSettingsOpen(false);
       setSelectedTag(null);
       setTodayDate(date);
       setActiveNav('today');
@@ -123,6 +145,7 @@ export default function App() {
 
   const handleOpenNote = (noteID: string, fromTaskId?: string) => {
     void guarded(() => {
+      setIsSettingsOpen(false);
       setNoteOrigin(fromTaskId && (activeNav === 'today' || activeNav === 'tasks' || activeNav === 'tag') ? { nav: activeNav, taskId: fromTaskId } : null);
       setActiveNav('notes');
       setFocusNoteId(noteID);
@@ -130,6 +153,7 @@ export default function App() {
   };
   const returnToOrigin = () => {
     if (!noteOrigin) return;
+    setIsSettingsOpen(false);
     setActiveNav(noteOrigin.nav);
     if (noteOrigin.nav === 'tasks') setFocusTaskId(noteOrigin.taskId);
     else if (noteOrigin.nav === 'today') setTodayTaskId(noteOrigin.taskId);
@@ -139,6 +163,7 @@ export default function App() {
 
   const handleSelectTag = (tag: string) => {
     void guarded(() => {
+      setIsSettingsOpen(false);
       setSelectedTag(tag);
       setActiveNav('tag');
     });
@@ -194,9 +219,20 @@ export default function App() {
     };
   }, [refreshVault]);
 
-  // Global keyboard shortcut for search (⌘K / ⌘P)
+  // Global keyboard shortcuts for search (⌘K / ⌘P) and settings (⌘,)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // ⌘, to toggle settings works globally
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        if (isSettingsOpen) {
+          setIsSettingsOpen(false);
+        } else {
+          handleOpenSettings();
+        }
+        return;
+      }
+
       const target = e.target as HTMLElement | null;
       if (target?.isContentEditable || target?.closest?.('.vditor')) {
         return;
@@ -212,13 +248,47 @@ export default function App() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
+  }, [isSettingsOpen]);
+
+  // Load persisted theme preference from Go backend
+  useEffect(() => {
+    const initTheme = async () => {
+      try {
+        const pref = await VaultService.GetThemePreference();
+        if (pref === 'light' || pref === 'dark' || pref === 'system') {
+          setThemeMode(pref);
+          localStorage.setItem('pata_theme', pref);
+        }
+      } catch (err) {
+        console.error('Failed to get theme preference from backend:', err);
+      }
+    };
+    initTheme();
   }, []);
+
+  const handleThemeChange = (mode: 'system' | 'light' | 'dark') => {
+    setThemeMode(mode);
+    try {
+      localStorage.setItem('pata_theme', mode);
+    } catch {
+      // ignore
+    }
+    void VaultService.SetThemePreference(mode).catch((err) => {
+      console.error('Failed to persist theme preference:', err);
+    });
+  };
 
   const handleSelectVault = async () => {
     setVaultBusy(true);
     try {
-      await VaultService.SelectVaultDirectory();
+      const prevPath = vaultStatus?.path;
+      const st = await VaultService.SelectVaultDirectory();
       await refreshVault();
+      if (st?.configured && st.path !== prevPath) {
+        setFocusTaskId(null);
+        setFocusNoteId(null);
+        setNoteOrigin(null);
+      }
     } catch (err: any) {
       console.error('Select vault failed:', err);
     } finally {
@@ -436,105 +506,49 @@ export default function App() {
           )}
         </div>
 
-        {/* Sidebar Footer: vault menu + theme switcher */}
+        {/* Sidebar Footer: settings entry + persistent health warning if present */}
         {!sidebarCollapsed && (
-          <div className="relative p-2 flex items-center justify-between no-drag-region">
-            {vaultStatus?.configured ? (
-              <button
-                onClick={() => setVaultMenuOpen((v) => !v)}
-                aria-haspopup="menu"
-                aria-expanded={vaultMenuOpen}
-                className="relative flex items-center space-x-1.5 min-w-0 px-2 py-1.5 rounded-md text-xs text-stone-500 dark:text-stone-400 hover:bg-stone-200/60 dark:hover:bg-stone-800/60 transition cursor-pointer"
-                title={vaultStatus.path}
-              >
-                <FolderOpen className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate max-w-[110px]">{vaultStatus.path.split('/').filter(Boolean).pop() || vaultStatus.path}</span>
-                {(rescanError || !vaultStatus.open || hasHealthIssues) && (
-                  <span className={`absolute top-1 left-1 w-1.5 h-1.5 rounded-full ${hasHealthIssues && !rescanError && vaultStatus.open ? 'bg-amber-500' : 'bg-rose-500'}`} />
-                )}
-              </button>
-            ) : (
-              <span />
-            )}
-            {hasHealthIssues && (
+          <div className="relative p-2 flex items-center justify-between no-drag-region border-t border-stone-200/60 dark:border-stone-800/60">
+            <button
+              onClick={() => {
+                if (isSettingsOpen) {
+                  setIsSettingsOpen(false);
+                } else {
+                  handleOpenSettings();
+                }
+              }}
+              className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer ${
+                isSettingsOpen
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
+              }`}
+              title="设置 (⌘,)"
+            >
+              <Settings className="w-4 h-4 shrink-0" />
+              <span>设置</span>
+            </button>
+
+            {(hasHealthIssues || rescanError || (vaultStatus?.configured && !vaultStatus?.open)) && (
               <button
                 onClick={() => {
                   healthTriggerRef.current = document.activeElement as HTMLElement | null;
                   setShowHealthModal(true);
                 }}
-                className="flex items-center space-x-1 px-1.5 py-1 rounded text-xs font-medium bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800/80 hover:bg-amber-200/80 dark:hover:bg-amber-900/60 transition cursor-pointer shrink-0"
-                title="Vault 健康异常提示"
+                className={`flex items-center space-x-1 px-1.5 py-1 rounded text-xs font-medium border transition cursor-pointer shrink-0 ${
+                  rescanError || !vaultStatus?.open
+                    ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border-rose-300 dark:border-rose-800/80 hover:bg-rose-200/80'
+                    : 'bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-800/80 hover:bg-amber-200/80'
+                }`}
+                title="Vault 状态与健康异常诊断"
               >
-                <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
-                {!sidebarCollapsed && <span>{parseErrorCount + danglingRefCount}</span>}
+                <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${rescanError || !vaultStatus?.open ? 'text-rose-600 dark:text-rose-400' : 'text-amber-600 dark:text-amber-400'}`} />
+                <span>
+                  {rescanError || !vaultStatus?.open
+                    ? '异常'
+                    : parseErrorCount + danglingRefCount}
+                </span>
               </button>
             )}
-            {vaultMenuOpen && vaultStatus?.configured && (
-              <>
-              <div className="fixed inset-0 z-20" onMouseDown={() => setVaultMenuOpen(false)} />
-              <div
-                role="menu"
-                className="pata-pop absolute left-2 right-2 bottom-full mb-1 z-30 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-lg p-3 space-y-2 text-xs"
-                onKeyDown={(e) => e.key === 'Escape' && setVaultMenuOpen(false)}
-              >
-                <div className="font-mono text-[11px] break-all text-stone-600 dark:text-stone-300">{vaultStatus.path}</div>
-                {!vaultStatus.open && <div className="text-rose-600 dark:text-rose-400">Vault 无法打开，请重新选择目录</div>}
-                {rescanError && <div className="text-rose-600 dark:text-rose-400 break-all">重新扫描失败: {rescanError}</div>}
-                {hasHealthIssues && (
-                  <button
-                    onClick={() => {
-                      setVaultMenuOpen(false);
-                      setShowHealthModal(true);
-                    }}
-                    className="text-amber-700 dark:text-amber-400 hover:underline"
-                  >
-                    查看 {parseErrorCount + danglingRefCount} 项健康提示
-                  </button>
-                )}
-                <div className="flex items-center gap-2 pt-1">
-                  <button
-                    onClick={handleRescan}
-                    disabled={vaultBusy}
-                    className="flex items-center space-x-1 px-2 py-1 rounded border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50"
-                    title="从磁盘重新扫描 Markdown 索引"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${vaultBusy ? 'animate-spin' : ''}`} />
-                    <span>重新扫描</span>
-                  </button>
-                  <button
-                    onClick={handleSelectVault}
-                    disabled={vaultBusy}
-                    className="px-2 py-1 rounded hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50"
-                  >
-                    更换目录
-                  </button>
-                </div>
-              </div>
-              </>
-            )}
-            <div className="flex items-center space-x-1">
-              <button
-                onClick={() => setThemeMode('light')}
-                className={`p-1.5 rounded transition ${themeMode === 'light' ? 'bg-stone-200 dark:bg-stone-800 text-amber-600' : 'text-stone-400'}`}
-                title="浅色模式"
-              >
-                <Sun className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setThemeMode('dark')}
-                className={`p-1.5 rounded transition ${themeMode === 'dark' ? 'bg-stone-200 dark:bg-stone-800 text-blue-400' : 'text-stone-400'}`}
-                title="深色模式"
-              >
-                <Moon className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setThemeMode('system')}
-                className={`p-1.5 rounded transition ${themeMode === 'system' ? 'bg-stone-200 dark:bg-stone-800 text-emerald-600' : 'text-stone-400'}`}
-                title="跟随系统"
-              >
-                <Monitor className="w-3.5 h-3.5" />
-              </button>
-            </div>
           </div>
         )}
       </aside>
@@ -543,70 +557,92 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden rounded-2xl border border-stone-200/70 dark:border-stone-800/70 shadow-xs bg-stone-50 dark:bg-stone-900 mt-2 mr-2 mb-2">
 
-        {/* Content Body */}
-        <div
-          className={
-            activeNav === 'today' || activeNav === 'tasks' || activeNav === 'tag' || (activeNav === 'notes' && isEditingNote)
-              ? 'flex-1 min-h-0 overflow-hidden' // 三栏或编辑页：内部自适应高度
-              : 'flex-1 overflow-y-auto p-6'
-          }
-        >
-          {activeNav === 'today' && (
-            <TodayView
-              vaultStatus={vaultStatus}
-              onSelectVault={handleSelectVault}
-              vaultBusy={vaultBusy}
-              onOpenNote={handleOpenNote}
-              initialTaskId={todayTaskId}
-              onInitialTaskConsumed={() => setTodayTaskId(null)}
-              initialDate={todayDate}
-              onInitialDateConsumed={() => setTodayDate(null)}
-              tagNames={tagNames}
-              onVaultDataChanged={refreshVault}
-              leaveGuardRef={leaveGuardRef}
-            />
-          )}
+        {/* Business Views Container (hidden when settings is open, preserving editor DOM/scroll/cursor) */}
+        <div className={`flex-1 min-h-0 flex flex-col ${isSettingsOpen ? 'hidden' : ''}`}>
+          <div
+            className={
+              activeNav === 'today' || activeNav === 'tasks' || activeNav === 'tag' || (activeNav === 'notes' && isEditingNote)
+                ? 'flex-1 min-h-0 overflow-hidden' // 三栏或编辑页：内部自适应高度
+                : 'flex-1 overflow-y-auto p-6'
+            }
+          >
+            {activeNav === 'today' && (
+              <TodayView
+                vaultStatus={vaultStatus}
+                onSelectVault={handleSelectVault}
+                vaultBusy={vaultBusy}
+                onOpenNote={handleOpenNote}
+                initialTaskId={todayTaskId}
+                onInitialTaskConsumed={() => setTodayTaskId(null)}
+                initialDate={todayDate}
+                onInitialDateConsumed={() => setTodayDate(null)}
+                tagNames={tagNames}
+                onVaultDataChanged={refreshVault}
+                leaveGuardRef={leaveGuardRef}
+              />
+            )}
 
-          {activeNav === 'tasks' && (
-            <TasksView
-              vaultStatus={vaultStatus}
-              onSelectVault={handleSelectVault}
-              vaultBusy={vaultBusy}
-              focusTaskId={focusTaskId}
-              onClearFocusTask={() => setFocusTaskId(null)}
-              onOpenNote={handleOpenNote}
-              tagNames={tagNames}
-              onVaultDataChanged={refreshVault}
-              leaveGuardRef={leaveGuardRef}
-            />
-          )}
+            {activeNav === 'tasks' && (
+              <TasksView
+                vaultStatus={vaultStatus}
+                onSelectVault={handleSelectVault}
+                vaultBusy={vaultBusy}
+                focusTaskId={focusTaskId}
+                onClearFocusTask={() => setFocusTaskId(null)}
+                onOpenNote={handleOpenNote}
+                tagNames={tagNames}
+                onVaultDataChanged={refreshVault}
+                leaveGuardRef={leaveGuardRef}
+              />
+            )}
 
-          {activeNav === 'notes' && (
-            <NotesView
+            {activeNav === 'notes' && (
+              <NotesView
+                vaultStatus={vaultStatus}
+                onSelectVault={handleSelectVault}
+                onRescanVault={handleRescan}
+                vaultBusy={vaultBusy}
+                focusNoteId={focusNoteId}
+                onClearFocusNote={() => setFocusNoteId(null)}
+                returnToTask={noteOrigin ? { label: '返回任务', go: returnToOrigin } : null}
+                onOpenTask={handleOpenTask}
+                onEditingChange={setIsEditingNote}
+                leaveGuardRef={leaveGuardRef}
+              />
+            )}
+
+            {activeNav === 'tag' && (
+              <TagView
+                selectedTag={selectedTag}
+                onOpenNote={handleOpenNote}
+                initialTaskId={tagTaskId}
+                onInitialTaskConsumed={() => setTagTaskId(null)}
+                tagNames={tagNames}
+                onVaultDataChanged={refreshVault}
+                leaveGuardRef={leaveGuardRef}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Settings View */}
+        {isSettingsOpen && (
+          <div className="flex-1 min-h-0 overflow-hidden">
+            <SettingsView
+              themeMode={themeMode}
+              onThemeChange={handleThemeChange}
               vaultStatus={vaultStatus}
               onSelectVault={handleSelectVault}
               onRescanVault={handleRescan}
               vaultBusy={vaultBusy}
-              focusNoteId={focusNoteId}
-              onClearFocusNote={() => setFocusNoteId(null)}
-              returnToTask={noteOrigin ? { label: '返回任务', go: returnToOrigin } : null}
-              onOpenTask={handleOpenTask}
-              onEditingChange={setIsEditingNote}
+              rescanError={rescanError}
+              health={health}
+              onOpenHealthModal={() => setShowHealthModal(true)}
+              onBack={() => setIsSettingsOpen(false)}
+              initialSection={settingsSection}
             />
-          )}
-
-          {activeNav === 'tag' && (
-            <TagView
-              selectedTag={selectedTag}
-              onOpenNote={handleOpenNote}
-              initialTaskId={tagTaskId}
-              onInitialTaskConsumed={() => setTagTaskId(null)}
-              tagNames={tagNames}
-              onVaultDataChanged={refreshVault}
-              leaveGuardRef={leaveGuardRef}
-            />
-          )}
-        </div>
+          </div>
+        )}
       </main>
 
       {/* Global Quick Search Overlay */}
@@ -679,6 +715,27 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+              {(!vaultStatus?.open && vaultStatus?.configured) && (
+                <div className="p-3 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/40 text-xs text-rose-700 dark:text-rose-300 space-y-1">
+                  <div className="font-semibold flex items-center space-x-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
+                    <span>Vault 目录无法打开</span>
+                  </div>
+                  <div className="font-mono text-[11px] break-all">{vaultStatus.path}</div>
+                  <div>{vaultStatus.error || '无法打开当前工作区，请检查权限或在设置中重新选择目录。'}</div>
+                </div>
+              )}
+
+              {rescanError && (
+                <div className="p-3 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/40 text-xs text-rose-700 dark:text-rose-300 space-y-1">
+                  <div className="font-semibold flex items-center space-x-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
+                    <span>重新扫描失败</span>
+                  </div>
+                  <div className="break-all">{rescanError}</div>
+                </div>
+              )}
+
               {parseErrorCount > 0 && (
                 <div className="space-y-2">
                   <div className="font-semibold text-amber-800 dark:text-amber-300 flex items-center justify-between">
@@ -741,7 +798,17 @@ export default function App() {
               </div>
             </div>
 
-            <div className="px-4 py-2.5 border-t border-stone-200 dark:border-stone-800 flex justify-end bg-stone-100/60 dark:bg-stone-950/60">
+            <div className="px-4 py-2.5 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-100/60 dark:bg-stone-950/60">
+              <button
+                onClick={() => {
+                  setShowHealthModal(false);
+                  handleOpenSettings('storage');
+                }}
+                className="px-3 py-1.5 rounded-md border border-stone-300 dark:border-stone-700 hover:bg-stone-200/60 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-medium transition cursor-pointer"
+              >
+                前往存储设置
+              </button>
+
               <button
                 onClick={() => setShowHealthModal(false)}
                 className="px-3 py-1.5 rounded-md bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs font-medium transition cursor-pointer"

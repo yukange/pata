@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -17,12 +18,31 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"pata/internal/keychain"
 	"pata/internal/storage/markdown"
 )
 
-// VaultConfig is the persisted single-vault choice (D18: 单 Vault).
+// VaultConfig is the persisted single-vault choice (D18: 单 Vault) and app preferences.
 type VaultConfig struct {
 	VaultPath string `json:"vault_path"`
+	Theme     string `json:"theme,omitempty"`
+}
+
+const (
+	ASRProvider        = "阿里云百炼"
+	ASRModel           = "qwen-audio-3.1-asr-flash-filetrans"
+	ASRRegion          = "华北2（北京）"
+	ASRKeychainService = "pata.asr"
+	ASRKeychainAccount = "aliyun_bailian_api_key"
+)
+
+// ASRConfigStatus reports transcription configuration status to frontend.
+// Note: plain key is NEVER exposed to frontend.
+type ASRConfigStatus struct {
+	Configured bool   `json:"configured"`
+	Provider   string `json:"provider"`
+	Model      string `json:"model"`
+	Region     string `json:"region"`
 }
 
 // VaultStatus reports whether a vault is configured/open for the UI.
@@ -129,6 +149,7 @@ type VaultService struct {
 	stopWatcher func()
 	configPath  string
 	emitEvent   func(name string, data any)
+	keychain    keychain.Store
 }
 
 func NewVaultService() *VaultService {
@@ -141,11 +162,15 @@ func NewVaultService() *VaultService {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		log.Printf("vault: cannot resolve user config dir, persistence disabled: %v", err)
-		return &VaultService{emitEvent: defaultEmit}
+		return &VaultService{
+			emitEvent: defaultEmit,
+			keychain:  keychain.NewDefaultStore(),
+		}
 	}
 	return &VaultService{
 		configPath: filepath.Join(configDir, "pata", "vault.json"),
 		emitEvent:  defaultEmit,
+		keychain:   keychain.NewDefaultStore(),
 	}
 }
 
@@ -179,7 +204,9 @@ func (s *VaultService) SelectVaultDirectory() (VaultStatus, error) {
 	if _, err := s.openVault(path); err != nil {
 		return s.GetVaultStatus(), err
 	}
-	if err := s.saveConfig(VaultConfig{VaultPath: path}); err != nil {
+	cfg, _ := s.loadConfig()
+	cfg.VaultPath = path
+	if err := s.saveConfig(cfg); err != nil {
 		return s.GetVaultStatus(), fmt.Errorf("Vault 已打开但保存配置失败: %w", err)
 	}
 	return s.GetVaultStatus(), nil
@@ -1580,4 +1607,147 @@ func (s *VaultService) saveConfig(cfg VaultConfig) error {
 		return err
 	}
 	return os.WriteFile(s.configPath, data, 0644)
+}
+
+// setKeychainStore overrides the keychain store, primarily for testing.
+func (s *VaultService) setKeychainStore(k keychain.Store) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.keychain = k
+}
+
+// GetThemePreference returns the persisted theme preference ("system", "light", or "dark").
+func (s *VaultService) GetThemePreference() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cfg, err := s.loadConfig()
+	if err != nil || cfg.Theme == "" {
+		return "system", nil
+	}
+	return cfg.Theme, nil
+}
+
+// SetThemePreference persists the theme preference ("system", "light", or "dark").
+func (s *VaultService) SetThemePreference(theme string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	theme = strings.TrimSpace(strings.ToLower(theme))
+	if theme != "system" && theme != "light" && theme != "dark" {
+		return fmt.Errorf("无效的主题选项: %s，仅支持 system, light, dark", theme)
+	}
+	cfg, err := s.loadConfig()
+	if err != nil {
+		cfg = VaultConfig{}
+	}
+	cfg.Theme = theme
+	return s.saveConfig(cfg)
+}
+
+// OpenVaultInFinder opens the current vault root directory in Finder (or native file explorer).
+func (s *VaultService) OpenVaultInFinder() error {
+	s.mu.Lock()
+	v := s.vault
+	s.mu.Unlock()
+	if v == nil {
+		return fmt.Errorf("Vault 尚未打开")
+	}
+	path := v.RootPath
+	if path == "" {
+		return fmt.Errorf("Vault 路径为空")
+	}
+	fi, err := os.Stat(path)
+	if err != nil || !fi.IsDir() {
+		return fmt.Errorf("Vault 目录不存在或无法访问: %s", path)
+	}
+
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "windows":
+		cmd = exec.Command("explorer", path)
+	default:
+		cmd = exec.Command("xdg-open", path)
+	}
+
+	return startAndReap(cmd)
+}
+
+// GetASRConfigStatus returns the current transcription configuration status.
+// React/Wails frontend only receives the configured status; plain key is never returned.
+func (s *VaultService) GetASRConfigStatus() (ASRConfigStatus, error) {
+	status := ASRConfigStatus{
+		Configured: false,
+		Provider:   ASRProvider,
+		Model:      ASRModel,
+		Region:     ASRRegion,
+	}
+
+	s.mu.Lock()
+	k := s.keychain
+	s.mu.Unlock()
+
+	if k == nil {
+		return status, nil
+	}
+
+	secret, err := k.Get(ASRKeychainService, ASRKeychainAccount)
+	if err != nil {
+		if errors.Is(err, keychain.ErrNotFound) {
+			return status, nil
+		}
+		return status, fmt.Errorf("查询 Keychain 状态失败: %w", err)
+	}
+
+	if strings.TrimSpace(secret) != "" {
+		status.Configured = true
+	}
+	return status, nil
+}
+
+// SetASRKey saves or updates the Qwen-Audio ASR API Key into macOS Keychain.
+// Notice: Key is never logged and never returned to the frontend.
+func (s *VaultService) SetASRKey(key string) error {
+	trimmed := strings.TrimSpace(key)
+	if trimmed == "" {
+		return fmt.Errorf("API Key 不能为空")
+	}
+
+	s.mu.Lock()
+	k := s.keychain
+	s.mu.Unlock()
+
+	if k == nil {
+		return fmt.Errorf("Keychain 存储不可用")
+	}
+
+	if err := k.Set(ASRKeychainService, ASRKeychainAccount, trimmed); err != nil {
+		return fmt.Errorf("保存 API Key 到 Keychain 失败: %w", err)
+	}
+
+	log.Println("ASR API Key 成功更新至系统 Keychain")
+	return nil
+}
+
+// GetASRKeyInternal retrieves the plain API Key from Keychain for internal ASR calls (Stage 11).
+func (s *VaultService) GetASRKeyInternal() (string, error) {
+	s.mu.Lock()
+	k := s.keychain
+	s.mu.Unlock()
+
+	if k == nil {
+		return "", fmt.Errorf("Keychain 存储未就绪")
+	}
+	secret, err := k.Get(ASRKeychainService, ASRKeychainAccount)
+	if err != nil {
+		if errors.Is(err, keychain.ErrNotFound) {
+			return "", fmt.Errorf("未配置语音转写 API Key，请在设置中配置")
+		}
+		return "", fmt.Errorf("读取 Keychain 失败: %w", err)
+	}
+	trimmed := strings.TrimSpace(secret)
+	if trimmed == "" {
+		return "", fmt.Errorf("语音转写 API Key 为空，请在设置中重新配置")
+	}
+	return trimmed, nil
 }

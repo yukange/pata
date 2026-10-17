@@ -7,6 +7,7 @@ export {
 };
 
 export type {
+    ASRConfigStatus,
     CreateActivityInput,
     CreateNoteInput,
     CreateTaskInput,

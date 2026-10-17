@@ -42,6 +42,7 @@ interface NotesViewProps {
   returnToTask?: { label: string; go: () => void } | null;
   onOpenTask?: (taskId: string) => void;
   onEditingChange?: (isEditing: boolean) => void;
+  leaveGuardRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
 function formatRelativeTime(isoString: string): string {
@@ -117,6 +118,7 @@ interface NoteEditorProps {
   onOpenTask?: (id: string) => void;
   onNoteUpdated: () => void;
   onNoteCreated?: (newId: string) => void;
+  leaveGuardRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
 function NoteEditor({
@@ -128,6 +130,7 @@ function NoteEditor({
   onOpenTask,
   onNoteUpdated,
   onNoteCreated,
+  leaveGuardRef,
 }: NoteEditorProps) {
   const [initialNote, setInitialNote] = useState<Note | null>(null);
   const [loadingNote, setLoadingNote] = useState<boolean>(true);
@@ -677,6 +680,35 @@ function NoteEditor({
     }
   };
   const handleBackClick = () => leaveThen(onBackRef.current);
+
+  useEffect(() => {
+    if (!leaveGuardRef) return;
+    leaveGuardRef.current = async () => {
+      const currentTitle = editTitleRef.current.trim();
+      const currentTags = parseTags(editTagsRef.current);
+      const currentBody = vditorRef.current ? vditorRef.current.getValue() : (initialNote?.body ?? '');
+      const dirty = isDirty(currentTitle, currentTags, currentBody);
+      if (!dirty) return true;
+
+      if (isNewDraftRef.current && !currentTitle) {
+        if (!currentBody.trim() && currentTags.length === 0) {
+          return true;
+        }
+        setShowDraftNoTitleConfirm(true);
+        return false;
+      }
+
+      const saved = await doSave();
+      if (!saved) {
+        setShowSaveFailedConfirm(true);
+        return false;
+      }
+      return true;
+    };
+    return () => {
+      leaveGuardRef.current = null;
+    };
+  }, [leaveGuardRef, isDirty, doSave, initialNote]);
 
   // ---- `[[` 笔记候选 + 链接点击 ----
   const syncPicker = () => {
@@ -1379,6 +1411,7 @@ export function NotesView({
   returnToTask,
   onOpenTask,
   onEditingChange,
+  leaveGuardRef,
 }: NotesViewProps) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1403,6 +1436,18 @@ export function NotesView({
       onClearFocusNote?.();
     }
   }, [focusNoteId, onClearFocusNote]);
+
+  // When vault path changes, reset active note & trail
+  const currentPathRef = useRef(vaultStatus?.path);
+  useEffect(() => {
+    if (currentPathRef.current !== vaultStatus?.path) {
+      currentPathRef.current = vaultStatus?.path;
+      setSelectedNoteId(null);
+      setIsNewDraft(false);
+      setTrail([]);
+      setEditorKey('');
+    }
+  }, [vaultStatus?.path]);
 
   // Scroll position preservation
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -1573,6 +1618,7 @@ export function NotesView({
         onOpenTask={onOpenTask}
         onNoteUpdated={loadNotes}
         onNoteCreated={handleNoteCreated}
+        leaveGuardRef={leaveGuardRef}
       />
     );
   }

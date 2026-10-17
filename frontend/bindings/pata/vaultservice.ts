@@ -55,6 +55,21 @@ export function DeleteTask(id: string): $CancellablePromise<void> {
 }
 
 /**
+ * GetASRConfigStatus returns the current transcription configuration status.
+ * React/Wails frontend only receives the configured status; plain key is never returned.
+ */
+export function GetASRConfigStatus(): $CancellablePromise<$models.ASRConfigStatus> {
+    return $Call.ByID(4178192511);
+}
+
+/**
+ * GetASRKeyInternal retrieves the plain API Key from Keychain for internal ASR calls (Stage 11).
+ */
+export function GetASRKeyInternal(): $CancellablePromise<string> {
+    return $Call.ByID(3505656899);
+}
+
+/**
  * GetActivity returns an activity by its ID.
  */
 export function GetActivity(id: string): $CancellablePromise<markdown$0.Activity | null> {
@@ -101,6 +116,13 @@ export function GetTagOverview(): $CancellablePromise<markdown$0.TagOverviewItem
  */
 export function GetTask(id: string): $CancellablePromise<markdown$0.Task | null> {
     return $Call.ByID(1057197746, id);
+}
+
+/**
+ * GetThemePreference returns the persisted theme preference ("system", "light", or "dark").
+ */
+export function GetThemePreference(): $CancellablePromise<string> {
+    return $Call.ByID(3656260713);
 }
 
 /**
@@ -182,6 +204,13 @@ export function OpenFile(filePath: string): $CancellablePromise<void> {
 }
 
 /**
+ * OpenVaultInFinder opens the current vault root directory in Finder (or native file explorer).
+ */
+export function OpenVaultInFinder(): $CancellablePromise<void> {
+    return $Call.ByID(637426180);
+}
+
+/**
  * PreviewFile invokes the macOS Quick Look preview or system preview for a file in the vault.
  */
 export function PreviewFile(filePath: string): $CancellablePromise<void> {
@@ -226,10 +255,25 @@ export function SelectVaultDirectory(): $CancellablePromise<$models.VaultStatus>
 }
 
 /**
+ * SetASRKey saves or updates the Qwen-Audio ASR API Key into macOS Keychain.
+ * Notice: Key is never logged and never returned to the frontend.
+ */
+export function SetASRKey(key: string): $CancellablePromise<void> {
+    return $Call.ByID(296420522, key);
+}
+
+/**
  * SetTaskStatus toggles or updates the status of a Task with completion/reopen event semantics.
  */
 export function SetTaskStatus(id: string, status: markdown$0.TaskStatus): $CancellablePromise<markdown$0.Task | null> {
     return $Call.ByID(1569318832, id, status);
+}
+
+/**
+ * SetThemePreference persists the theme preference ("system", "light", or "dark").
+ */
+export function SetThemePreference(theme: string): $CancellablePromise<void> {
+    return $Call.ByID(3060376613, theme);
 }
 
 /**

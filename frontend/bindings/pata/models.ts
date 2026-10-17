@@ -6,6 +6,17 @@
 import * as markdown$0 from "./internal/storage/markdown/models.js";
 
 /**
+ * ASRConfigStatus reports transcription configuration status to frontend.
+ * Note: plain key is NEVER exposed to frontend.
+ */
+export interface ASRConfigStatus {
+    "configured": boolean;
+    "provider": string;
+    "model": string;
+    "region": string;
+}
+
+/**
  * CreateActivityInput defines parameters for creating an Activity.
  */
 export interface CreateActivityInput {

@@ -1,6 +1,6 @@
 # Pata · Agent 项目指引
 
-**项目名称：啪嗒 / Pata。** 前五阶段完成代码交付；**阶段 6/7/8/9 代码实现与 macOS 实机验收均已完成**；**阶段 10/11 设计完成、待编码与验收**。实际进度以 [docs/README.md](docs/README.md) 为准。
+**项目名称：啪嗒 / Pata。** 前五阶段完成代码交付；**阶段 6/7/8/9/10 代码实现与 macOS 实机验收均已完成**；**阶段 11 设计完成、待编码与验收**。实际进度以 [docs/README.md](docs/README.md) 为准。
 
 ## 开始阅读
 
@@ -19,7 +19,7 @@
 - **本阶段不实现 CLI/MCP/AI 集成**；未来 CLI 依赖运行中的 App Core，IPC/自动启动等在 CLI 需求阶段讨论，禁止私自扩大范围。
 - 阶段 8 的 DayPlan **目标路径**为根 `plans/`（须备份）；阶段 9 的 `files/` 亦为用户数据、不可当缓存清理。
 - 阶段 9 仅在 Today/Task Activity 与 Note 中导入、引用文件，`[[` 候选同时支持 Note 与 File；原生预览、按文件名搜索，不做 Files 导航、File 实体或自动清理。
-- **阶段 10（待实施）**：主窗口单页设置包含「外观 / 存储 / 语音转写」；侧边栏底部主题三按钮与 Vault 配置菜单收敛为单个设置齿轮。主题三态迁入设置并持久化；Vault 更换/重扫/Finder 打开迁入设置，但首次缺 Vault 仍直接引导、健康异常仍在主界面可见。API Key 存 macOS Keychain，地域固定北京、模型固定 `qwen-audio-3.1-asr-flash-filetrans`；不做地域/供应商/模型选择。文档见 [10 proposal](docs/10-settings/proposal.md)。
+- **阶段 10（已完成）**：主窗口单页设置包含「外观 / 存储 / 语音转写」；侧边栏底部主题三按钮与 Vault 配置菜单收敛为单个设置齿轮。主题三态迁入设置并持久化；Vault 更换/重扫/Finder 打开迁入设置，但首次缺 Vault 仍直接引导、健康异常仍在主界面可见。API Key 存 macOS Keychain，地域固定北京、模型固定 `qwen-audio-3.1-asr-flash-filetrans`；不做地域/供应商/模型选择。文档见 [10 proposal](docs/10-settings/proposal.md)。
 - **阶段 11（待实施）**：在 Notes 从 MP3 创建存储格式为普通 Markdown Note、**正文在 Pata 内只读**的逐字稿；原 MP3 存 `files/`，导入后立即建 Note，标题/标签可编辑，逐字稿可选择/复制/搜索。支持毫秒时间戳、说话人、顶部播放器、时间戳点击跳播、拖动结束定位逐字稿、确认后替换旧逐字稿；普通 Note 即便含 MP3 也保持可编辑。不做专用 Transcript 类型、JSON 侧车、会议摘要或多供应商，音频关联与链接格式在阶段 2 Schema 确认后定义。文档见 [11 proposal](docs/11-audio-transcription/proposal.md)。
 
 ## 产品不可破坏的规则
