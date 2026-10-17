@@ -296,6 +296,15 @@ TaskCompleted:
 	}
 
 	formattedMarkdown := FormatTranscriptMarkdown(sentences)
+	if strings.TrimSpace(formattedMarkdown) == "" {
+		m.updateStatus(noteID, func(st *ASRTaskStatus) {
+			st.State = StateFailed
+			st.StageMessage = "未识别到有效语音内容"
+			st.Error = "未识别到有效语音内容"
+			st.CandidateTranscript = ""
+		})
+		return
+	}
 
 	// 7. Save or require confirmation
 	if isRetranscribe {

@@ -1962,6 +1962,9 @@ func (s *VaultService) saveTranscriptBody(v *markdown.Vault, noteID string, tran
 	if v == nil {
 		return fmt.Errorf("Vault 为空")
 	}
+	if strings.TrimSpace(transcriptBody) == "" {
+		return fmt.Errorf("逐字稿内容为空，未识别到有效内容")
+	}
 
 	existing, ok := v.Index.GetNote(noteID)
 	if !ok {

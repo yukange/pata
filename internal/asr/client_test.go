@@ -334,3 +334,121 @@ func TestManager_Flow(t *testing.T) {
 		t.Errorf("expected StateCompleted after confirm, got %s", mgr.GetStatus(noteID2).State)
 	}
 }
+
+func TestManager_EmptyTranscriptionRejected(t *testing.T) {
+	var server *httptest.Server
+	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/uploads"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"policy":                 "p",
+					"signature":              "s",
+					"upload_dir":             "dir",
+					"upload_host":            server.URL + "/oss-upload",
+					"oss_access_key_id":      "k",
+					"x_oss_object_acl":       "private",
+					"x_oss_forbid_overwrite": "true",
+				},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/oss-upload":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/services/audio/asr/transcription"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"output": map[string]any{
+					"task_id": "empty-task-1",
+				},
+			})
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/tasks/empty-task-1"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"output": map[string]any{
+					"task_id":     "empty-task-1",
+					"task_status": "SUCCEEDED",
+					"results": []map[string]any{
+						{
+							"subtask_status":    "SUCCEEDED",
+							"transcription_url": server.URL + "/results/empty-transcript.json",
+						},
+					},
+				},
+			})
+		case r.Method == http.MethodGet && r.URL.Path == "/results/empty-transcript.json":
+			w.Header().Set("Content-Type", "application/json")
+			// Return sentences that only contain whitespace
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"sentences": []Sentence{
+					{
+						BeginTime: 0,
+						EndTime:   1000,
+						Text:      "   \n  \t ",
+						SpeakerID: 0,
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	tmpDir := t.TempDir()
+	dummyAudio := filepath.Join(tmpDir, "silence.mp3")
+	monoFrame := []byte{0xFF, 0xFB, 0x90, 0xC0, 0x00, 0x00, 0x00, 0x00}
+	_ = os.WriteFile(dummyAudio, monoFrame, 0644)
+
+	client := NewClient(server.URL, DefaultModel)
+	client.HTTPClient = server.Client()
+
+	mgr := NewManager(client, nil)
+	mgr.PollInterval = 10 * time.Millisecond
+
+	// 1. Initial transcription with empty result must fail and NOT call onSave
+	onSaveCalled := false
+	mgr.StartTask("n-empty-1", dummyAudio, false, "key", func(body string) error {
+		onSaveCalled = true
+		return nil
+	})
+
+	for i := 0; i < 50; i++ {
+		st := mgr.GetStatus("n-empty-1")
+		if st.State == StateFailed {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+		if i == 49 {
+			t.Fatalf("expected StateFailed, got %s", st.State)
+		}
+	}
+
+	if onSaveCalled {
+		t.Fatalf("onSave should not be called when transcription result is empty")
+	}
+	st := mgr.GetStatus("n-empty-1")
+	if !strings.Contains(st.Error, "未识别到有效语音内容") {
+		t.Errorf("expected error message to mention empty result, got %q", st.Error)
+	}
+
+	// 2. Retranscription with empty result must also fail and NOT enter StatePendingConfirmation
+	mgr.StartTask("n-empty-2", dummyAudio, true, "key", func(body string) error {
+		t.Fatalf("onSave should not be called during re-transcription")
+		return nil
+	})
+
+	for i := 0; i < 50; i++ {
+		st2 := mgr.GetStatus("n-empty-2")
+		if st2.State == StateFailed {
+			break
+		}
+		if st2.State == StatePendingConfirmation {
+			t.Fatalf("empty retranscription must not enter StatePendingConfirmation")
+		}
+		time.Sleep(20 * time.Millisecond)
+		if i == 49 {
+			t.Fatalf("expected StateFailed, got %s", st2.State)
+		}
+	}
+}
+
