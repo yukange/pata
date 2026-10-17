@@ -88,6 +88,10 @@ function formatRelativeTime(isoString: string): string {
   }
 }
 
+function isAudioTranscriptNote(note?: Note | null): note is Note & { audio_transcript: true; audio_file: string } {
+  return Boolean(note && note.audio_transcript && note.audio_file && note.audio_file.trim().length > 0);
+}
+
 function getNoteExcerpt(title: string, body?: string): string {
   if (!body) return '';
   const lines = body.split('\n');
@@ -233,7 +237,7 @@ function NoteEditor({
     if (!lastSavedStateRef.current) return false;
     const last = lastSavedStateRef.current;
     if (currentTitle.trim() !== last.title.trim()) return true;
-    if (!initialNoteRef.current?.audio_transcript && currentBody !== last.body) return true;
+    if (!isAudioTranscriptNote(initialNoteRef.current) && currentBody !== last.body) return true;
     if (currentTags.length !== last.tags.length) return true;
     for (let i = 0; i < currentTags.length; i++) {
       if (currentTags[i] !== last.tags[i]) return true;
@@ -252,13 +256,13 @@ function NoteEditor({
     }
 
     // must-fix 2: vditorRef 为 null (初始化未完成) 时绝对不能写盘，避免空 body 清空正文（只读逐字稿 Note 无需 vditorRef）
-    if (!vditorRef.current && !initialNoteRef.current?.audio_transcript) {
+    if (!vditorRef.current && !isAudioTranscriptNote(initialNoteRef.current)) {
       return false;
     }
 
     const currentTitle = editTitleRef.current.trim();
-    const currentBody = initialNoteRef.current?.audio_transcript
-      ? (initialNoteRef.current.body ?? '')
+    const currentBody = isAudioTranscriptNote(initialNoteRef.current)
+      ? (initialNoteRef.current?.body ?? '')
       : (vditorRef.current ? vditorRef.current.getValue() : '');
     const currentTags = parseTags(editTagsRef.current);
 
@@ -397,7 +401,7 @@ function NoteEditor({
     } finally {
       isSavingRef.current = false;
       // 仅当本次保存成功时才重排（保存 in-flight 期间新输入不丢）；若保存失败则不自动重排，避免无限重试
-      if (saved && (vditorRef.current || initialNoteRef.current?.audio_transcript)) {
+      if (saved && (vditorRef.current || isAudioTranscriptNote(initialNoteRef.current))) {
         const bodyNow = vditorRef.current ? vditorRef.current.getValue() : (initialNoteRef.current?.body ?? '');
         const titleNow = editTitleRef.current;
         const tagsNow = parseTags(editTagsRef.current);
@@ -509,7 +513,7 @@ function NoteEditor({
     let unlistenStatus: (() => void) | undefined;
     let unlistenVault: (() => void) | undefined;
 
-    if (initialNote?.audio_transcript) {
+    if (isAudioTranscriptNote(initialNote)) {
       VaultService.GetASRTaskStatus(noteId)
         .then((st) => {
           setAsrStatus(st);
@@ -563,7 +567,7 @@ function NoteEditor({
       if (unlistenStatus) unlistenStatus();
       if (unlistenVault) unlistenVault();
     };
-  }, [noteId, initialNote?.audio_transcript]);
+  }, [noteId, isAudioTranscriptNote(initialNote)]);
 
   const handleRetranscribe = async () => {
     try {
@@ -611,7 +615,7 @@ function NoteEditor({
 
   // Mount Vditor editor when note is loaded (only for normal editable notes)
   useEffect(() => {
-    if (loadingNote || !initialNote || !vditorContainerRef.current || isVditorMountedRef.current || initialNote.audio_transcript) return;
+    if (loadingNote || !initialNote || !vditorContainerRef.current || isVditorMountedRef.current || isAudioTranscriptNote(initialNote)) return;
     isVditorMountedRef.current = true;
 
     const isDark = document.documentElement.classList.contains('dark');
@@ -1026,8 +1030,8 @@ function NoteEditor({
   // Copy draft to clipboard (should-fix 3)
   const handleCopyDraft = async () => {
     const currentTitle = editTitleRef.current;
-    const currentBody = initialNoteRef.current?.audio_transcript
-      ? (initialNoteRef.current.body ?? '')
+    const currentBody = isAudioTranscriptNote(initialNoteRef.current)
+      ? (initialNoteRef.current?.body ?? '')
       : (vditorRef.current ? vditorRef.current.getValue() : '');
     const draftText = currentTitle ? `# ${currentTitle}\n\n${currentBody}` : currentBody;
     try {
@@ -1279,7 +1283,7 @@ function NoteEditor({
       </div>
 
       {/* Audio Player and Transcript Viewer for audio transcript notes, or Vditor for ordinary notes */}
-      {initialNote?.audio_transcript ? (
+      {isAudioTranscriptNote(initialNote) ? (
         <div className="flex-1 min-h-0 flex flex-col space-y-3 overflow-hidden">
           <AudioPlayer
             noteId={currentNoteIdRef.current || noteId}
@@ -2087,7 +2091,7 @@ export function NotesView({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center space-x-2 min-w-0">
-                    {n.audio_transcript && (
+                    {isAudioTranscriptNote(n) && (
                       <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 shrink-0">
                         <Volume2 className="w-2.5 h-2.5" />
                         <span>逐字稿</span>

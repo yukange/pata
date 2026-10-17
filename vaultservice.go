@@ -1009,7 +1009,7 @@ func (s *VaultService) UpdateNote(input UpdateNoteInput) (*markdown.Note, error)
 	now := time.Now()
 	existing.Title = title
 	existing.Tags = tags
-	if !existing.AudioTranscript {
+	if !(existing.AudioTranscript && strings.TrimSpace(existing.AudioFile) != "") {
 		existing.Body = input.Body
 	}
 	existing.UpdatedAt = now

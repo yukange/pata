@@ -44,6 +44,13 @@ type Client struct {
 	HTTPClient *http.Client
 }
 
+func withOpTimeout(ctx context.Context, defaultTimeout time.Duration) (context.Context, context.CancelFunc) {
+	if _, hasDeadline := ctx.Deadline(); hasDeadline {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, defaultTimeout)
+}
+
 // NewClient creates a new DashScope ASR Client.
 func NewClient(baseURL string, model string) *Client {
 	if baseURL == "" {
@@ -53,11 +60,9 @@ func NewClient(baseURL string, model string) *Client {
 		model = DefaultModel
 	}
 	return &Client{
-		BaseURL: strings.TrimRight(baseURL, "/"),
-		Model:   model,
-		HTTPClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
+		BaseURL:    strings.TrimRight(baseURL, "/"),
+		Model:      model,
+		HTTPClient: &http.Client{},
 	}
 }
 
@@ -67,8 +72,11 @@ func (c *Client) GetUploadPolicy(ctx context.Context, apiKey string) (*UploadPol
 		return nil, fmt.Errorf("API Key 不能为空")
 	}
 
+	reqCtx, cancel := withOpTimeout(ctx, 60*time.Second)
+	defer cancel()
+
 	reqURL := fmt.Sprintf("%s/api/v1/uploads?action=getPolicy&model=%s", c.BaseURL, url.QueryEscape(c.Model))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("构建上传策略请求失败: %w", err)
 	}
@@ -159,7 +167,10 @@ func (c *Client) UploadToOSS(ctx context.Context, policy *UploadPolicy, filePath
 		return "", fmt.Errorf("结束上传表单构建失败: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, policy.UploadHost, &b)
+	reqCtx, cancel := withOpTimeout(ctx, 20*time.Minute)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, policy.UploadHost, &b)
 	if err != nil {
 		return "", fmt.Errorf("构建 OSS 上传请求失败: %w", err)
 	}
@@ -203,8 +214,11 @@ func (c *Client) SubmitTask(ctx context.Context, apiKey string, ossURL string, d
 		return "", fmt.Errorf("序列化转写请求失败: %w", err)
 	}
 
+	reqCtx, cancel := withOpTimeout(ctx, 60*time.Second)
+	defer cancel()
+
 	reqURL := fmt.Sprintf("%s/api/v1/services/audio/asr/transcription", c.BaseURL)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(payloadBytes))
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, reqURL, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return "", fmt.Errorf("构建转写任务请求失败: %w", err)
 	}
@@ -270,8 +284,11 @@ func (c *Client) PollTask(ctx context.Context, apiKey string, taskID string) (*T
 		return nil, fmt.Errorf("task_id 不能为空")
 	}
 
+	reqCtx, cancel := withOpTimeout(ctx, 60*time.Second)
+	defer cancel()
+
 	reqURL := fmt.Sprintf("%s/api/v1/tasks/%s", c.BaseURL, url.PathEscape(taskID))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("构建任务轮询请求失败: %w", err)
 	}
@@ -312,7 +329,10 @@ func (c *Client) PollTask(ctx context.Context, apiKey string, taskID string) (*T
 
 // FetchTranscriptionResult downloads the JSON result from transcription_url and parses sentence segments.
 func (c *Client) FetchTranscriptionResult(ctx context.Context, transcriptionURL string) ([]Sentence, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, transcriptionURL, nil)
+	reqCtx, cancel := withOpTimeout(ctx, 60*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, transcriptionURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("构建获取逐字稿结果请求失败: %w", err)
 	}

@@ -120,4 +120,11 @@ updated_at: 2026-10-15T09:20:00+08:00
 	if err := ValidateEntity("notes/invalid.md", invalid); err == nil {
 		t.Fatalf("expected error for escaping audio_file, got nil")
 	}
+
+	// audio_transcript true but missing audio_file should fail validation
+	invalidMissingAudio := note.Clone().(*Note)
+	invalidMissingAudio.AudioFile = ""
+	if err := ValidateEntity("notes/invalid.md", invalidMissingAudio); err == nil {
+		t.Fatalf("expected error for audio_transcript=true without audio_file, got nil")
+	}
 }

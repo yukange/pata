@@ -146,6 +146,13 @@ func validateNote(path string, n *Note) error {
 			}
 		}
 	}
+	if n.AudioTranscript && strings.TrimSpace(n.AudioFile) == "" {
+		return &ValidationError{
+			Path:   path,
+			Field:  "audio_file",
+			Reason: "audio_file must be specified when audio_transcript is true",
+		}
+	}
 	if n.AudioFile != "" {
 		cleaned := filepath.Clean(filepath.ToSlash(n.AudioFile))
 		if strings.HasPrefix(cleaned, "../") || cleaned == ".." || filepath.IsAbs(cleaned) {
