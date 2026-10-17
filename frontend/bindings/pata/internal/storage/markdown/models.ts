@@ -123,6 +123,8 @@ export interface Note {
     "id": string;
     "title": string;
     "tags"?: string[] | null;
+    "audio_file"?: string;
+    "audio_transcript"?: boolean;
     "created_at": string;
     "updated_at": string;
     "body": string;

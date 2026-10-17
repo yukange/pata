@@ -12,6 +12,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as asr$0 from "./internal/asr/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as markdown$0 from "./internal/storage/markdown/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -19,10 +22,33 @@ import * as markdown$0 from "./internal/storage/markdown/models.js";
 import * as $models from "./models.js";
 
 /**
+ * ConfirmReplaceTranscript applies the candidate re-transcription result to the Note body.
+ */
+export function ConfirmReplaceTranscript(noteID: string): $CancellablePromise<markdown$0.Note | null> {
+    return $Call.ByID(3534408019, noteID);
+}
+
+/**
  * CreateActivity creates an activity embedded inside a Task or DayPlan.
  */
 export function CreateActivity(input: $models.CreateActivityInput): $CancellablePromise<markdown$0.Activity | null> {
     return $Call.ByID(3984259696, input);
+}
+
+/**
+ * CreateAudioNote imports an MP3 audio file into files/, creates an audio transcript Note immediately,
+ * and starts the asynchronous transcription pipeline in the background.
+ */
+export function CreateAudioNote(sourcePath: string): $CancellablePromise<markdown$0.Note | null> {
+    return $Call.ByID(3851384397, sourcePath);
+}
+
+/**
+ * CreateAudioNoteData imports base64 MP3 audio data into files/, creates an audio transcript Note immediately,
+ * and starts the asynchronous transcription pipeline in the background.
+ */
+export function CreateAudioNoteData(name: string, base64Data: string): $CancellablePromise<markdown$0.Note | null> {
+    return $Call.ByID(737116173, name, base64Data);
 }
 
 /**
@@ -55,6 +81,13 @@ export function DeleteTask(id: string): $CancellablePromise<void> {
 }
 
 /**
+ * DiscardCandidateTranscript discards candidate re-transcription results.
+ */
+export function DiscardCandidateTranscript(noteID: string): $CancellablePromise<void> {
+    return $Call.ByID(11144408, noteID);
+}
+
+/**
  * GetASRConfigStatus returns the current transcription configuration status.
  * React/Wails frontend only receives the configured status; plain key is never returned.
  */
@@ -63,10 +96,31 @@ export function GetASRConfigStatus(): $CancellablePromise<$models.ASRConfigStatu
 }
 
 /**
+ * GetASRTaskStatus returns the current in-memory transcription status for a note.
+ */
+export function GetASRTaskStatus(noteID: string): $CancellablePromise<asr$0.ASRTaskStatus> {
+    return $Call.ByID(3348271808, noteID);
+}
+
+/**
  * GetActivity returns an activity by its ID.
  */
 export function GetActivity(id: string): $CancellablePromise<markdown$0.Activity | null> {
     return $Call.ByID(2823849866, id);
+}
+
+/**
+ * GetAudioData returns the base64 data URI of a vault audio file (fallback/testing).
+ */
+export function GetAudioData(filePath: string): $CancellablePromise<string> {
+    return $Call.ByID(1035815303, filePath);
+}
+
+/**
+ * GetAudioURL returns the internal asset URL to stream/play a vault audio file.
+ */
+export function GetAudioURL(filePath: string): $CancellablePromise<string> {
+    return $Call.ByID(1174217976, filePath);
 }
 
 /**
@@ -240,6 +294,13 @@ export function SearchAll(query: string): $CancellablePromise<markdown$0.SearchR
 }
 
 /**
+ * SelectAudioFile opens a native dialog for selecting an MP3 audio file.
+ */
+export function SelectAudioFile(): $CancellablePromise<string> {
+    return $Call.ByID(3686725867);
+}
+
+/**
  * SelectVaultDirectory shows a native directory picker, persists the choice (single vault)
  * and opens it. Cancel returns the unchanged status.
  */
@@ -267,6 +328,13 @@ export function SetTaskStatus(id: string, status: markdown$0.TaskStatus): $Cance
  */
 export function SetThemePreference(theme: string): $CancellablePromise<void> {
     return $Call.ByID(3060376613, theme);
+}
+
+/**
+ * StartAudioTranscription triggers or retries transcription on an existing Note.
+ */
+export function StartAudioTranscription(noteID: string): $CancellablePromise<void> {
+    return $Call.ByID(1769676217, noteID);
 }
 
 /**

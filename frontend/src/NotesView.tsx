@@ -11,11 +11,16 @@ import {
   Loader2,
   Check,
   Copy,
+  Volume2,
+  ChevronDown,
 } from 'lucide-react';
 import Vditor from 'vditor';
 import * as VaultService from '../bindings/pata/vaultservice';
 import { VaultStatus, CreateNoteInput, UpdateNoteInput } from '../bindings/pata/models';
 import { Note, LinkSource, EntityType } from '../bindings/pata/internal/storage/markdown/models';
+import { ASRTaskStatus, ASRTaskState } from '../bindings/pata/internal/asr/models';
+import { AudioPlayer } from './AudioPlayer';
+import { TranscriptViewer, TranscriptViewerRef } from './TranscriptViewer';
 import {
   CandidateItem,
   FileRef,
@@ -44,6 +49,7 @@ interface NotesViewProps {
   onOpenTask?: (taskId: string) => void;
   onEditingChange?: (isEditing: boolean) => void;
   leaveGuardRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
+  onOpenSettings?: (section?: 'appearance' | 'storage' | 'transcription') => void;
 }
 
 function formatRelativeTime(isoString: string): string {
@@ -120,6 +126,7 @@ interface NoteEditorProps {
   onNoteUpdated: () => void;
   onNoteCreated?: (newId: string) => void;
   leaveGuardRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
+  onOpenSettings?: (section?: 'appearance' | 'storage' | 'transcription') => void;
 }
 
 function NoteEditor({
@@ -132,10 +139,20 @@ function NoteEditor({
   onNoteUpdated,
   onNoteCreated,
   leaveGuardRef,
+  onOpenSettings,
 }: NoteEditorProps) {
   const [initialNote, setInitialNote] = useState<Note | null>(null);
+  const initialNoteRef = useRef<Note | null>(initialNote);
+  initialNoteRef.current = initialNote;
   const [loadingNote, setLoadingNote] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Audio transcript specific states
+  const [asrStatus, setAsrStatus] = useState<ASRTaskStatus | null>(null);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const transcriptViewerRef = useRef<TranscriptViewerRef | null>(null);
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState<boolean>(false);
+  const [replaceError, setReplaceError] = useState<string | null>(null);
 
   const [editTitle, setEditTitle] = useState<string>('');
   const [editTags, setEditTags] = useState<string>('');
@@ -216,7 +233,7 @@ function NoteEditor({
     if (!lastSavedStateRef.current) return false;
     const last = lastSavedStateRef.current;
     if (currentTitle.trim() !== last.title.trim()) return true;
-    if (currentBody !== last.body) return true;
+    if (!initialNoteRef.current?.audio_transcript && currentBody !== last.body) return true;
     if (currentTags.length !== last.tags.length) return true;
     for (let i = 0; i < currentTags.length; i++) {
       if (currentTags[i] !== last.tags[i]) return true;
@@ -234,13 +251,15 @@ function NoteEditor({
       return false;
     }
 
-    // must-fix 2: vditorRef 为 null (初始化未完成) 时绝对不能写盘，避免空 body 清空正文
-    if (!vditorRef.current) {
+    // must-fix 2: vditorRef 为 null (初始化未完成) 时绝对不能写盘，避免空 body 清空正文（只读逐字稿 Note 无需 vditorRef）
+    if (!vditorRef.current && !initialNoteRef.current?.audio_transcript) {
       return false;
     }
 
     const currentTitle = editTitleRef.current.trim();
-    const currentBody = vditorRef.current.getValue();
+    const currentBody = initialNoteRef.current?.audio_transcript
+      ? (initialNoteRef.current.body ?? '')
+      : (vditorRef.current ? vditorRef.current.getValue() : '');
     const currentTags = parseTags(editTagsRef.current);
 
     // 新建草稿保存分支：标题为空时维持安全草稿状态，不写非法空文件到磁盘
@@ -378,8 +397,8 @@ function NoteEditor({
     } finally {
       isSavingRef.current = false;
       // 仅当本次保存成功时才重排（保存 in-flight 期间新输入不丢）；若保存失败则不自动重排，避免无限重试
-      if (saved && vditorRef.current) {
-        const bodyNow = vditorRef.current.getValue();
+      if (saved && (vditorRef.current || initialNoteRef.current?.audio_transcript)) {
+        const bodyNow = vditorRef.current ? vditorRef.current.getValue() : (initialNoteRef.current?.body ?? '');
         const titleNow = editTitleRef.current;
         const tagsNow = parseTags(editTagsRef.current);
         if (isDirtyRef.current(titleNow, tagsNow, bodyNow) && !hasConflictRef.current) {
@@ -485,9 +504,114 @@ function NoteEditor({
     };
   }, []);
 
-  // Mount Vditor editor when note is loaded
+  // Listen to ASR status events and task updates
   useEffect(() => {
-    if (loadingNote || !initialNote || !vditorContainerRef.current || isVditorMountedRef.current) return;
+    let unlistenStatus: (() => void) | undefined;
+    let unlistenVault: (() => void) | undefined;
+
+    if (initialNote?.audio_transcript) {
+      VaultService.GetASRTaskStatus(noteId)
+        .then((st) => {
+          setAsrStatus(st);
+          if (st.state === ASRTaskState.StatePendingConfirmation) {
+            setShowReplaceConfirm(true);
+          }
+        })
+        .catch(() => {});
+
+      const subStatus = Events.On('asr:status', (event: any) => {
+        if (event.data && event.data.note_id === noteId) {
+          const st = event.data as ASRTaskStatus;
+          setAsrStatus(st);
+          if (st.state === ASRTaskState.StatePendingConfirmation) {
+            setShowReplaceConfirm(true);
+          }
+          if (st.state === ASRTaskState.StateCompleted) {
+            VaultService.GetNote(noteId).then((updated) => {
+              if (updated) {
+                setInitialNote(updated);
+                lastSavedStateRef.current = {
+                  title: updated.title,
+                  tags: updated.tags || [],
+                  body: updated.body || '',
+                };
+              }
+            });
+          }
+        }
+      });
+      unlistenStatus = () => subStatus();
+
+      const subVault = Events.On('vault:changed', (event: any) => {
+        if (event.data && event.data.entity_id === noteId && event.data.op === 'update') {
+          VaultService.GetNote(noteId).then((updated) => {
+            if (updated) {
+              setInitialNote(updated);
+              lastSavedStateRef.current = {
+                title: updated.title,
+                tags: updated.tags || [],
+                body: updated.body || '',
+              };
+            }
+          });
+        }
+      });
+      unlistenVault = () => subVault();
+    }
+
+    return () => {
+      if (unlistenStatus) unlistenStatus();
+      if (unlistenVault) unlistenVault();
+    };
+  }, [noteId, initialNote?.audio_transcript]);
+
+  const handleRetranscribe = async () => {
+    try {
+      const cfg = await VaultService.GetASRConfigStatus();
+      if (!cfg.configured) {
+        onOpenSettings?.('transcription');
+        return;
+      }
+      await VaultService.StartAudioTranscription(noteId);
+      const st = await VaultService.GetASRTaskStatus(noteId);
+      setAsrStatus(st);
+    } catch (err: any) {
+      console.error('StartAudioTranscription failed:', err);
+    }
+  };
+
+  const handleConfirmReplace = async () => {
+    try {
+      setReplaceError(null);
+      const updated = await VaultService.ConfirmReplaceTranscript(noteId);
+      if (updated) {
+        setInitialNote(updated);
+        lastSavedStateRef.current = {
+          title: updated.title,
+          tags: updated.tags || [],
+          body: updated.body || '',
+        };
+        setShowReplaceConfirm(false);
+      }
+    } catch (err: any) {
+      setReplaceError(err?.message || '替换逐字稿失败');
+    }
+  };
+
+  const handleDiscardCandidate = async () => {
+    try {
+      await VaultService.DiscardCandidateTranscript(noteId);
+      setShowReplaceConfirm(false);
+      const st = await VaultService.GetASRTaskStatus(noteId);
+      setAsrStatus(st);
+    } catch (err: any) {
+      console.error('DiscardCandidateTranscript failed:', err);
+    }
+  };
+
+  // Mount Vditor editor when note is loaded (only for normal editable notes)
+  useEffect(() => {
+    if (loadingNote || !initialNote || !vditorContainerRef.current || isVditorMountedRef.current || initialNote.audio_transcript) return;
     isVditorMountedRef.current = true;
 
     const isDark = document.documentElement.classList.contains('dark');
@@ -902,7 +1026,9 @@ function NoteEditor({
   // Copy draft to clipboard (should-fix 3)
   const handleCopyDraft = async () => {
     const currentTitle = editTitleRef.current;
-    const currentBody = vditorRef.current ? vditorRef.current.getValue() : '';
+    const currentBody = initialNoteRef.current?.audio_transcript
+      ? (initialNoteRef.current.body ?? '')
+      : (vditorRef.current ? vditorRef.current.getValue() : '');
     const draftText = currentTitle ? `# ${currentTitle}\n\n${currentBody}` : currentBody;
     try {
       await navigator.clipboard.writeText(draftText);
@@ -1152,66 +1278,102 @@ function NoteEditor({
         </div>
       </div>
 
-      {/* Vditor Editor Container (occupies remaining height) */}
-      <div
-        ref={vditorContainerRef}
-        className="vditor-editor-wrapper flex-1 min-h-0 overflow-hidden border-none outline-hidden bg-transparent"
-        style={{ border: 'none', outline: 'none' }}
-        onDragOver={(e) => {
-          if (e.dataTransfer.types.includes('Files')) {
-            e.preventDefault();
-          }
-        }}
-        onDrop={async (e) => {
-          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            e.preventDefault();
-            const vd = vditorRef.current;
-            if (!vd) return;
-            const self = allNotesRef.current.find((x) => x.id === (currentNoteIdRef.current || noteId));
-            const fromPath = self?.path ?? 'notes/untitled.md';
-            for (let i = 0; i < e.dataTransfer.files.length; i++) {
-              const file = e.dataTransfer.files[i];
-              try {
-                let imported: FileRef | null = null;
-                if ((file as any).path) {
-                  imported = await VaultService.ImportFile((file as any).path);
-                } else {
-                  const b64 = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(file);
-                  });
-                  imported = await VaultService.ImportFileData(file.name, b64);
+      {/* Audio Player and Transcript Viewer for audio transcript notes, or Vditor for ordinary notes */}
+      {initialNote?.audio_transcript ? (
+        <div className="flex-1 min-h-0 flex flex-col space-y-3 overflow-hidden">
+          <AudioPlayer
+            noteId={currentNoteIdRef.current || noteId}
+            audioFile={initialNote.audio_file}
+            taskStatus={asrStatus}
+            onSeekCommitted={(timeMs) => transcriptViewerRef.current?.scrollToTime(timeMs)}
+            onRetranscribe={handleRetranscribe}
+            audioRef={audioElRef}
+            isTranscribing={
+              asrStatus?.state === ASRTaskState.StateUploading ||
+              asrStatus?.state === ASRTaskState.StateTranscribing ||
+              asrStatus?.state === ASRTaskState.StateWriting
+            }
+            hasTranscriptBody={Boolean(initialNote.body && initialNote.body.trim().length > 0)}
+          />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <TranscriptViewer
+              ref={transcriptViewerRef}
+              body={initialNote.body || ''}
+              isTranscribing={
+                asrStatus?.state === ASRTaskState.StateUploading ||
+                asrStatus?.state === ASRTaskState.StateTranscribing ||
+                asrStatus?.state === ASRTaskState.StateWriting
+              }
+              onJumpToTime={(timeMs) => {
+                if (audioElRef.current) {
+                  audioElRef.current.currentTime = timeMs / 1000;
+                  audioElRef.current.play().catch(() => {});
                 }
-                if (imported) {
-                  const href = escapeLinkPath(relativePath(fromPath, imported.path));
-                  const isImg = /\.(png|jpe?g|gif|webp|svg)$/i.test(imported.ext);
-                  const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-                  if (isImg) {
-                    vd.insertValue(`![${esc(imported.name)}](${esc(href)}) `);
+              }}
+            />
+          </div>
+        </div>
+      ) : (
+        <div
+          ref={vditorContainerRef}
+          className="vditor-editor-wrapper flex-1 min-h-0 overflow-hidden border-none outline-hidden bg-transparent"
+          style={{ border: 'none', outline: 'none' }}
+          onDragOver={(e) => {
+            if (e.dataTransfer.types.includes('Files')) {
+              e.preventDefault();
+            }
+          }}
+          onDrop={async (e) => {
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              e.preventDefault();
+              const vd = vditorRef.current;
+              if (!vd) return;
+              const self = allNotesRef.current.find((x) => x.id === (currentNoteIdRef.current || noteId));
+              const fromPath = self?.path ?? 'notes/untitled.md';
+              for (let i = 0; i < e.dataTransfer.files.length; i++) {
+                const file = e.dataTransfer.files[i];
+                try {
+                  let imported: FileRef | null = null;
+                  if ((file as any).path) {
+                    imported = await VaultService.ImportFile((file as any).path);
                   } else {
-                    vd.insertValue(`[${esc(imported.name)}](${esc(href)}) `);
+                    const b64 = await new Promise<string>((resolve, reject) => {
+                      const reader = new FileReader();
+                      reader.onload = () => resolve(reader.result as string);
+                      reader.onerror = reject;
+                      reader.readAsDataURL(file);
+                    });
+                    imported = await VaultService.ImportFileData(file.name, b64);
                   }
+                  if (imported) {
+                    const href = escapeLinkPath(relativePath(fromPath, imported.path));
+                    const isImg = /\.(png|jpe?g|gif|webp|svg)$/i.test(imported.ext);
+                    const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                    if (isImg) {
+                      vd.insertValue(`![${esc(imported.name)}](${esc(href)}) `);
+                    } else {
+                      vd.insertValue(`[${esc(imported.name)}](${esc(href)}) `);
+                    }
+                  }
+                } catch (err) {
+                  console.error('Failed to import dropped file in note:', err);
                 }
-              } catch (err) {
-                console.error('Failed to import dropped file in note:', err);
               }
             }
-          }
-        }}
-        onClick={(e) => {
-          const target = e.target as HTMLElement;
-          if (
-            target === vditorContainerRef.current ||
-            target.classList?.contains('vditor') ||
-            target.classList?.contains('vditor-content') ||
-            target.classList?.contains('vditor-ir')
-          ) {
-            vditorRef.current?.focus();
-          }
-        }}
-      />
+          }}
+          onClick={(e) => {
+            const target = e.target as HTMLElement;
+            if (
+              target === vditorContainerRef.current ||
+              target.classList?.contains('vditor') ||
+              target.classList?.contains('vditor-content') ||
+              target.classList?.contains('vditor-ir')
+            ) {
+              vditorRef.current?.focus();
+            }
+          }}
+        />
+      )}
 
       {picker && (
         <NotePicker
@@ -1469,6 +1631,49 @@ function NoteEditor({
         </div>,
         document.body
       )}
+
+      {/* Confirmation Modal for Replacing Transcript */}
+      {showReplaceConfirm && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
+            <div className="flex items-start space-x-3">
+              <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 shrink-0">
+                <RefreshCw className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                  发现新转写结果
+                </h3>
+                <p className="text-xs text-stone-500 leading-relaxed">
+                  当前音频已生成新的逐字稿内容。您可以选择替换原逐字稿，或者保留原稿（保留原稿将放弃新生成的逐字稿）。
+                </p>
+                {replaceError && (
+                  <p className="text-xs text-rose-600 dark:text-rose-400 font-medium pt-1">
+                    {replaceError}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={handleDiscardCandidate}
+                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+              >
+                保留原稿
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReplace}
+                className="px-3 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition shadow-xs cursor-pointer"
+              >
+                替换逐字稿
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -1484,6 +1689,7 @@ export function NotesView({
   onOpenTask,
   onEditingChange,
   leaveGuardRef,
+  onOpenSettings,
 }: NotesViewProps) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1493,6 +1699,53 @@ export function NotesView({
   const [editorKey, setEditorKey] = useState<string>('');
   // 经笔记链接/被引用来源依次打开的笔记栈，「返回」按栈回到上一篇
   const [trail, setTrail] = useState<string[]>([]);
+
+  // Split-button / dropdown menu & audio note creation states
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [showMissingKeyModal, setShowMissingKeyModal] = useState(false);
+  const [creatingAudioNote, setCreatingAudioNote] = useState(false);
+  const [createAudioNoteError, setCreateAudioNoteError] = useState<string | null>(null);
+  const createMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!createMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (createMenuRef.current && !createMenuRef.current.contains(e.target as Node)) {
+        setCreateMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [createMenuOpen]);
+
+  const handleStartCreateAudioNote = async () => {
+    setCreateAudioNoteError(null);
+    try {
+      const cfg = await VaultService.GetASRConfigStatus();
+      if (!cfg.configured) {
+        setShowMissingKeyModal(true);
+        return;
+      }
+      const audioPath = await VaultService.SelectAudioFile();
+      if (!audioPath) {
+        return;
+      }
+      setCreatingAudioNote(true);
+      const created = await VaultService.CreateAudioNote(audioPath);
+      if (created) {
+        loadNotes();
+        setTrail([]);
+        setEditorKey(created.id);
+        setSelectedNoteId(created.id);
+        setIsNewDraft(false);
+      }
+    } catch (err: any) {
+      console.error('CreateAudioNote failed:', err);
+      setCreateAudioNoteError(err?.message || String(err));
+    } finally {
+      setCreatingAudioNote(false);
+    }
+  };
 
   useEffect(() => {
     onEditingChange?.(selectedNoteId !== null);
@@ -1691,6 +1944,7 @@ export function NotesView({
         onNoteUpdated={loadNotes}
         onNoteCreated={handleNoteCreated}
         leaveGuardRef={leaveGuardRef}
+        onOpenSettings={onOpenSettings}
       />
     );
   }
@@ -1710,14 +1964,51 @@ export function NotesView({
           {loading && <span className="text-[11px] text-stone-400">加载中...</span>}
         </div>
 
-        <button
-          type="button"
-          onClick={handleStartCreateNote}
-          className="flex items-center space-x-1 px-3.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition shadow-2xs shrink-0 cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>新建笔记</span>
-        </button>
+        {/* Split Button: New Note / New Audio Note */}
+        <div className="relative inline-flex items-center rounded-lg shadow-2xs" ref={createMenuRef}>
+          <button
+            type="button"
+            onClick={handleStartCreateNote}
+            className="flex items-center space-x-1 px-3 py-1.5 rounded-l-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>新建笔记</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreateMenuOpen((v) => !v)}
+            className="px-1.5 py-1.5 rounded-r-lg bg-emerald-700 hover:bg-emerald-800 border-l border-emerald-600 text-white text-xs transition cursor-pointer"
+            title="更多新建选项"
+          >
+            <ChevronDown className="w-3.5 h-3.5" />
+          </button>
+          {createMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-lg py-1 z-30">
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateMenuOpen(false);
+                  handleStartCreateNote();
+                }}
+                className="w-full flex items-center space-x-2 px-3 py-2 text-xs text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition text-left cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 text-stone-400" />
+                <span>新建空白笔记</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCreateMenuOpen(false);
+                  handleStartCreateAudioNote();
+                }}
+                className="w-full flex items-center space-x-2 px-3 py-2 text-xs text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition text-left cursor-pointer"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>从音频创建逐字稿</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Error Feedback Banner */}
@@ -1725,6 +2016,23 @@ export function NotesView({
         <div className="p-3 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 text-xs flex items-center space-x-2">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
           <span>加载笔记列表失败: {listError}</span>
+        </div>
+      )}
+
+      {/* Audio Note Creation Error Banner */}
+      {createAudioNoteError && (
+        <div className="p-3 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 text-xs flex items-center justify-between space-x-2">
+          <div className="flex items-center space-x-2 min-w-0">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            <span className="truncate">导入音频创建笔记失败: {createAudioNoteError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCreateAudioNoteError(null)}
+            className="text-stone-400 hover:text-stone-600 text-xs shrink-0 cursor-pointer"
+          >
+            关闭
+          </button>
         </div>
       )}
 
@@ -1742,16 +2050,26 @@ export function NotesView({
                 Vault 中暂无笔记
               </div>
               <div className="text-[11px] text-stone-400 max-w-xs mx-auto">
-                点击右上角「新建笔记」写下第一篇长文或记录吧，写 Note 无须建 Task
+                写下第一篇长文或记录吧，也可以直接从 MP3 音频导入生成逐字稿
               </div>
-              <button
-                type="button"
-                onClick={handleStartCreateNote}
-                className="mt-2 inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition shadow-2xs cursor-pointer"
-              >
-                <Plus className="w-3 h-3" />
-                <span>立即新建</span>
-              </button>
+              <div className="flex items-center justify-center space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={handleStartCreateNote}
+                  className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition shadow-2xs cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>新建空白笔记</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStartCreateAudioNote}
+                  className="inline-flex items-center space-x-1 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-stone-800 text-xs font-medium transition shadow-2xs cursor-pointer"
+                >
+                  <Volume2 className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                  <span>从音频创建 (MP3)</span>
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -1768,9 +2086,17 @@ export function NotesView({
                 className="group p-4 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 hover:border-emerald-500/60 dark:hover:border-emerald-600/60 hover:shadow-2xs transition cursor-pointer select-none space-y-2"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 group-hover:text-emerald-800 dark:group-hover:text-emerald-400 transition truncate">
-                    {n.title}
-                  </h3>
+                  <div className="flex items-center space-x-2 min-w-0">
+                    {n.audio_transcript && (
+                      <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 shrink-0">
+                        <Volume2 className="w-2.5 h-2.5" />
+                        <span>逐字稿</span>
+                      </span>
+                    )}
+                    <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100 group-hover:text-emerald-800 dark:group-hover:text-emerald-400 transition truncate">
+                      {n.title}
+                    </h3>
+                  </div>
                   <span className="font-mono text-[11px] text-stone-400 shrink-0">
                     {relativeTime}
                   </span>
@@ -1802,6 +2128,58 @@ export function NotesView({
             );
           })}
         </div>
+      )}
+
+      {/* Missing Key Modal */}
+      {showMissingKeyModal && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
+            <div className="flex items-start space-x-3">
+              <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                  需配置语音转写 API Key
+                </h3>
+                <p className="text-xs text-stone-500 leading-relaxed">
+                  音频逐字稿生成依赖阿里云百炼 DashScope 语音服务。请先在「设置 - 语音转写」中配置 API Key。
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setShowMissingKeyModal(false)}
+                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMissingKeyModal(false);
+                  onOpenSettings?.('transcription');
+                }}
+                className="px-3 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition shadow-xs cursor-pointer"
+              >
+                前往设置
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Creating Audio Note Loading Overlay */}
+      {creatingAudioNote && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-xs p-4">
+          <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 px-6 py-4 shadow-xl flex items-center space-x-3 text-xs font-medium text-stone-700 dark:text-stone-200">
+            <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+            <span>正在导入音频并创建逐字稿笔记...</span>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

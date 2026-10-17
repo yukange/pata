@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"pata/internal/asr"
 	"pata/internal/keychain"
 	"pata/internal/storage/markdown"
 )
@@ -151,6 +153,7 @@ type VaultService struct {
 	emitEvent   func(name string, data any)
 	keychain    keychain.Store
 	launcher    func(cmd *exec.Cmd) error
+	asrManager  *asr.Manager
 }
 
 func NewVaultService() *VaultService {
@@ -163,16 +166,34 @@ func NewVaultService() *VaultService {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		log.Printf("vault: cannot resolve user config dir, persistence disabled: %v", err)
-		return &VaultService{
+		svc := &VaultService{
 			emitEvent: defaultEmit,
 			keychain:  keychain.NewDefaultStore(),
 		}
+		svc.asrManager = asr.NewManager(asr.NewClient("", ""), svc.dispatchEvent)
+		return svc
 	}
-	return &VaultService{
+	svc := &VaultService{
 		configPath: filepath.Join(configDir, "pata", "vault.json"),
 		emitEvent:  defaultEmit,
 		keychain:   keychain.NewDefaultStore(),
 	}
+	svc.asrManager = asr.NewManager(asr.NewClient("", ""), svc.dispatchEvent)
+	return svc
+}
+
+func (s *VaultService) getASRManager() *asr.Manager {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.asrManager == nil {
+		s.asrManager = asr.NewManager(asr.NewClient("", ""), s.dispatchEvent)
+	}
+	return s.asrManager
+}
+
+func (s *VaultService) setASRClient(c *asr.Client) {
+	mgr := s.getASRManager()
+	mgr.SetClient(c)
 }
 
 // ServiceStartup auto-opens the persisted vault; failure leaves the vault closed, not the app dead.
@@ -988,7 +1009,9 @@ func (s *VaultService) UpdateNote(input UpdateNoteInput) (*markdown.Note, error)
 	now := time.Now()
 	existing.Title = title
 	existing.Tags = tags
-	existing.Body = input.Body
+	if !existing.AudioTranscript {
+		existing.Body = input.Body
+	}
 	existing.UpdatedAt = now
 
 	baseline := noteBaseline(v, existing)
@@ -1762,4 +1785,288 @@ func (s *VaultService) getASRKeyInternal() (string, error) {
 		return "", fmt.Errorf("语音转写 API Key 为空，请在设置中重新配置")
 	}
 	return trimmed, nil
+}
+
+// SelectAudioFile opens a native dialog for selecting an MP3 audio file.
+func (s *VaultService) SelectAudioFile() (string, error) {
+	app := application.Get()
+	if app == nil || app.Dialog == nil {
+		return "", fmt.Errorf("桌面对话框不可用")
+	}
+	dialog := app.Dialog.OpenFile()
+	dialog.SetTitle("选择要转写的 MP3 音频文件")
+	dialog.CanChooseFiles(true)
+	dialog.CanChooseDirectories(false)
+	dialog.AddFilter("MP3 音频 (*.mp3)", "*.mp3")
+	path, err := dialog.PromptForSingleSelection()
+	if err != nil {
+		return "", fmt.Errorf("打开文件选择器失败: %w", err)
+	}
+	return path, nil
+}
+
+// CreateAudioNote imports an MP3 audio file into files/, creates an audio transcript Note immediately,
+// and starts the asynchronous transcription pipeline in the background.
+func (s *VaultService) CreateAudioNote(sourcePath string) (*markdown.Note, error) {
+	cleanSrc := filepath.Clean(strings.TrimSpace(sourcePath))
+	ext := strings.ToLower(filepath.Ext(cleanSrc))
+	if ext != ".mp3" {
+		return nil, fmt.Errorf("第一版仅支持导入 MP3 格式音频文件")
+	}
+
+	// Try retrieving API key (if unconfigured, task will report failure, but Note and MP3 are preserved)
+	apiKey, _ := s.getASRKeyInternal()
+
+	// 1. Import file to files/ (copies without overwriting)
+	res, err := s.ImportFile(cleanSrc)
+	if err != nil {
+		return nil, fmt.Errorf("导入音频文件失败: %w", err)
+	}
+
+	s.mu.Lock()
+	v := s.vault
+	s.mu.Unlock()
+	if v == nil {
+		return nil, fmt.Errorf("尚未打开 Vault")
+	}
+
+	// Derive default note title from base name without .mp3
+	title := strings.TrimSuffix(res.Name, filepath.Ext(res.Name))
+	if strings.TrimSpace(title) == "" {
+		title = "音频逐字稿"
+	}
+
+	now := time.Now()
+	note := &markdown.Note{
+		Type:            markdown.EntityTypeNote,
+		ID:              markdown.GenerateEntityID(markdown.EntityTypeNote),
+		Title:           title,
+		Tags:            []string{},
+		AudioFile:       res.Path,
+		AudioTranscript: true,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		Body:            "",
+	}
+
+	if _, err := v.SaveEntity(note, nil); err != nil {
+		return nil, fmt.Errorf("创建逐字稿笔记失败: %w", err)
+	}
+
+	// 2. Start asynchronous transcription in background
+	noteID := note.ID
+	audioAbsPath := filepath.Join(v.RootPath, filepath.FromSlash(res.Path))
+	mgr := s.getASRManager()
+	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
+		return s.saveTranscriptBody(noteID, transcriptBody)
+	})
+
+	return note, nil
+}
+
+// CreateAudioNoteData imports base64 MP3 audio data into files/, creates an audio transcript Note immediately,
+// and starts the asynchronous transcription pipeline in the background.
+func (s *VaultService) CreateAudioNoteData(name string, base64Data string) (*markdown.Note, error) {
+	cleanName := filepath.Base(strings.TrimSpace(name))
+	ext := strings.ToLower(filepath.Ext(cleanName))
+	if ext != ".mp3" {
+		return nil, fmt.Errorf("第一版仅支持导入 MP3 格式音频文件")
+	}
+
+	apiKey, _ := s.getASRKeyInternal()
+
+	res, err := s.ImportFileData(cleanName, base64Data)
+	if err != nil {
+		return nil, fmt.Errorf("导入音频数据失败: %w", err)
+	}
+
+	s.mu.Lock()
+	v := s.vault
+	s.mu.Unlock()
+	if v == nil {
+		return nil, fmt.Errorf("尚未打开 Vault")
+	}
+
+	title := strings.TrimSuffix(res.Name, filepath.Ext(res.Name))
+	if strings.TrimSpace(title) == "" {
+		title = "音频逐字稿"
+	}
+
+	now := time.Now()
+	note := &markdown.Note{
+		Type:            markdown.EntityTypeNote,
+		ID:              markdown.GenerateEntityID(markdown.EntityTypeNote),
+		Title:           title,
+		Tags:            []string{},
+		AudioFile:       res.Path,
+		AudioTranscript: true,
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		Body:            "",
+	}
+
+	if _, err := v.SaveEntity(note, nil); err != nil {
+		return nil, fmt.Errorf("创建逐字稿笔记失败: %w", err)
+	}
+
+	noteID := note.ID
+	audioAbsPath := filepath.Join(v.RootPath, filepath.FromSlash(res.Path))
+	mgr := s.getASRManager()
+	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
+		return s.saveTranscriptBody(noteID, transcriptBody)
+	})
+
+	return note, nil
+}
+
+func (s *VaultService) saveTranscriptBody(noteID string, transcriptBody string) error {
+	s.mu.Lock()
+	v := s.vault
+	s.mu.Unlock()
+	if v == nil {
+		return fmt.Errorf("尚未打开 Vault")
+	}
+
+	existing, ok := v.Index.GetNote(noteID)
+	if !ok {
+		return fmt.Errorf("目标笔记不存在: %s", noteID)
+	}
+
+	existing.Body = transcriptBody
+	existing.UpdatedAt = time.Now()
+	baseline := noteBaseline(v, existing)
+	if _, err := v.SaveEntity(existing, baseline); err != nil {
+		return err
+	}
+	return nil
+}
+
+// StartAudioTranscription triggers or retries transcription on an existing Note.
+func (s *VaultService) StartAudioTranscription(noteID string) error {
+	s.mu.Lock()
+	v := s.vault
+	s.mu.Unlock()
+	if v == nil {
+		return fmt.Errorf("尚未打开 Vault")
+	}
+
+	trimmedID := strings.TrimSpace(noteID)
+	if trimmedID == "" {
+		return fmt.Errorf("笔记 ID 不能为空")
+	}
+
+	note, ok := v.Index.GetNote(trimmedID)
+	if !ok {
+		return fmt.Errorf("笔记不存在: %s", trimmedID)
+	}
+
+	if !note.AudioTranscript || note.AudioFile == "" {
+		return fmt.Errorf("该笔记不是音频逐字稿笔记")
+	}
+
+	apiKey, err := s.getASRKeyInternal()
+	if err != nil {
+		return err
+	}
+
+	audioAbsPath, err := s.resolveSafeFilePath(note.AudioFile)
+	if err != nil {
+		return fmt.Errorf("关联音频文件不存在或失效: %w", err)
+	}
+
+	isRetranscribe := strings.TrimSpace(note.Body) != ""
+	mgr := s.getASRManager()
+	mgr.StartTask(trimmedID, audioAbsPath, isRetranscribe, apiKey, func(transcriptBody string) error {
+		return s.saveTranscriptBody(trimmedID, transcriptBody)
+	})
+
+	return nil
+}
+
+// GetASRTaskStatus returns the current in-memory transcription status for a note.
+func (s *VaultService) GetASRTaskStatus(noteID string) (asr.ASRTaskStatus, error) {
+	trimmedID := strings.TrimSpace(noteID)
+	if trimmedID == "" {
+		return asr.ASRTaskStatus{}, fmt.Errorf("笔记 ID 不能为空")
+	}
+	mgr := s.getASRManager()
+	return mgr.GetStatus(trimmedID), nil
+}
+
+// ConfirmReplaceTranscript applies the candidate re-transcription result to the Note body.
+func (s *VaultService) ConfirmReplaceTranscript(noteID string) (*markdown.Note, error) {
+	s.mu.Lock()
+	v := s.vault
+	s.mu.Unlock()
+	if v == nil {
+		return nil, fmt.Errorf("尚未打开 Vault")
+	}
+
+	trimmedID := strings.TrimSpace(noteID)
+	if trimmedID == "" {
+		return nil, fmt.Errorf("笔记 ID 不能为空")
+	}
+
+	mgr := s.getASRManager()
+	var updatedNote *markdown.Note
+	err := mgr.ConfirmReplace(trimmedID, func(transcriptBody string) error {
+		existing, ok := v.Index.GetNote(trimmedID)
+		if !ok {
+			return fmt.Errorf("笔记不存在: %s", trimmedID)
+		}
+
+		existing.Body = transcriptBody
+		existing.UpdatedAt = time.Now()
+		baseline := noteBaseline(v, existing)
+		if _, err := v.SaveEntity(existing, baseline); err != nil {
+			return err
+		}
+		updatedNote = existing
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedNote, nil
+}
+
+// DiscardCandidateTranscript discards candidate re-transcription results.
+func (s *VaultService) DiscardCandidateTranscript(noteID string) error {
+	trimmedID := strings.TrimSpace(noteID)
+	if trimmedID == "" {
+		return fmt.Errorf("笔记 ID 不能为空")
+	}
+	mgr := s.getASRManager()
+	mgr.DiscardCandidate(trimmedID)
+	return nil
+}
+
+// GetAudioURL returns the internal asset URL to stream/play a vault audio file.
+func (s *VaultService) GetAudioURL(filePath string) (string, error) {
+	_, err := s.resolveSafeFilePath(filePath)
+	if err != nil {
+		return "", err
+	}
+	cleanRel := filepath.ToSlash(filepath.Clean(strings.TrimSpace(filePath)))
+	cleanRel = strings.TrimPrefix(cleanRel, "/")
+	segments := strings.Split(cleanRel, "/")
+	for i, seg := range segments {
+		segments[i] = url.PathEscape(seg)
+	}
+	return "/vault-audio/" + strings.Join(segments, "/"), nil
+}
+
+// GetAudioData returns the base64 data URI of a vault audio file (fallback/testing).
+func (s *VaultService) GetAudioData(filePath string) (string, error) {
+	absPath, err := s.resolveSafeFilePath(filePath)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return "", fmt.Errorf("读取音频文件失败: %w", err)
+	}
+	encoded := base64.StdEncoding.EncodeToString(data)
+	return "data:audio/mpeg;base64," + encoded, nil
 }

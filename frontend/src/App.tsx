@@ -622,6 +622,7 @@ export default function App() {
                 onOpenTask={handleOpenTask}
                 onEditingChange={setIsEditingNote}
                 leaveGuardRef={leaveGuardRef}
+                onOpenSettings={handleOpenSettings}
               />
             )}
 

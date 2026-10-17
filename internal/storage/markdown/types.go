@@ -147,14 +147,16 @@ func (t *Task) Clone() Entity {
 
 // Note represents a markdown note.
 type Note struct {
-	Type      EntityType           `yaml:"type" json:"type"`
-	ID        string               `yaml:"id" json:"id"`
-	Title     string               `yaml:"title" json:"title"`
-	Tags      []string             `yaml:"tags,omitempty" json:"tags,omitempty"`
-	CreatedAt time.Time            `yaml:"created_at" json:"created_at"`
-	UpdatedAt time.Time            `yaml:"updated_at" json:"updated_at"`
-	Extra     map[string]yaml.Node `yaml:",inline" json:"-"`
-	Body      string               `yaml:"-" json:"body"`
+	Type            EntityType           `yaml:"type" json:"type"`
+	ID              string               `yaml:"id" json:"id"`
+	Title           string               `yaml:"title" json:"title"`
+	Tags            []string             `yaml:"tags,omitempty" json:"tags,omitempty"`
+	AudioFile       string               `yaml:"audio_file,omitempty" json:"audio_file,omitempty"`
+	AudioTranscript bool                 `yaml:"audio_transcript,omitempty" json:"audio_transcript,omitempty"`
+	CreatedAt       time.Time            `yaml:"created_at" json:"created_at"`
+	UpdatedAt       time.Time            `yaml:"updated_at" json:"updated_at"`
+	Extra           map[string]yaml.Node `yaml:",inline" json:"-"`
+	Body            string               `yaml:"-" json:"body"`
 }
 
 func (n *Note) GetType() EntityType            { return EntityTypeNote }

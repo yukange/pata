@@ -64,3 +64,60 @@ func TestParseExamples(t *testing.T) {
 		t.Fatalf("expected at least 4 example files, found %d", count)
 	}
 }
+
+func TestNote_AudioTranscriptRoundTrip(t *testing.T) {
+	raw := `---
+type: note
+id: n-audio123
+title: 会议录音讨论
+tags: [架构, 评审]
+audio_file: files/meeting.mp3
+audio_transcript: true
+created_at: 2026-10-15T09:00:00+08:00
+updated_at: 2026-10-15T09:20:00+08:00
+---
+
+[00:01:05.230](#t=00:01:05.230) 说话人 1
+
+我们先讨论一下这次技术架构的调整。
+
+[00:01:18.760](#t=00:01:18.760) 说话人 2
+
+我觉得可以先把现有的方案简化一下。
+`
+	entity, err := ParseMarkdown("notes/meeting.md", []byte(raw))
+	if err != nil {
+		t.Fatalf("ParseMarkdown failed: %v", err)
+	}
+	note, ok := entity.(*Note)
+	if !ok {
+		t.Fatalf("expected *Note, got %T", entity)
+	}
+	if note.AudioFile != "files/meeting.mp3" {
+		t.Errorf("expected AudioFile 'files/meeting.mp3', got %q", note.AudioFile)
+	}
+	if !note.AudioTranscript {
+		t.Errorf("expected AudioTranscript true, got false")
+	}
+
+	serialized, err := SerializeMarkdown(note)
+	if err != nil {
+		t.Fatalf("SerializeMarkdown failed: %v", err)
+	}
+
+	roundTrip, err := ParseMarkdown("notes/meeting.md", serialized)
+	if err != nil {
+		t.Fatalf("re-parse serialized note failed: %v", err)
+	}
+	rtNote := roundTrip.(*Note)
+	if rtNote.AudioFile != "files/meeting.mp3" || !rtNote.AudioTranscript {
+		t.Fatalf("mismatch after roundtrip: audio_file=%s, transcript=%v", rtNote.AudioFile, rtNote.AudioTranscript)
+	}
+
+	// Invalid audio_file escaping vault root should fail validation
+	invalid := note.Clone().(*Note)
+	invalid.AudioFile = "../secret/meeting.mp3"
+	if err := ValidateEntity("notes/invalid.md", invalid); err == nil {
+		t.Fatalf("expected error for escaping audio_file, got nil")
+	}
+}

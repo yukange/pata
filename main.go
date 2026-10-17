@@ -3,6 +3,8 @@ package main
 import (
 	"embed"
 	"log"
+	"net/http"
+	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -24,6 +26,21 @@ func main() {
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
+			Middleware: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasPrefix(r.URL.Path, "/vault-audio/") {
+						relPath := strings.TrimPrefix(r.URL.Path, "/vault-audio/")
+						absPath, err := vaultService.resolveSafeFilePath(relPath)
+						if err != nil {
+							http.NotFound(w, r)
+							return
+						}
+						http.ServeFile(w, r, absPath)
+						return
+					}
+					next.ServeHTTP(w, r)
+				})
+			},
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,

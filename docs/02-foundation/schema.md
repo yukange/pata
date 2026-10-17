@@ -155,6 +155,8 @@ type: note
 id: n-001
 title: 编辑器设计方案
 tags: [Pata]
+audio_file: files/recording.mp3      # 可选：主录音关联（相对 Vault 根路径）
+audio_transcript: true               # 可选：标记为自动生成的只读逐字稿 Note
 created_at: 2026-10-15T09:00:00+08:00
 updated_at: 2026-10-15T09:20:00+08:00
 ---
@@ -164,7 +166,23 @@ updated_at: 2026-10-15T09:20:00+08:00
 正常 Markdown 正文，包括相对链接与其他格式。
 ~~~
 
-普通 Markdown 无 Frontmatter 仍遵循既有 Note 推断和保护规则。Note 的内容与编辑器不因本阶段发生 Schema 迁移。
+### 自动生成的只读逐字稿 Note（阶段 11 规范）
+
+- 当且仅当 Note Frontmatter 包含 `audio_transcript: true` 且设置了有效的 `audio_file`（如 `files/sample.mp3`）时，该 Note 被识别为自动生成的逐字稿 Note。
+- **只读正文边界**：在 Pata 内，此类 Note 的正文只读（不可直接在编辑器中键入、粘贴或插入附件，但允许文本选择、复制、检索与时间戳跳转）；标题 `title` 与标签 `tags` 仍可自由编辑与保存。普通手写 Note（即便正文包含 MP3 附件链接）不设 `audio_transcript: true`，保持现有完整编辑能力。
+- **逐字稿排版与时间戳链接**：正文不重复插入 `# 标题`，按识别句子段落组织。时间戳采用标准 Markdown 锚点链接语法 `[HH:MM:SS.mmm](#t=HH:MM:SS.mmm)`，时间为音频起点毫秒时间戳，点击可跳转播放；发言人格式为统一的「说话人 1/2…」：
+
+~~~markdown
+[00:01:05.230](#t=00:01:05.230) 说话人 1
+
+我们先讨论一下这次技术架构的调整。
+
+[00:01:18.760](#t=00:01:18.760) 说话人 2
+
+我觉得可以先把现有的方案简化一下。
+~~~
+
+普通 Markdown 无 Frontmatter 仍遵循既有 Note 推断和保护规则。普通 Note 的内容与编辑器不因本阶段发生 Schema 迁移。
 
 ## 删除与异常一致性
 
