@@ -160,3 +160,37 @@ func TestAudio_PrepareAudioForDiarizationStereoFailure(t *testing.T) {
 	}
 }
 
+func TestAudio_InspectMP3FileChannels(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// 1. Mono file
+	monoPath := filepath.Join(tmpDir, "mono.mp3")
+	monoFrame := []byte{0xFF, 0xFB, 0x90, 0xC0}
+	_ = os.WriteFile(monoPath, monoFrame, 0644)
+
+	ch, err := inspectMP3FileChannels(monoPath)
+	if err != nil || ch != 1 {
+		t.Fatalf("expected 1 channel, got %d, err: %v", ch, err)
+	}
+
+	// 2. Stereo file with ID3 tag and extra trailing data (verifying bounded read)
+	stereoPath := filepath.Join(tmpDir, "stereo_with_id3.mp3")
+	id3Header := []byte{'I', 'D', '3', 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 'a', 'b', 'c', 'd'}
+	stereoFrame := []byte{0xFF, 0xFB, 0x90, 0x00}
+	fullContent := append(id3Header, stereoFrame...)
+	fullContent = append(fullContent, make([]byte, 1024)...)
+	_ = os.WriteFile(stereoPath, fullContent, 0644)
+
+	ch, err = inspectMP3FileChannels(stereoPath)
+	if err != nil || ch != 2 {
+		t.Fatalf("expected 2 channels, got %d, err: %v", ch, err)
+	}
+
+	// 3. Non-existent file returns error
+	_, err = inspectMP3FileChannels(filepath.Join(tmpDir, "nonexistent.mp3"))
+	if err == nil {
+		t.Fatalf("expected error for non-existent file")
+	}
+}
+
+

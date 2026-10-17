@@ -3,6 +3,7 @@ package asr
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -80,18 +81,63 @@ func InspectAudio(filePath string) (AudioInfo, error) {
 		}
 	}
 
-	// 2. Pure Go MP3 header inspection fallback
-	data, err := os.ReadFile(filePath)
+	// 2. Pure Go MP3 header inspection fallback (bounded read to avoid large memory allocations)
+	channels, err := inspectMP3FileChannels(filePath)
 	if err != nil {
 		return info, err
 	}
+	info.Channels = channels
+	return info, nil
+}
 
-	channels, err := inspectMP3Channels(data)
-	if err == nil {
-		info.Channels = channels
+// inspectMP3FileChannels reads a bounded prefix/header of the file without loading the entire file into memory.
+func inspectMP3FileChannels(filePath string) (int, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return 2, err
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		return 2, err
+	}
+	if fi.Size() == 0 {
+		return 2, nil
 	}
 
-	return info, nil
+	var header [10]byte
+	n, err := io.ReadFull(f, header[:])
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return 2, err
+	}
+
+	startOffset := int64(0)
+	if n == 10 && bytes.Equal(header[:3], []byte("ID3")) {
+		tagSize := (int64(header[6]&0x7F) << 21) |
+			(int64(header[7]&0x7F) << 14) |
+			(int64(header[8]&0x7F) << 7) |
+			int64(header[9]&0x7F)
+		if 10+tagSize < fi.Size() {
+			startOffset = 10 + tagSize
+		}
+	}
+
+	if _, err := f.Seek(startOffset, io.SeekStart); err != nil {
+		return 2, err
+	}
+
+	// Read a bounded chunk (up to 64KB) to find the first audio frame header
+	buf := make([]byte, 64*1024)
+	bytesRead, err := io.ReadFull(f, buf)
+	if err != nil && err != io.ErrUnexpectedEOF && err != io.EOF {
+		return 2, err
+	}
+	if bytesRead < 4 {
+		return 2, nil
+	}
+
+	return inspectMP3Channels(buf[:bytesRead])
 }
 
 // inspectMP3Channels reads MPEG audio frame headers to determine channel mode.
