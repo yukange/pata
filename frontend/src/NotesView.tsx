@@ -1323,14 +1323,10 @@ function NoteEditor({
                 type="button"
                 onClick={() => {
                   setShowLeaveConflictConfirm(false);
-                  hasConflictRef.current = false;
+                  handleAbandonAndReturn();
                   const resolve = leavePromptResolverRef.current;
                   leavePromptResolverRef.current = null;
-                  if (resolve) {
-                    resolve(true);
-                  } else {
-                    handleAbandonAndReturn();
-                  }
+                  resolve?.(true);
                 }}
                 className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition shadow-xs"
               >
@@ -1375,15 +1371,16 @@ function NoteEditor({
                 type="button"
                 onClick={() => {
                   setShowSaveFailedConfirm(false);
+                  if (debounceTimerRef.current) {
+                    window.clearTimeout(debounceTimerRef.current);
+                    debounceTimerRef.current = null;
+                  }
+                  const go = pendingGoRef.current ?? onBack;
+                  pendingGoRef.current = null;
+                  go();
                   const resolve = leavePromptResolverRef.current;
                   leavePromptResolverRef.current = null;
-                  if (resolve) {
-                    resolve(true);
-                  } else {
-                    const go = pendingGoRef.current ?? onBack;
-                    pendingGoRef.current = null;
-                    go();
-                  }
+                  resolve?.(true);
                 }}
                 className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition shadow-xs"
               >
@@ -1438,15 +1435,16 @@ function NoteEditor({
                   type="button"
                   onClick={() => {
                     setShowDraftNoTitleConfirm(false);
+                    if (debounceTimerRef.current) {
+                      window.clearTimeout(debounceTimerRef.current);
+                      debounceTimerRef.current = null;
+                    }
+                    const go = pendingGoRef.current ?? onBack;
+                    pendingGoRef.current = null;
+                    go();
                     const resolve = leavePromptResolverRef.current;
                     leavePromptResolverRef.current = null;
-                    if (resolve) {
-                      resolve(true);
-                    } else {
-                      const go = pendingGoRef.current ?? onBack;
-                      pendingGoRef.current = null;
-                      go();
-                    }
+                    resolve?.(true);
                   }}
                   className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 text-xs transition"
                 >

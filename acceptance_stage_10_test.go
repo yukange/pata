@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -179,9 +180,16 @@ func TestStage10_SettingsAcceptance(t *testing.T) {
 // 4. Tests real Vault interaction on /Users/wuyukang/code/github/test_pata
 // 5. Launches bin/pata.app process on macOS and checks process lifecycle
 func TestStage10_RealMachineLiveMacOS(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("skipping live macOS acceptance test on non-macOS")
+	}
+	if os.Getenv("PATA_LIVE_MACOS_TEST") != "1" {
+		t.Skip("skipping live macOS acceptance test; set PATA_LIVE_MACOS_TEST=1 on macOS to run")
+	}
+
 	appPath := filepath.Join("bin", "pata.app")
 	if _, err := os.Stat(appPath); os.IsNotExist(err) {
-		t.Fatalf("bin/pata.app does not exist. Run 'wails3 task package' first.")
+		t.Skip("bin/pata.app does not exist; run 'wails3 task package' first")
 	}
 
 	// 1. Codesign verification
