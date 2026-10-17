@@ -92,21 +92,32 @@ func (m *Manager) StartTask(
 	apiKey string,
 	onSave SaveTranscriptFunc,
 ) {
-	// Guard against starting duplicate active tasks on same note
+	// Guard against starting duplicate active tasks on same note atomically
 	m.mu.Lock()
-	existing, ok := m.tasks[noteID]
-	if ok && (existing.State == StateUploading || existing.State == StateTranscribing || existing.State == StateWriting) {
+	st, ok := m.tasks[noteID]
+	if ok && (st.State == StateUploading || st.State == StateTranscribing || st.State == StateWriting) {
 		m.mu.Unlock()
 		return
 	}
+	if !ok {
+		st = &ASRTaskStatus{
+			NoteID: noteID,
+		}
+		m.tasks[noteID] = st
+	}
+	st.State = StateUploading
+	st.StageMessage = "正在上传音频..."
+	st.Error = ""
+	st.Warning = ""
+	st.CandidateTranscript = ""
+	st.UpdatedAt = time.Now()
+	copySt := *st
+	emit := m.emitFunc
 	m.mu.Unlock()
 
-	m.updateStatus(noteID, func(st *ASRTaskStatus) {
-		st.State = StateUploading
-		st.StageMessage = "正在上传音频..."
-		st.Error = ""
-		st.CandidateTranscript = ""
-	})
+	if emit != nil {
+		emit(EventASRStatus, copySt)
+	}
 
 	go m.runPipeline(noteID, audioAbsPath, isRetranscribe, apiKey, onSave)
 }
