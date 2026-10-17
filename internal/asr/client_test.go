@@ -452,3 +452,150 @@ func TestManager_EmptyTranscriptionRejected(t *testing.T) {
 	}
 }
 
+func TestManager_PermanentPollingError(t *testing.T) {
+	pollAttempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/uploads"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"policy":                 "p",
+					"signature":              "s",
+					"upload_dir":             "dir",
+					"upload_host":            "http://" + r.Host + "/oss-upload",
+					"oss_access_key_id":      "k",
+					"x_oss_object_acl":       "private",
+					"x_oss_forbid_overwrite": "true",
+				},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/oss-upload":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/services/audio/asr/transcription"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"output": map[string]any{
+					"task_id": "perm-task-1",
+				},
+			})
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/tasks/perm-task-1"):
+			pollAttempts++
+			// Return 401 Unauthorized (permanent error)
+			w.WriteHeader(http.StatusUnauthorized)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"code":    "InvalidApiKey",
+				"message": "API key is invalid or revoked",
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	dummyAudio := filepath.Join(t.TempDir(), "silence.mp3")
+	monoFrame := []byte{0xFF, 0xFB, 0x90, 0xC0, 0x00, 0x00, 0x00, 0x00}
+	_ = os.WriteFile(dummyAudio, monoFrame, 0644)
+
+	client := NewClient(server.URL, DefaultModel)
+	client.HTTPClient = server.Client()
+
+	mgr := NewManager(client, nil)
+	mgr.PollInterval = 10 * time.Millisecond
+
+	mgr.StartTask("n-perm", dummyAudio, false, "key", func(body string) error {
+		return nil
+	})
+
+	for i := 0; i < 50; i++ {
+		st := mgr.GetStatus("n-perm")
+		if st.State == StateFailed {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+		if i == 49 {
+			t.Fatalf("expected StateFailed, got %s", st.State)
+		}
+	}
+
+	st := mgr.GetStatus("n-perm")
+	if !strings.Contains(st.Error, "InvalidApiKey") && !strings.Contains(st.Error, "401") {
+		t.Errorf("expected actionable 401/InvalidApiKey error, got: %q", st.Error)
+	}
+	if pollAttempts != 1 {
+		t.Errorf("permanent error should not be retried, expected 1 poll attempt, got %d", pollAttempts)
+	}
+}
+
+func TestManager_ConsecutivePollingErrorsCapped(t *testing.T) {
+	pollAttempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/uploads"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"policy":                 "p",
+					"signature":              "s",
+					"upload_dir":             "dir",
+					"upload_host":            "http://" + r.Host + "/oss-upload",
+					"oss_access_key_id":      "k",
+					"x_oss_object_acl":       "private",
+					"x_oss_forbid_overwrite": "true",
+				},
+			})
+		case r.Method == http.MethodPost && r.URL.Path == "/oss-upload":
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/api/v1/services/audio/asr/transcription"):
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"output": map[string]any{
+					"task_id": "transient-task-1",
+				},
+			})
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/v1/tasks/transient-task-1"):
+			pollAttempts++
+			// Return 500 Internal Server Error (transient error)
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("internal gateway crash"))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	dummyAudio := filepath.Join(t.TempDir(), "silence.mp3")
+	monoFrame := []byte{0xFF, 0xFB, 0x90, 0xC0, 0x00, 0x00, 0x00, 0x00}
+	_ = os.WriteFile(dummyAudio, monoFrame, 0644)
+
+	client := NewClient(server.URL, DefaultModel)
+	client.HTTPClient = server.Client()
+
+	mgr := NewManager(client, nil)
+	mgr.PollInterval = 10 * time.Millisecond
+	mgr.MaxConsecutivePollErrors = 3
+
+	mgr.StartTask("n-capped", dummyAudio, false, "key", func(body string) error {
+		return nil
+	})
+
+	for i := 0; i < 50; i++ {
+		st := mgr.GetStatus("n-capped")
+		if st.State == StateFailed {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+		if i == 49 {
+			t.Fatalf("expected StateFailed, got %s", st.State)
+		}
+	}
+
+	st := mgr.GetStatus("n-capped")
+	if !strings.Contains(st.Error, "连续失败") {
+		t.Errorf("expected consecutive failure error, got: %q", st.Error)
+	}
+	if pollAttempts != 3 {
+		t.Errorf("expected exactly 3 poll attempts before capping, got %d", pollAttempts)
+	}
+}
+
+

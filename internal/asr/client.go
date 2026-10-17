@@ -318,15 +318,39 @@ func (c *Client) PollTask(ctx context.Context, apiKey string, taskID string) (*T
 			Message string `json:"message"`
 		}
 		_ = json.Unmarshal(bodyBytes, &errResp)
-		if errResp.Message != "" {
-			return nil, fmt.Errorf("查询任务状态失败 (%s): %s", errResp.Code, errResp.Message)
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Code:       errResp.Code,
+			Message:    errResp.Message,
 		}
-		return nil, fmt.Errorf("查询任务状态失败，HTTP 状态码: %d", resp.StatusCode)
 	}
 
 	var taskResp TaskStatusResponse
 	if err := json.Unmarshal(bodyBytes, &taskResp); err != nil {
 		return nil, fmt.Errorf("解析任务状态响应失败: %w", err)
+	}
+
+	if taskResp.Code != "" && taskResp.Code != "200" {
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Code:       taskResp.Code,
+			Message:    taskResp.Message,
+		}
+	}
+
+	if taskResp.Output.TaskStatus == "" {
+		msg := taskResp.Output.Message
+		if msg == "" {
+			msg = taskResp.Message
+		}
+		if msg == "" {
+			msg = "服务端未返回有效任务状态"
+		}
+		return nil, &APIError{
+			StatusCode: http.StatusBadRequest,
+			Code:       taskResp.Output.Code,
+			Message:    msg,
+		}
 	}
 
 	return &taskResp, nil

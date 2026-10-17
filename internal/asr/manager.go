@@ -2,6 +2,7 @@ package asr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -17,11 +18,12 @@ type SaveTranscriptFunc func(transcriptMarkdown string) error
 
 // Manager manages in-memory ASR tasks for Notes across view navigation.
 type Manager struct {
-	mu           sync.Mutex
-	tasks        map[string]*ASRTaskStatus
-	client       *Client
-	emitFunc     func(name string, data any)
-	PollInterval time.Duration
+	mu                       sync.Mutex
+	tasks                    map[string]*ASRTaskStatus
+	client                   *Client
+	emitFunc                 func(name string, data any)
+	PollInterval             time.Duration
+	MaxConsecutivePollErrors int
 }
 
 // NewManager creates an ASR Manager.
@@ -30,10 +32,11 @@ func NewManager(client *Client, emitFunc func(name string, data any)) *Manager {
 		client = NewClient("", "")
 	}
 	return &Manager{
-		tasks:        make(map[string]*ASRTaskStatus),
-		client:       client,
-		emitFunc:     emitFunc,
-		PollInterval: 2 * time.Second,
+		tasks:                    make(map[string]*ASRTaskStatus),
+		client:                   client,
+		emitFunc:                 emitFunc,
+		PollInterval:             2 * time.Second,
+		MaxConsecutivePollErrors: 5,
 	}
 }
 
@@ -210,6 +213,13 @@ func (m *Manager) runPipeline(
 	pollTicker := time.NewTicker(interval)
 	defer pollTicker.Stop()
 
+	maxConsecutive := m.MaxConsecutivePollErrors
+	if maxConsecutive <= 0 {
+		maxConsecutive = 5
+	}
+	consecutiveErrors := 0
+	var lastPollErr error
+
 	var transcriptionURL string
 	for {
 		select {
@@ -217,16 +227,44 @@ func (m *Manager) runPipeline(
 			m.updateStatus(noteID, func(st *ASRTaskStatus) {
 				st.State = StateFailed
 				st.StageMessage = "转写请求超时"
-				st.Error = "请求等待超时，请稍后重试"
+				if lastPollErr != nil {
+					st.Error = fmt.Sprintf("转写超时: %v", lastPollErr)
+				} else {
+					st.Error = "请求等待超时，请稍后重试"
+				}
 			})
 			return
 
 		case <-pollTicker.C:
 			res, err := client.PollTask(ctx, apiKey, taskID)
 			if err != nil {
-				log.Printf("asr: poll task %s transient error: %v", taskID, err)
+				consecutiveErrors++
+				lastPollErr = err
+				log.Printf("asr: poll task %s error (%d/%d): %v", taskID, consecutiveErrors, maxConsecutive, err)
+
+				var apiErr *APIError
+				if errors.As(err, &apiErr) && apiErr.IsPermanent() {
+					m.updateStatus(noteID, func(st *ASRTaskStatus) {
+						st.State = StateFailed
+						st.StageMessage = "查询转写任务失败"
+						st.Error = err.Error()
+					})
+					return
+				}
+
+				if consecutiveErrors >= maxConsecutive {
+					m.updateStatus(noteID, func(st *ASRTaskStatus) {
+						st.State = StateFailed
+						st.StageMessage = "查询转写任务失败"
+						st.Error = fmt.Sprintf("查询转写任务连续失败: %v", err)
+					})
+					return
+				}
 				continue
 			}
+
+			consecutiveErrors = 0
+			lastPollErr = nil
 
 			switch res.Output.TaskStatus {
 			case "PENDING", "RUNNING":

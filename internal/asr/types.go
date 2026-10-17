@@ -1,6 +1,9 @@
 package asr
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 const (
 	DefaultProvider = "阿里云百炼"
@@ -8,6 +11,30 @@ const (
 	DefaultRegion   = "华北2（北京）"
 	DefaultBaseURL  = "https://dashscope.aliyuncs.com"
 )
+
+// APIError represents an error response from the DashScope API.
+type APIError struct {
+	StatusCode int    `json:"status_code"`
+	Code       string `json:"code,omitempty"`
+	Message    string `json:"message,omitempty"`
+}
+
+func (e *APIError) Error() string {
+	if e.Code != "" && e.Message != "" {
+		return fmt.Sprintf("API 错误 (%s): %s", e.Code, e.Message)
+	}
+	if e.Message != "" {
+		return fmt.Sprintf("API 错误 (HTTP %d): %s", e.StatusCode, e.Message)
+	}
+	return fmt.Sprintf("API 请求失败，HTTP 状态码: %d", e.StatusCode)
+}
+
+// IsPermanent returns true if the error indicates a permanent failure that shouldn't be retried.
+func (e *APIError) IsPermanent() bool {
+	// 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 422 Unprocessable Entity
+	// Note: 429 Too Many Requests and 408 Request Timeout are usually transient.
+	return e.StatusCode >= 400 && e.StatusCode < 500 && e.StatusCode != 429 && e.StatusCode != 408
+}
 
 // UploadPolicy contains temporary credentials and endpoint returned by DashScope.
 type UploadPolicy struct {
