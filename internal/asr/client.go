@@ -45,9 +45,6 @@ type Client struct {
 }
 
 func withOpTimeout(ctx context.Context, defaultTimeout time.Duration) (context.Context, context.CancelFunc) {
-	if _, hasDeadline := ctx.Deadline(); hasDeadline {
-		return ctx, func() {}
-	}
 	return context.WithTimeout(ctx, defaultTimeout)
 }
 

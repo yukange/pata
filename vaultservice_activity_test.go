@@ -274,7 +274,7 @@ func TestVaultService_DayTimeline_AggregatesTaskAndDayPlanActivities(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	tActTime := time.Now().UTC().Add(-10 * time.Minute)
+	tActTime := time.Now().UTC()
 	taskAct, err := s.CreateActivity(CreateActivityInput{
 		TaskID: task1.ID,
 		At:     &tActTime,
@@ -285,7 +285,7 @@ func TestVaultService_DayTimeline_AggregatesTaskAndDayPlanActivities(t *testing.
 	}
 
 	// Independent activity on today
-	dpActTime := time.Now().UTC().Add(-5 * time.Minute)
+	dpActTime := time.Now().UTC()
 	dpAct, err := s.CreateActivity(CreateActivityInput{
 		Date: today,
 		At:   &dpActTime,

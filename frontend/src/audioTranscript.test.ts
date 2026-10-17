@@ -57,3 +57,20 @@ test('findSentenceAtTime: binary search for closest sentence <= time', () => {
   assert.equal(findSentenceAtTime(blocks, 30000), 2);
   assert.equal(findSentenceAtTime(blocks, 45000), 2);
 });
+
+test('parseTranscript: retains preamble text before first timestamp block', () => {
+  const md = `# 晨会记录
+这是前言说明内容。
+
+[00:00:05.100](#t=00:00:05.100) 说话人 1
+
+会议正式开始。`;
+
+  const blocks = parseTranscript(md);
+  assert.equal(blocks.length, 2);
+  assert.equal(blocks[0].text, '# 晨会记录\n这是前言说明内容。');
+  assert.equal(blocks[0].timestampMs, 0);
+  assert.equal(blocks[1].text, '会议正式开始。');
+  assert.equal(blocks[1].timestampMs, 5100);
+});
+

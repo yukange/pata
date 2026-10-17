@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -276,6 +277,87 @@ func SafeWrite(targetPath string, data []byte, baseline *FileBaseline, tracker *
 
 	return &FileBaseline{
 		Path:    absPath,
+		Hash:    newHash,
+		ModTime: modTime,
+	}, nil
+}
+
+// SafeCopyFile copies a file from srcPath to targetPath using a streamed copy into a temporary file
+// and atomic rename. It hashes the data while streaming to construct the FileBaseline without
+// buffering the entire file in memory.
+func SafeCopyFile(srcPath string, targetPath string, tracker *WriteTracker) (*FileBaseline, error) {
+	absSrc, err := filepath.Abs(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve source path: %w", err)
+	}
+	srcFile, err := os.Open(absSrc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer srcFile.Close()
+
+	absTarget, err := filepath.Abs(targetPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve target path: %w", err)
+	}
+	dir := filepath.Dir(absTarget)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create target directory %s: %w", dir, err)
+	}
+
+	tmpFile, err := os.CreateTemp(dir, ".pata_tmp_*")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporary file in %s: %w", dir, err)
+	}
+	tmpPath := tmpFile.Name()
+
+	success := false
+	defer func() {
+		if !success {
+			_ = tmpFile.Close()
+			_ = os.Remove(tmpPath)
+		}
+	}()
+
+	hasher := sha256.New()
+	mw := io.MultiWriter(tmpFile, hasher)
+	if _, err := io.Copy(mw, srcFile); err != nil {
+		return nil, fmt.Errorf("failed to stream copy data: %w", err)
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		return nil, fmt.Errorf("failed to sync temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	newHash := hex.EncodeToString(hasher.Sum(nil))
+	if tracker != nil {
+		tracker.MarkInternalWrite(absTarget, newHash)
+	}
+
+	if err := os.Rename(tmpPath, absTarget); err != nil {
+		return nil, fmt.Errorf("failed to rename %s to %s: %w", tmpPath, absTarget, err)
+	}
+
+	parentDir, err := os.Open(dir)
+	if err == nil {
+		_ = parentDir.Sync()
+		_ = parentDir.Close()
+	}
+
+	success = true
+	fi, err := os.Stat(absTarget)
+	var modTime time.Time
+	if err == nil {
+		modTime = fi.ModTime()
+	} else {
+		modTime = time.Now()
+	}
+
+	return &FileBaseline{
+		Path:    absTarget,
 		Hash:    newHash,
 		ModTime: modTime,
 	}, nil

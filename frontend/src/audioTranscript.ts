@@ -57,6 +57,15 @@ export function parseTranscript(body: string): TranscriptBlock[] {
       });
       currentBlock = null;
       textLines = [];
+    } else if (textLines.join('\n').trim()) {
+      blocks.push({
+        id: `tb-preamble-${blocks.length}`,
+        timestampStr: '00:00:00.000',
+        timestampMs: 0,
+        speaker: '',
+        text: textLines.join('\n').trim(),
+      });
+      textLines = [];
     }
   };
 
@@ -72,7 +81,6 @@ export function parseTranscript(body: string): TranscriptBlock[] {
         timestampMs: parseTime(tsStr),
         speaker: speaker || '发言',
       };
-      textLines = [];
     } else if (currentBlock) {
       textLines.push(lines[i]);
     } else {

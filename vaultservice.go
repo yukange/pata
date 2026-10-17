@@ -1352,12 +1352,7 @@ func (s *VaultService) ImportFile(sourcePath string) (*markdown.FileResource, er
 	uniqueName := generateUniqueFilename(filesDir, baseName)
 	targetPath := filepath.Join(filesDir, uniqueName)
 
-	data, err := os.ReadFile(cleanSrc)
-	if err != nil {
-		return nil, fmt.Errorf("读取源文件内容失败: %w", err)
-	}
-
-	baseline, err := markdown.SafeWrite(targetPath, data, nil, v.Tracker)
+	baseline, err := markdown.SafeCopyFile(cleanSrc, targetPath, v.Tracker)
 	if err != nil {
 		return nil, fmt.Errorf("保存文件至 files/ 失败: %w", err)
 	}
@@ -1367,7 +1362,7 @@ func (s *VaultService) ImportFile(sourcePath string) (*markdown.FileResource, er
 		Path:    relPath,
 		Name:    uniqueName,
 		Ext:     filepath.Ext(uniqueName),
-		Size:    int64(len(data)),
+		Size:    fi.Size(),
 		ModTime: baseline.ModTime,
 	}
 
@@ -1857,7 +1852,8 @@ func (s *VaultService) CreateAudioNote(sourcePath string) (*markdown.Note, error
 		Body:            "",
 	}
 
-	if _, err := v.SaveEntity(note, nil); err != nil {
+	initBaseline, err := v.SaveEntity(note, nil)
+	if err != nil {
 		return nil, fmt.Errorf("创建逐字稿笔记失败: %w", err)
 	}
 
@@ -1867,7 +1863,7 @@ func (s *VaultService) CreateAudioNote(sourcePath string) (*markdown.Note, error
 	audioAbsPath := filepath.Join(v.RootPath, filepath.FromSlash(res.Path))
 	mgr := s.getASRManager()
 	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
-		return s.saveTranscriptBody(originVault, noteID, transcriptBody)
+		return s.saveTranscriptBody(originVault, noteID, initBaseline, transcriptBody)
 	})
 
 	return note, nil
@@ -1914,7 +1910,8 @@ func (s *VaultService) CreateAudioNoteData(name string, base64Data string) (*mar
 		Body:            "",
 	}
 
-	if _, err := v.SaveEntity(note, nil); err != nil {
+	initBaseline, err := v.SaveEntity(note, nil)
+	if err != nil {
 		return nil, fmt.Errorf("创建逐字稿笔记失败: %w", err)
 	}
 
@@ -1923,13 +1920,13 @@ func (s *VaultService) CreateAudioNoteData(name string, base64Data string) (*mar
 	audioAbsPath := filepath.Join(v.RootPath, filepath.FromSlash(res.Path))
 	mgr := s.getASRManager()
 	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
-		return s.saveTranscriptBody(originVault, noteID, transcriptBody)
+		return s.saveTranscriptBody(originVault, noteID, initBaseline, transcriptBody)
 	})
 
 	return note, nil
 }
 
-func (s *VaultService) saveTranscriptBody(v *markdown.Vault, noteID string, transcriptBody string) error {
+func (s *VaultService) saveTranscriptBody(v *markdown.Vault, noteID string, expectedBaseline *markdown.FileBaseline, transcriptBody string) error {
 	if v == nil {
 		return fmt.Errorf("Vault 为空")
 	}
@@ -1939,10 +1936,18 @@ func (s *VaultService) saveTranscriptBody(v *markdown.Vault, noteID string, tran
 		return fmt.Errorf("目标笔记不存在: %s", noteID)
 	}
 
+	// Reject if note was modified externally while transcription was running
+	currentBaseline := noteBaseline(v, existing)
+	if expectedBaseline != nil && currentBaseline != nil {
+		if expectedBaseline.Hash != currentBaseline.Hash {
+			return fmt.Errorf("笔记在生成逐字稿期间已被外部修改，已取消写入以保护外部编辑")
+		}
+	}
+
 	existing.Body = transcriptBody
 	existing.UpdatedAt = time.Now()
-	baseline := noteBaseline(v, existing)
-	if _, err := v.SaveEntity(existing, baseline); err != nil {
+	// Pass expectedBaseline to SaveEntity to enforce disk-level optimistic concurrency check
+	if _, err := v.SaveEntity(existing, expectedBaseline); err != nil {
 		return err
 	}
 	return nil
@@ -1987,27 +1992,27 @@ func (s *VaultService) StartAudioTranscription(noteID string) error {
 	}
 
 	isRetranscribe := strings.TrimSpace(note.Body) != ""
+	var initBaseline *markdown.FileBaseline
+	b := noteBaseline(v, note)
+	if b != nil {
+		cp := *b
+		initBaseline = &cp
+	}
 	if isRetranscribe {
-		b := noteBaseline(v, note)
-		var bCopy *markdown.FileBaseline
-		if b != nil {
-			cp := *b
-			bCopy = &cp
-		}
 		s.mu.Lock()
 		if s.candidateBaselines == nil {
 			s.candidateBaselines = make(map[string]*transcriptCandidate)
 		}
 		s.candidateBaselines[trimmedID] = &transcriptCandidate{
 			vault:    v,
-			baseline: bCopy,
+			baseline: initBaseline,
 		}
 		s.mu.Unlock()
 	}
 
 	originVault := v
 	mgr.StartTask(trimmedID, audioAbsPath, isRetranscribe, apiKey, func(transcriptBody string) error {
-		return s.saveTranscriptBody(originVault, trimmedID, transcriptBody)
+		return s.saveTranscriptBody(originVault, trimmedID, initBaseline, transcriptBody)
 	})
 
 	return nil

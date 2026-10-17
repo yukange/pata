@@ -142,32 +142,36 @@ func PrepareAudioForDiarization(srcPath string) (targetPath string, warning stri
 
 	// Audio has multiple channels. Check if afconvert is available (macOS)
 	if runtime.GOOS == "darwin" {
-		tempDir := os.TempDir()
+		taskDir, err := os.MkdirTemp("", "pata_mono_*")
+		if err != nil {
+			return "", warning, cleanup, fmt.Errorf("创建音频临时转换目录失败: %w", err)
+		}
 		baseNoExt := strings.TrimSuffix(filepath.Base(srcPath), filepath.Ext(srcPath))
-		monoPath := filepath.Join(tempDir, fmt.Sprintf("pata_mono_%d_%s.m4a", os.Getpid(), baseNoExt))
-		
+		monoPath := filepath.Join(taskDir, fmt.Sprintf("%s.m4a", baseNoExt))
+
 		// afconvert -f m4af -d aac -c 1 srcPath monoPath
 		// DashScope accepts .m4a, .wav, .mp3
 		cmd := exec.Command("afconvert", "-f", "m4af", "-d", "aac", "-c", "1", srcPath, monoPath)
 		outM4a, convertErr := cmd.CombinedOutput()
 		if convertErr == nil {
 			cleanup = func() {
-				_ = os.Remove(monoPath)
+				_ = os.RemoveAll(taskDir)
 			}
 			return monoPath, warning, cleanup, nil
 		}
 
 		// If m4a fails, try WAVE
-		wavPath := filepath.Join(tempDir, fmt.Sprintf("pata_mono_%d_%s.wav", os.Getpid(), baseNoExt))
+		wavPath := filepath.Join(taskDir, fmt.Sprintf("%s.wav", baseNoExt))
 		cmdWav := exec.Command("afconvert", "-f", "WAVE", "-d", "LEI16", "-c", "1", srcPath, wavPath)
 		outWav, wavErr := cmdWav.CombinedOutput()
 		if wavErr == nil {
 			cleanup = func() {
-				_ = os.Remove(wavPath)
+				_ = os.RemoveAll(taskDir)
 			}
 			return wavPath, warning, cleanup, nil
 		}
 
+		_ = os.RemoveAll(taskDir)
 		return "", warning, cleanup, fmt.Errorf("多声道音频转单声道失败: %v (m4a: %s, wav: %s)", convertErr, strings.TrimSpace(string(outM4a)), strings.TrimSpace(string(outWav)))
 	}
 
