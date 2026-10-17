@@ -651,6 +651,7 @@ function NoteEditor({
 
       // 若完全未输入任何内容，直接安全退出，不创建任何磁盘文件
       if (!currentTitle && !currentBody && currentTags.length === 0) {
+        pendingGoRef.current = null;
         go();
         return;
       }
@@ -659,6 +660,7 @@ function NoteEditor({
       if (currentTitle) {
         const saved = await doSave();
         if (saved) {
+          pendingGoRef.current = null;
           go();
         } else {
           setShowSaveFailedConfirm(true);
@@ -677,12 +679,14 @@ function NoteEditor({
     const dirty = isDirty(currentTitle, currentTags, currentBody);
 
     if (!dirty) {
+      pendingGoRef.current = null;
       go();
       return;
     }
 
     const saved = await doSave();
     if (saved) {
+      pendingGoRef.current = null;
       go();
     } else {
       setShowSaveFailedConfirm(true);
@@ -727,6 +731,7 @@ function NoteEditor({
         leavePromptResolverRef.current(false);
         leavePromptResolverRef.current = null;
       }
+      pendingGoRef.current = null;
     };
   }, [leaveGuardRef, isDirty, doSave, initialNote]);
 
@@ -961,7 +966,9 @@ function NoteEditor({
       debounceTimerRef.current = null;
     }
     hasConflictRef.current = false;
-    (pendingGoRef.current ?? onBack)();
+    const go = pendingGoRef.current ?? onBack;
+    pendingGoRef.current = null;
+    go();
   };
 
   if (loadingNote) {
@@ -1312,6 +1319,7 @@ function NoteEditor({
                 type="button"
                 onClick={() => {
                   setShowLeaveConflictConfirm(false);
+                  pendingGoRef.current = null;
                   const resolve = leavePromptResolverRef.current;
                   leavePromptResolverRef.current = null;
                   resolve?.(false);
@@ -1361,6 +1369,7 @@ function NoteEditor({
                 type="button"
                 onClick={() => {
                   setShowSaveFailedConfirm(false);
+                  pendingGoRef.current = null;
                   const resolve = leavePromptResolverRef.current;
                   leavePromptResolverRef.current = null;
                   resolve?.(false);
@@ -1426,6 +1435,7 @@ function NoteEditor({
                   type="button"
                   onClick={() => {
                     setShowDraftNoTitleConfirm(false);
+                    pendingGoRef.current = null;
                     const resolve = leavePromptResolverRef.current;
                     leavePromptResolverRef.current = null;
                     resolve?.(false);
