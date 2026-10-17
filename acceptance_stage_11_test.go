@@ -443,6 +443,44 @@ func TestStage11_AudioTranscriptionAcceptance(t *testing.T) {
 		t.Errorf("external edit was overwritten despite conflict!")
 	}
 
+	// 7c. In-app metadata edits (title/tags) during transcription/candidate must NOT trigger conflict rejection
+	// Re-start transcription
+	if err := svc.StartAudioTranscription(audioNote.ID); err != nil {
+		t.Fatalf("StartAudioTranscription for in-app edit test failed: %v", err)
+	}
+	for time.Now().Before(time.Now().Add(5 * time.Second)) {
+		st, _ := svc.GetASRTaskStatus(audioNote.ID)
+		if st.State == asr.StatePendingConfirmation {
+			break
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+
+	// Update title and tags in-app while candidate is waiting
+	_, err = svc.UpdateNote(UpdateNoteInput{
+		ID:    audioNote.ID,
+		Title: "晨会纪要（更新标题）",
+		Tags:  []string{"晨会", "已更新"},
+	})
+	if err != nil {
+		t.Fatalf("UpdateNote failed: %v", err)
+	}
+
+	// ConfirmReplaceTranscript must succeed and not be falsely rejected as external conflict
+	inAppConfirmed, err := svc.ConfirmReplaceTranscript(audioNote.ID)
+	if err != nil {
+		t.Fatalf("ConfirmReplaceTranscript should succeed after in-app metadata edit, got: %v", err)
+	}
+	if inAppConfirmed.Title != "晨会纪要（更新标题）" {
+		t.Errorf("expected updated title preserved, got %q", inAppConfirmed.Title)
+	}
+	if len(inAppConfirmed.Tags) != 2 || inAppConfirmed.Tags[1] != "已更新" {
+		t.Errorf("expected updated tags preserved, got %v", inAppConfirmed.Tags)
+	}
+	if !strings.Contains(inAppConfirmed.Body, "（重新转写）") {
+		t.Errorf("expected candidate body replaced, got:\n%s", inAppConfirmed.Body)
+	}
+
 	// 8. Audio URL & Security:
 	audioURL, err := svc.GetAudioURL(confirmedNote.AudioFile)
 	if err != nil {
