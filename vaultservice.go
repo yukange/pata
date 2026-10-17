@@ -1729,8 +1729,9 @@ func (s *VaultService) SetASRKey(key string) error {
 	return nil
 }
 
-// GetASRKeyInternal retrieves the plain API Key from Keychain for internal ASR calls (Stage 11).
-func (s *VaultService) GetASRKeyInternal() (string, error) {
+// getASRKeyInternal retrieves the plain API Key from Keychain for internal backend ASR calls (Stage 11).
+// It is deliberately unexported so Wails will never expose it to frontend IPC bindings.
+func (s *VaultService) getASRKeyInternal() (string, error) {
 	s.mu.Lock()
 	k := s.keychain
 	s.mu.Unlock()

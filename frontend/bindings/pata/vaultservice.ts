@@ -63,13 +63,6 @@ export function GetASRConfigStatus(): $CancellablePromise<$models.ASRConfigStatu
 }
 
 /**
- * GetASRKeyInternal retrieves the plain API Key from Keychain for internal ASR calls (Stage 11).
- */
-export function GetASRKeyInternal(): $CancellablePromise<string> {
-    return $Call.ByID(3505656899);
-}
-
-/**
  * GetActivity returns an activity by its ID.
  */
 export function GetActivity(id: string): $CancellablePromise<markdown$0.Activity | null> {

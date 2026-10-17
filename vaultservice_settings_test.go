@@ -99,8 +99,8 @@ func TestASRConfigAndKeychain(t *testing.T) {
 		t.Fatalf("unexpected provider/model/region info: %+v", st)
 	}
 
-	// 2. GetASRKeyInternal should fail when unconfigured
-	_, err = svc.GetASRKeyInternal()
+	// 2. getASRKeyInternal should fail when unconfigured
+	_, err = svc.getASRKeyInternal()
 	if err == nil {
 		t.Fatalf("expected error when ASR key is unconfigured, got nil")
 	}
@@ -126,9 +126,9 @@ func TestASRConfigAndKeychain(t *testing.T) {
 	}
 
 	// 6. Internal retrieval should return the exact key
-	retrieved, err := svc.GetASRKeyInternal()
+	retrieved, err := svc.getASRKeyInternal()
 	if err != nil {
-		t.Fatalf("GetASRKeyInternal failed: %v", err)
+		t.Fatalf("getASRKeyInternal failed: %v", err)
 	}
 	if retrieved != firstKey {
 		t.Fatalf("got %q, want %q", retrieved, firstKey)
@@ -138,7 +138,7 @@ func TestASRConfigAndKeychain(t *testing.T) {
 	if err := svc.SetASRKey("   "); err == nil {
 		t.Fatalf("expected error on empty key replacement")
 	}
-	retrieved, err = svc.GetASRKeyInternal()
+	retrieved, err = svc.getASRKeyInternal()
 	if err != nil || retrieved != firstKey {
 		t.Fatalf("expected old key %q preserved after failed replacement, got %q (err: %v)", firstKey, retrieved, err)
 	}
@@ -148,7 +148,7 @@ func TestASRConfigAndKeychain(t *testing.T) {
 	if err := svc.SetASRKey(secondKey); err != nil {
 		t.Fatalf("SetASRKey failed: %v", err)
 	}
-	retrieved, err = svc.GetASRKeyInternal()
+	retrieved, err = svc.getASRKeyInternal()
 	if err != nil || retrieved != secondKey {
 		t.Fatalf("expected new key %q, got %q", secondKey, retrieved)
 	}

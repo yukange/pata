@@ -124,7 +124,7 @@ func TestStage10_SettingsAcceptance(t *testing.T) {
 	}
 
 	// Verify internal retrieval gets plain key
-	internalKey, err := svc.GetASRKeyInternal()
+	internalKey, err := svc.getASRKeyInternal()
 	if err != nil || internalKey != firstKey {
 		t.Fatalf("expected internalKey %q, got %q (err: %v)", firstKey, internalKey, err)
 	}
@@ -133,7 +133,7 @@ func TestStage10_SettingsAcceptance(t *testing.T) {
 	if err := svc.SetASRKey("  "); err == nil {
 		t.Fatalf("expected error on empty replacement")
 	}
-	internalKey, err = svc.GetASRKeyInternal()
+	internalKey, err = svc.getASRKeyInternal()
 	if err != nil || internalKey != firstKey {
 		t.Fatalf("expected old key %q preserved after failed replacement, got %q", firstKey, internalKey)
 	}
@@ -143,7 +143,7 @@ func TestStage10_SettingsAcceptance(t *testing.T) {
 	if err := svc.SetASRKey(secondKey); err != nil {
 		t.Fatalf("SetASRKey(secondKey) failed: %v", err)
 	}
-	internalKey, err = svc.GetASRKeyInternal()
+	internalKey, err = svc.getASRKeyInternal()
 	if err != nil || internalKey != secondKey {
 		t.Fatalf("expected secondKey %q, got %q", secondKey, internalKey)
 	}

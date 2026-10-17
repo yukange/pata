@@ -176,6 +176,14 @@ function NoteEditor({
   pickerRef.current = picker;
   const pickerDismissedRef = useRef(-1);
   const pendingGoRef = useRef<(() => void) | null>(null);
+  const leavePromptResolverRef = useRef<((proceed: boolean) => void) | null>(null);
+
+  const askUserConfirm = (openDialog: () => void): Promise<boolean> => {
+    return new Promise<boolean>((resolve) => {
+      leavePromptResolverRef.current = resolve;
+      openDialog();
+    });
+  };
 
   const vditorRef = useRef<Vditor | null>(null);
   const vditorContainerRef = useRef<HTMLDivElement | null>(null);
@@ -684,6 +692,15 @@ function NoteEditor({
   useEffect(() => {
     if (!leaveGuardRef) return;
     leaveGuardRef.current = async () => {
+      if (hasConflictRef.current) {
+        return askUserConfirm(() => setShowLeaveConflictConfirm(true));
+      }
+
+      if (debounceTimerRef.current) {
+        window.clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+
       const currentTitle = editTitleRef.current.trim();
       const currentTags = parseTags(editTagsRef.current);
       const currentBody = vditorRef.current ? vditorRef.current.getValue() : (initialNote?.body ?? '');
@@ -694,19 +711,21 @@ function NoteEditor({
         if (!currentBody.trim() && currentTags.length === 0) {
           return true;
         }
-        setShowDraftNoTitleConfirm(true);
-        return false;
+        return askUserConfirm(() => setShowDraftNoTitleConfirm(true));
       }
 
       const saved = await doSave();
       if (!saved) {
-        setShowSaveFailedConfirm(true);
-        return false;
+        return askUserConfirm(() => setShowSaveFailedConfirm(true));
       }
       return true;
     };
     return () => {
       leaveGuardRef.current = null;
+      if (leavePromptResolverRef.current) {
+        leavePromptResolverRef.current(false);
+        leavePromptResolverRef.current = null;
+      }
     };
   }, [leaveGuardRef, isDirty, doSave, initialNote]);
 
@@ -1290,14 +1309,29 @@ function NoteEditor({
             <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
               <button
                 type="button"
-                onClick={() => setShowLeaveConflictConfirm(false)}
+                onClick={() => {
+                  setShowLeaveConflictConfirm(false);
+                  const resolve = leavePromptResolverRef.current;
+                  leavePromptResolverRef.current = null;
+                  resolve?.(false);
+                }}
                 className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
               >
                 继续编辑
               </button>
               <button
                 type="button"
-                onClick={handleAbandonAndReturn}
+                onClick={() => {
+                  setShowLeaveConflictConfirm(false);
+                  hasConflictRef.current = false;
+                  const resolve = leavePromptResolverRef.current;
+                  leavePromptResolverRef.current = null;
+                  if (resolve) {
+                    resolve(true);
+                  } else {
+                    handleAbandonAndReturn();
+                  }
+                }}
                 className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition shadow-xs"
               >
                 放弃修改并离开
@@ -1327,7 +1361,12 @@ function NoteEditor({
             <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
               <button
                 type="button"
-                onClick={() => setShowSaveFailedConfirm(false)}
+                onClick={() => {
+                  setShowSaveFailedConfirm(false);
+                  const resolve = leavePromptResolverRef.current;
+                  leavePromptResolverRef.current = null;
+                  resolve?.(false);
+                }}
                 className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
               >
                 留在页面
@@ -1336,7 +1375,15 @@ function NoteEditor({
                 type="button"
                 onClick={() => {
                   setShowSaveFailedConfirm(false);
-                  (pendingGoRef.current ?? onBack)();
+                  const resolve = leavePromptResolverRef.current;
+                  leavePromptResolverRef.current = null;
+                  if (resolve) {
+                    resolve(true);
+                  } else {
+                    const go = pendingGoRef.current ?? onBack;
+                    pendingGoRef.current = null;
+                    go();
+                  }
                 }}
                 className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition shadow-xs"
               >
@@ -1377,7 +1424,12 @@ function NoteEditor({
               <div className="flex items-center space-x-2">
                 <button
                   type="button"
-                  onClick={() => setShowDraftNoTitleConfirm(false)}
+                  onClick={() => {
+                    setShowDraftNoTitleConfirm(false);
+                    const resolve = leavePromptResolverRef.current;
+                    leavePromptResolverRef.current = null;
+                    resolve?.(false);
+                  }}
                   className="px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-700 hover:bg-emerald-800 text-white transition shadow-xs"
                 >
                   继续编辑
@@ -1386,7 +1438,15 @@ function NoteEditor({
                   type="button"
                   onClick={() => {
                     setShowDraftNoTitleConfirm(false);
-                    (pendingGoRef.current ?? onBack)();
+                    const resolve = leavePromptResolverRef.current;
+                    leavePromptResolverRef.current = null;
+                    if (resolve) {
+                      resolve(true);
+                    } else {
+                      const go = pendingGoRef.current ?? onBack;
+                      pendingGoRef.current = null;
+                      go();
+                    }
                   }}
                   className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 text-xs transition"
                 >
