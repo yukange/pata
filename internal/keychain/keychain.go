@@ -2,7 +2,6 @@ package keychain
 
 import (
 	"errors"
-	"runtime"
 	"strings"
 	"sync"
 )
@@ -20,14 +19,6 @@ type Store interface {
 	Get(service, account string) (string, error)
 	Set(service, account, secret string) error
 	Delete(service, account string) error
-}
-
-// NewDefaultStore returns the platform-appropriate keychain store.
-func NewDefaultStore() Store {
-	if runtime.GOOS == "darwin" {
-		return NewDarwinStore()
-	}
-	return NewMemoryStore()
 }
 
 // MemoryStore provides an in-memory credential store for testing or unsupported platforms.
