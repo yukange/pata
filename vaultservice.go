@@ -1637,7 +1637,10 @@ func (s *VaultService) SetThemePreference(theme string) error {
 	}
 	cfg, err := s.loadConfig()
 	if err != nil {
-		cfg = VaultConfig{}
+		return fmt.Errorf("读取配置文件失败: %w", err)
+	}
+	if cfg.VaultPath == "" && s.vault != nil && s.vault.RootPath != "" {
+		cfg.VaultPath = s.vault.RootPath
 	}
 	cfg.Theme = theme
 	return s.saveConfig(cfg)

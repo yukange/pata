@@ -67,6 +67,16 @@ func TestThemePreference(t *testing.T) {
 	if theme != "light" {
 		t.Fatalf("expected 'light', got %q", theme)
 	}
+
+	// 6. Test that corrupted config returns error rather than overwriting config
+	_ = os.WriteFile(configPath, []byte("invalid-json{"), 0644)
+	if err := svc.SetThemePreference("dark"); err == nil {
+		t.Fatalf("expected error when setting theme on corrupted config, got nil")
+	}
+	content, _ := os.ReadFile(configPath)
+	if string(content) != "invalid-json{" {
+		t.Fatalf("corrupted config was overwritten: %s", string(content))
+	}
 }
 
 func TestOpenVaultInFinderErrors(t *testing.T) {

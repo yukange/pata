@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Events } from '@wailsio/runtime';
 import {
   FileText,
@@ -1290,7 +1291,7 @@ function NoteEditor({
       )}
 
       {/* Confirmation Modal for Leaving During Conflict */}
-      {showLeaveConflictConfirm && (
+      {showLeaveConflictConfirm && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
             <div className="flex items-start space-x-3">
@@ -1334,11 +1335,12 @@ function NoteEditor({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Confirmation Modal for Save Failure on Exit (must-fix 3) */}
-      {showSaveFailedConfirm && (
+      {showSaveFailedConfirm && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
             <div className="flex items-start space-x-3">
@@ -1388,11 +1390,12 @@ function NoteEditor({
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Confirmation Modal for Leaving Empty-Title Draft with Content */}
-      {showDraftNoTitleConfirm && (
+      {showDraftNoTitleConfirm && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
             <div className="flex items-start space-x-3">
@@ -1453,7 +1456,8 @@ function NoteEditor({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

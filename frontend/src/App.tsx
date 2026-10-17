@@ -100,7 +100,10 @@ export default function App() {
   // 当前页面登记的离开前确认（任务详情有未保存草稿时返回 false 表示取消离开）
   const leaveGuardRef = useRef<(() => Promise<boolean>) | null>(null);
   const guarded = async (go: () => void) => {
-    if (leaveGuardRef.current && !(await leaveGuardRef.current())) return;
+    if (leaveGuardRef.current && !(await leaveGuardRef.current())) {
+      setIsSettingsOpen(false);
+      return;
+    }
     go();
   };
   const goNav = (nav: 'today' | 'tasks' | 'notes') => {
