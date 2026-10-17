@@ -411,12 +411,18 @@ func TestStage11_AudioTranscriptionAcceptance(t *testing.T) {
 	if err := svc.StartAudioTranscription(audioNote.ID); err != nil {
 		t.Fatalf("StartAudioTranscription for conflict test failed: %v", err)
 	}
-	for time.Now().Before(time.Now().Add(5 * time.Second)) {
+	deadline = time.Now().Add(5 * time.Second)
+	reachedPending := false
+	for time.Now().Before(deadline) {
 		st, _ := svc.GetASRTaskStatus(audioNote.ID)
 		if st.State == asr.StatePendingConfirmation {
+			reachedPending = true
 			break
 		}
 		time.Sleep(30 * time.Millisecond)
+	}
+	if !reachedPending {
+		t.Fatalf("timed out waiting for StatePendingConfirmation in conflict test")
 	}
 
 	// Simulate external edit directly to file on disk
@@ -448,12 +454,18 @@ func TestStage11_AudioTranscriptionAcceptance(t *testing.T) {
 	if err := svc.StartAudioTranscription(audioNote.ID); err != nil {
 		t.Fatalf("StartAudioTranscription for in-app edit test failed: %v", err)
 	}
-	for time.Now().Before(time.Now().Add(5 * time.Second)) {
+	deadline = time.Now().Add(5 * time.Second)
+	reachedPending = false
+	for time.Now().Before(deadline) {
 		st, _ := svc.GetASRTaskStatus(audioNote.ID)
 		if st.State == asr.StatePendingConfirmation {
+			reachedPending = true
 			break
 		}
 		time.Sleep(30 * time.Millisecond)
+	}
+	if !reachedPending {
+		t.Fatalf("timed out waiting for StatePendingConfirmation in in-app edit test")
 	}
 
 	// Update title and tags in-app while candidate is waiting
