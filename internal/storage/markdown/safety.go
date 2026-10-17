@@ -1,6 +1,7 @@
 package markdown
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -282,20 +283,10 @@ func SafeWrite(targetPath string, data []byte, baseline *FileBaseline, tracker *
 	}, nil
 }
 
-// SafeCopyFile copies a file from srcPath to targetPath using a streamed copy into a temporary file
-// and atomic rename. It hashes the data while streaming to construct the FileBaseline without
-// buffering the entire file in memory.
-func SafeCopyFile(srcPath string, targetPath string, tracker *WriteTracker) (*FileBaseline, error) {
-	absSrc, err := filepath.Abs(srcPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve source path: %w", err)
-	}
-	srcFile, err := os.Open(absSrc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open source file: %w", err)
-	}
-	defer srcFile.Close()
-
+// writeStreamExclusive streams data from r to a temporary file in the target directory,
+// fsyncs it, and links it atomically to targetPath (failing with os.ErrExist if targetPath already exists).
+// If linking fails due to lack of hard link support, it stats and renames.
+func writeStreamExclusive(targetPath string, r io.Reader, tracker *WriteTracker) (*FileBaseline, error) {
 	absTarget, err := filepath.Abs(targetPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve target path: %w", err)
@@ -325,7 +316,7 @@ func SafeCopyFile(srcPath string, targetPath string, tracker *WriteTracker) (*Fi
 
 	hasher := sha256.New()
 	mw := io.MultiWriter(tmpFile, hasher)
-	if _, err := io.Copy(mw, srcFile); err != nil {
+	if _, err := io.Copy(mw, r); err != nil {
 		return nil, fmt.Errorf("failed to stream copy data: %w", err)
 	}
 
@@ -380,6 +371,29 @@ func SafeCopyFile(srcPath string, targetPath string, tracker *WriteTracker) (*Fi
 		Hash:    newHash,
 		ModTime: modTime,
 	}, nil
+}
+
+// SafeCopyFile copies a file from srcPath to targetPath using a streamed copy into a temporary file
+// and atomic link/rename, failing with os.ErrExist if targetPath already exists.
+// It hashes the data while streaming to construct the FileBaseline without buffering the entire file in memory.
+func SafeCopyFile(srcPath string, targetPath string, tracker *WriteTracker) (*FileBaseline, error) {
+	absSrc, err := filepath.Abs(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve source path: %w", err)
+	}
+	srcFile, err := os.Open(absSrc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open source file: %w", err)
+	}
+	defer srcFile.Close()
+
+	return writeStreamExclusive(targetPath, srcFile, tracker)
+}
+
+// SafeWriteExclusive writes byte data to targetPath exclusively, failing with os.ErrExist if targetPath
+// already exists on disk. It guarantees no concurrent overwriting via atomic link/rename.
+func SafeWriteExclusive(targetPath string, data []byte, tracker *WriteTracker) (*FileBaseline, error) {
+	return writeStreamExclusive(targetPath, bytes.NewReader(data), tracker)
 }
 
 // SafeResolveVaultPath resolves a relative or absolute targetPath against vaultRoot.

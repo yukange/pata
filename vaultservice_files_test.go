@@ -198,3 +198,63 @@ func TestVaultService_ConcurrentFileImport(t *testing.T) {
 	}
 }
 
+func TestVaultService_ConcurrentImportFileData(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	svc := NewVaultService()
+	v, err := svc.openVault(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to open vault: %v", err)
+	}
+	defer func() {
+		if svc.stopWatcher != nil {
+			svc.stopWatcher()
+		}
+	}()
+
+	results := make([]*markdown.FileResource, 5)
+	errs := make([]error, 5)
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			payload := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("unique content payload %d", idx)))
+			res, err := svc.ImportFileData("concurrent.png", payload)
+			results[idx] = res
+			errs[idx] = err
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i := 0; i < 5; i++ {
+		if errs[i] != nil {
+			t.Fatalf("concurrent ImportFileData #%d failed: %v", i, errs[i])
+		}
+		if results[i] == nil {
+			t.Fatalf("concurrent ImportFileData #%d returned nil result", i)
+		}
+	}
+
+	seenNames := make(map[string]bool)
+	for i, r := range results {
+		if seenNames[r.Name] {
+			t.Fatalf("duplicate filename generated under concurrency: %s", r.Name)
+		}
+		seenNames[r.Name] = true
+
+		diskPath := filepath.Join(v.RootPath, r.Path)
+		data, err := os.ReadFile(diskPath)
+		if err != nil {
+			t.Fatalf("failed to read imported file on disk: %v", err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("file %s is unexpectedly empty", diskPath)
+		}
+		_ = i
+	}
+}
+
+

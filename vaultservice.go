@@ -1445,10 +1445,10 @@ func (s *VaultService) ImportFileData(name string, base64Data string) (*markdown
 		uniqueName = generateUniqueFilename(filesDir, cleanName)
 		targetPath = filepath.Join(filesDir, uniqueName)
 
-		b, err := markdown.SafeWrite(targetPath, data, nil, v.Tracker)
+		b, err := markdown.SafeWriteExclusive(targetPath, data, v.Tracker)
 		if err != nil {
-			var conflictErr *markdown.ConflictError
-			if errors.As(err, &conflictErr) || errors.Is(err, os.ErrExist) {
+			if errors.Is(err, os.ErrExist) {
+				// Target appeared concurrently during write; retry with a new unique filename
 				continue
 			}
 			return nil, fmt.Errorf("写入文件失败: %w", err)

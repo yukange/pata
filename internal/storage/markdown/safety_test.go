@@ -128,3 +128,39 @@ func TestSafeCopyFile_NoOverwrite(t *testing.T) {
 	}
 }
 
+func TestSafeWriteExclusive_NoOverwrite(t *testing.T) {
+	tmpDir := t.TempDir()
+	targetPath := filepath.Join(tmpDir, "exclusive.bin")
+
+	_ = os.WriteFile(targetPath, []byte("existing content"), 0644)
+
+	// Writing to existing file MUST fail with os.ErrExist and keep content intact
+	_, err := SafeWriteExclusive(targetPath, []byte("new content"), nil)
+	if err == nil {
+		t.Fatalf("expected error when target already exists, got nil")
+	}
+	if !errors.Is(err, os.ErrExist) {
+		t.Fatalf("expected os.ErrExist, got %v", err)
+	}
+
+	content, _ := os.ReadFile(targetPath)
+	if string(content) != "existing content" {
+		t.Fatalf("existing file was overwritten! got %q", string(content))
+	}
+
+	// Writing to non-existent target succeeds
+	newTarget := filepath.Join(tmpDir, "new_exclusive.bin")
+	b, err := SafeWriteExclusive(newTarget, []byte("new content"), nil)
+	if err != nil {
+		t.Fatalf("SafeWriteExclusive failed: %v", err)
+	}
+	if b == nil || b.Hash == "" {
+		t.Fatalf("expected valid baseline, got %+v", b)
+	}
+	readBack, _ := os.ReadFile(newTarget)
+	if string(readBack) != "new content" {
+		t.Fatalf("read back content mismatch: got %q, want %q", readBack, "new content")
+	}
+}
+
+
