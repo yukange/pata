@@ -77,6 +77,14 @@ export function TasksView({
     };
   }, [loadTasks]);
 
+  const currentPathRef = useRef(vaultStatus?.path);
+  useEffect(() => {
+    if (currentPathRef.current !== vaultStatus?.path) {
+      currentPathRef.current = vaultStatus?.path;
+      setSelectedTaskId(null);
+    }
+  }, [vaultStatus?.path]);
+
   useEffect(() => {
     leaveGuardRef.current = async () => (await panelRef.current?.confirmLeave()) ?? true;
     return () => {

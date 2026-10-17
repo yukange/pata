@@ -199,7 +199,19 @@ export function TodayView({
       console.error('Failed to load today data:', err);
       setError(err?.message || String(err));
     }
-  }, [vaultStatus?.open, selectedDate, todayStr]);
+  }, [vaultStatus?.open, vaultStatus?.path, selectedDate, todayStr]);
+
+  const currentPathRef = useRef(vaultStatus?.path);
+  useEffect(() => {
+    if (currentPathRef.current !== vaultStatus?.path) {
+      currentPathRef.current = vaultStatus?.path;
+      setPendingPlan(null);
+      setNoticeMsg(null);
+      setSaveError(null);
+      setActivityError(null);
+      setEditingActivityId(null);
+    }
+  }, [vaultStatus?.path]);
 
   useEffect(() => {
     setNoticeMsg(null);

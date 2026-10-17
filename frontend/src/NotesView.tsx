@@ -1544,7 +1544,7 @@ export function NotesView({
     } finally {
       setLoading(false);
     }
-  }, [vaultStatus?.open]);
+  }, [vaultStatus?.open, vaultStatus?.path]);
 
   useEffect(() => {
     loadNotes();

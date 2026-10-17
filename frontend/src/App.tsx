@@ -291,6 +291,11 @@ export default function App() {
         setFocusTaskId(null);
         setFocusNoteId(null);
         setNoteOrigin(null);
+        setTodayTaskId(null);
+        setTodayDate(null);
+        setTagTaskId(null);
+        setSelectedTag(null);
+        setIsEditingNote(false);
       }
     } catch (err: any) {
       console.error('Select vault failed:', err);
@@ -561,7 +566,10 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden rounded-2xl border border-stone-200/70 dark:border-stone-800/70 shadow-xs bg-stone-50 dark:bg-stone-900 mt-2 mr-2 mb-2">
 
         {/* Business Views Container (hidden when settings is open, preserving editor DOM/scroll/cursor) */}
-        <div className={`flex-1 min-h-0 flex flex-col ${isSettingsOpen ? 'hidden' : ''}`}>
+        <div
+          key={vaultStatus?.path ?? 'unconfigured'}
+          className={`flex-1 min-h-0 flex flex-col ${isSettingsOpen ? 'hidden' : ''}`}
+        >
           <div
             className={
               activeNav === 'today' || activeNav === 'tasks' || activeNav === 'tag' || (activeNav === 'notes' && isEditingNote)
@@ -571,6 +579,7 @@ export default function App() {
           >
             {activeNav === 'today' && (
               <TodayView
+                key={vaultStatus?.path ?? 'today'}
                 vaultStatus={vaultStatus}
                 onSelectVault={handleSelectVault}
                 vaultBusy={vaultBusy}
@@ -587,6 +596,7 @@ export default function App() {
 
             {activeNav === 'tasks' && (
               <TasksView
+                key={vaultStatus?.path ?? 'tasks'}
                 vaultStatus={vaultStatus}
                 onSelectVault={handleSelectVault}
                 vaultBusy={vaultBusy}
@@ -601,6 +611,7 @@ export default function App() {
 
             {activeNav === 'notes' && (
               <NotesView
+                key={vaultStatus?.path ?? 'notes'}
                 vaultStatus={vaultStatus}
                 onSelectVault={handleSelectVault}
                 onRescanVault={handleRescan}
@@ -616,6 +627,7 @@ export default function App() {
 
             {activeNav === 'tag' && (
               <TagView
+                key={vaultStatus?.path ?? 'tag'}
                 selectedTag={selectedTag}
                 onOpenNote={handleOpenNote}
                 initialTaskId={tagTaskId}
