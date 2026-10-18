@@ -1621,8 +1621,16 @@ func (s *VaultService) openVault(path string) (*markdown.Vault, error) {
 	go s.forwardVaultEvents(v.Events(), stopForwarder)
 
 	s.mu.Lock()
+	oldVault := s.vault
 	oldStop := s.stopWatcher
 	s.vault = v
+	if oldVault != nil && filepath.Clean(oldVault.RootPath) != filepath.Clean(v.RootPath) {
+		// Vault changed: scope ASR state by clearing prior vault's transcript records and cancelling active tasks
+		s.transcriptRecords = make(map[string]*transcriptRecord)
+		if s.asrManager != nil {
+			s.asrManager.Reset()
+		}
+	}
 	var stopOnce sync.Once
 	s.stopWatcher = func() {
 		stopOnce.Do(func() {
@@ -2027,14 +2035,20 @@ func (s *VaultService) CreateAudioNoteData(name string, base64Data string) (*mar
 }
 
 func (s *VaultService) saveTranscriptBody(v *markdown.Vault, noteID string, transcriptBody string) error {
-	if v == nil {
+	s.mu.Lock()
+	activeVault := s.vault
+	s.mu.Unlock()
+	if activeVault == nil || v == nil {
 		return fmt.Errorf("Vault 为空")
+	}
+	if filepath.Clean(v.RootPath) != filepath.Clean(activeVault.RootPath) {
+		return fmt.Errorf("逐字稿任务所属 Vault 与当前激活 Vault 不一致，已取消写入")
 	}
 	if strings.TrimSpace(transcriptBody) == "" {
 		return fmt.Errorf("逐字稿内容为空，未识别到有效内容")
 	}
 
-	existing, ok := v.Index.GetNote(noteID)
+	existing, ok := activeVault.Index.GetNote(noteID)
 	if !ok {
 		return fmt.Errorf("目标笔记不存在: %s", noteID)
 	}
@@ -2195,18 +2209,18 @@ func (s *VaultService) ConfirmReplaceTranscript(noteID string) (*markdown.Note, 
 	activeVault := s.vault
 	s.mu.Unlock()
 
-	var targetVault *markdown.Vault
-	var candidateBaseline *markdown.FileBaseline
-
-	if rec != nil && rec.vault != nil {
-		targetVault = rec.vault
-		candidateBaseline = rec.baseline
-	} else {
-		targetVault = activeVault
+	if activeVault == nil {
+		return nil, fmt.Errorf("尚未打开 Vault")
 	}
 
-	if targetVault == nil {
-		return nil, fmt.Errorf("尚未打开 Vault")
+	if rec != nil && rec.vault != nil && filepath.Clean(rec.vault.RootPath) != filepath.Clean(activeVault.RootPath) {
+		return nil, fmt.Errorf("逐字稿任务所属 Vault 与当前激活 Vault 不一致，已取消替换")
+	}
+
+	targetVault := activeVault
+	var candidateBaseline *markdown.FileBaseline
+	if rec != nil {
+		candidateBaseline = rec.baseline
 	}
 
 	mgr := s.getASRManager()

@@ -24,6 +24,7 @@ type TaskCompletionFunc func(state ASRTaskState)
 type Manager struct {
 	mu                       sync.Mutex
 	tasks                    map[string]*ASRTaskStatus
+	cancels                  map[string]context.CancelFunc
 	client                   *Client
 	emitFunc                 func(name string, data any)
 	PollInterval             time.Duration
@@ -37,11 +38,25 @@ func NewManager(client *Client, emitFunc func(name string, data any)) *Manager {
 	}
 	return &Manager{
 		tasks:                    make(map[string]*ASRTaskStatus),
+		cancels:                  make(map[string]context.CancelFunc),
 		client:                   client,
 		emitFunc:                 emitFunc,
 		PollInterval:             2 * time.Second,
 		MaxConsecutivePollErrors: 5,
 	}
+}
+
+// Reset cancels all active background tasks and clears all task state.
+func (m *Manager) Reset() {
+	m.mu.Lock()
+	for _, cancel := range m.cancels {
+		if cancel != nil {
+			cancel()
+		}
+	}
+	m.cancels = make(map[string]context.CancelFunc)
+	m.tasks = make(map[string]*ASRTaskStatus)
+	m.mu.Unlock()
 }
 
 // SetClient updates the underlying DashScope client (useful for unit testing).
@@ -156,7 +171,15 @@ func (m *Manager) runPipeline(
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
-	defer cancel()
+	m.mu.Lock()
+	m.cancels[noteID] = cancel
+	m.mu.Unlock()
+	defer func() {
+		cancel()
+		m.mu.Lock()
+		delete(m.cancels, noteID)
+		m.mu.Unlock()
+	}()
 
 	// 0. Quick check on source audio file size before expensive preprocessing
 	if fi, err := os.Stat(audioAbsPath); err == nil && fi.Size() > MaxUploadSizeBytes {
@@ -169,7 +192,7 @@ func (m *Manager) runPipeline(
 	}
 
 	// 1. Audio Preprocessing (channel check, mono downmixing for diarization)
-	targetAudioPath, warning, cleanup, prepErr := PrepareAudioForDiarization(audioAbsPath)
+	targetAudioPath, warning, cleanup, prepErr := PrepareAudioForDiarizationContext(ctx, audioAbsPath)
 	defer cleanup()
 	if prepErr != nil {
 		m.updateStatus(noteID, func(st *ASRTaskStatus) {
@@ -462,5 +485,14 @@ func (m *Manager) SetTaskFailed(noteID string, stageMsg string, errMsg string) {
 		st.State = StateFailed
 		st.StageMessage = stageMsg
 		st.Error = errMsg
+	})
+}
+
+// SetTaskStatusForTest sets task status directly (for testing).
+func (m *Manager) SetTaskStatusForTest(noteID string, state ASRTaskState, stageMsg string, candidate string) {
+	m.updateStatus(noteID, func(st *ASRTaskStatus) {
+		st.State = state
+		st.StageMessage = stageMsg
+		st.CandidateTranscript = candidate
 	})
 }

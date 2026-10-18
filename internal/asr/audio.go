@@ -2,6 +2,7 @@ package asr
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -55,11 +56,16 @@ type AudioInfo struct {
 // InspectAudio inspects an MP3 audio file. It first checks via afinfo (on Darwin),
 // and falls back to pure Go MP3 frame header parsing.
 func InspectAudio(filePath string) (AudioInfo, error) {
+	return InspectAudioContext(context.Background(), filePath)
+}
+
+// InspectAudioContext inspects an MP3 audio file with a cancellation context.
+func InspectAudioContext(ctx context.Context, filePath string) (AudioInfo, error) {
 	info := AudioInfo{Channels: 2, DurationSec: 0}
 
 	// 1. Try macOS afinfo if available
 	if runtime.GOOS == "darwin" {
-		cmd := exec.Command("afinfo", filePath)
+		cmd := exec.CommandContext(ctx, "afinfo", filePath)
 		out, err := cmd.Output()
 		if err == nil {
 			str := string(out)
@@ -175,8 +181,13 @@ func inspectMP3Channels(data []byte) (int, error) {
 // If the input audio is already mono, it returns the original path and a no-op cleanup func.
 // If stereo, it converts it to a temporary mono copy and returns the cleanup func.
 func PrepareAudioForDiarization(srcPath string) (targetPath string, warning string, cleanup func(), err error) {
+	return PrepareAudioForDiarizationContext(context.Background(), srcPath)
+}
+
+// PrepareAudioForDiarizationContext ensures mono audio bound to ctx.
+func PrepareAudioForDiarizationContext(ctx context.Context, srcPath string) (targetPath string, warning string, cleanup func(), err error) {
 	cleanup = func() {}
-	info, inspectErr := InspectAudio(srcPath)
+	info, inspectErr := InspectAudioContext(ctx, srcPath)
 	if inspectErr == nil && info.DurationSec > 7200 {
 		warning = "音频时长超过 2 小时建议上限，说话人分离可能耗时较长或处理受限"
 	}
@@ -197,7 +208,7 @@ func PrepareAudioForDiarization(srcPath string) (targetPath string, warning stri
 
 		// afconvert -f m4af -d aac -c 1 srcPath monoPath
 		// DashScope accepts .m4a, .wav, .mp3
-		cmd := exec.Command("afconvert", "-f", "m4af", "-d", "aac", "-c", "1", srcPath, monoPath)
+		cmd := exec.CommandContext(ctx, "afconvert", "-f", "m4af", "-d", "aac", "-c", "1", srcPath, monoPath)
 		outM4a, convertErr := cmd.CombinedOutput()
 		if convertErr == nil {
 			cleanup = func() {
@@ -208,7 +219,7 @@ func PrepareAudioForDiarization(srcPath string) (targetPath string, warning stri
 
 		// If m4a fails, try WAVE
 		wavPath := filepath.Join(taskDir, fmt.Sprintf("%s.wav", baseNoExt))
-		cmdWav := exec.Command("afconvert", "-f", "WAVE", "-d", "LEI16", "-c", "1", srcPath, wavPath)
+		cmdWav := exec.CommandContext(ctx, "afconvert", "-f", "WAVE", "-d", "LEI16", "-c", "1", srcPath, wavPath)
 		outWav, wavErr := cmdWav.CombinedOutput()
 		if wavErr == nil {
 			cleanup = func() {

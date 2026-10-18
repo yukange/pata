@@ -671,3 +671,77 @@ func TestTranscriptRecord_RetryPreservesNewRecord(t *testing.T) {
 	}
 }
 
+func TestVaultService_VaultSwitchResetsASRTaskState(t *testing.T) {
+	vaultDir1 := t.TempDir()
+	vaultDir2 := t.TempDir()
+
+	svc := NewVaultService()
+	v1, err := svc.openVault(vaultDir1)
+	if err != nil {
+		t.Fatalf("openVault 1 failed: %v", err)
+	}
+	defer func() {
+		if svc.stopWatcher != nil {
+			svc.stopWatcher()
+		}
+	}()
+
+	noteID := "n-shared-id"
+
+	// Simulate in-flight / pending confirmation task in Vault 1
+	mgr := svc.getASRManager()
+	mgr.SetTaskStatusForTest(noteID, asr.StatePendingConfirmation, "等待确认替换", "Vault 1 candidate")
+
+	svc.mu.Lock()
+	svc.transcriptRecords[noteID] = &transcriptRecord{
+		vault:        v1,
+		expectedBody: "old body",
+	}
+	svc.mu.Unlock()
+
+	// Verify status is pending in Vault 1
+	st, _ := svc.GetASRTaskStatus(noteID)
+	if st.State != asr.StatePendingConfirmation {
+		t.Fatalf("expected StatePendingConfirmation in Vault 1, got %v", st.State)
+	}
+
+	// Switch to Vault 2
+	_, err = svc.openVault(vaultDir2)
+	if err != nil {
+		t.Fatalf("openVault 2 failed: %v", err)
+	}
+
+	// In Vault 2, task status for noteID must be idle, not pending confirmation from Vault 1
+	st2, _ := svc.GetASRTaskStatus(noteID)
+	if st2.State != asr.StateIdle {
+		t.Fatalf("expected StateIdle in Vault 2 after vault switch, got %v", st2.State)
+	}
+
+	// transcriptRecords must have been reset
+	svc.mu.Lock()
+	rec := svc.transcriptRecords[noteID]
+	svc.mu.Unlock()
+	if rec != nil {
+		t.Fatalf("expected transcriptRecords to be reset after vault switch, got %+v", rec)
+	}
+
+	// Any stale attempt to confirm replace pointing to v1 must be rejected
+	svc.mu.Lock()
+	svc.transcriptRecords[noteID] = &transcriptRecord{
+		vault:        v1,
+		expectedBody: "old body",
+	}
+	svc.mu.Unlock()
+
+	_, err = svc.ConfirmReplaceTranscript(noteID)
+	if err == nil {
+		t.Fatalf("expected ConfirmReplaceTranscript with mismatched vault to fail, but succeeded")
+	}
+
+	// Any stale attempt to save transcript body pointing to v1 must be rejected
+	err = svc.saveTranscriptBody(v1, noteID, "test transcript")
+	if err == nil {
+		t.Fatalf("expected saveTranscriptBody with mismatched vault to fail, but succeeded")
+	}
+}
+

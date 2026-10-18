@@ -1,6 +1,7 @@
 package asr
 
 import (
+	"context"
 	"encoding/binary"
 	"os"
 	"path/filepath"
@@ -190,6 +191,24 @@ func TestAudio_InspectMP3FileChannels(t *testing.T) {
 	_, err = inspectMP3FileChannels(filepath.Join(tmpDir, "nonexistent.mp3"))
 	if err == nil {
 		t.Fatalf("expected error for non-existent file")
+	}
+}
+
+func TestAudio_PrepareAudioForDiarizationContextTimeout(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("skipping on non-darwin")
+	}
+	tmpDir := t.TempDir()
+	stereoWAV := createTestStereoWAV(t, tmpDir)
+
+	// Provide an already-cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, cleanup, err := PrepareAudioForDiarizationContext(ctx, stereoWAV)
+	defer cleanup()
+	if err == nil {
+		t.Fatalf("expected error when context is cancelled, got nil")
 	}
 }
 
