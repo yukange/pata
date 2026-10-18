@@ -459,6 +459,16 @@ func TestStage11_AudioTranscriptionAcceptance(t *testing.T) {
 		t.Errorf("external edit was overwritten on repeated confirm attempt!")
 	}
 
+	// Starting transcription while awaiting confirmation must be rejected to protect the candidate
+	if err := svc.StartAudioTranscription(audioNote.ID); err == nil {
+		t.Fatalf("expected StartAudioTranscription to fail while in StatePendingConfirmation, but succeeded")
+	}
+
+	// Discard rejected candidate to reset state before restarting
+	if err := svc.DiscardCandidateTranscript(audioNote.ID); err != nil {
+		t.Fatalf("DiscardCandidateTranscript failed: %v", err)
+	}
+
 	// 7c. In-app metadata edits (title/tags) during transcription/candidate must NOT trigger conflict rejection
 	// Re-start transcription
 	if err := svc.StartAudioTranscription(audioNote.ID); err != nil {
@@ -597,6 +607,67 @@ func TestTranscriptRecord_CleanupOnFailure(t *testing.T) {
 
 	if rec != nil {
 		t.Errorf("expected transcriptRecord to be cleaned up after task failure, but it still exists: %+v", rec)
+	}
+}
+
+func TestTranscriptRecord_RetryPreservesNewRecord(t *testing.T) {
+	svc := NewVaultService()
+	noteID := "n-retry-race"
+
+	rec1 := &transcriptRecord{expectedBody: "gen1"}
+	rec2 := &transcriptRecord{expectedBody: "gen2"}
+
+	svc.mu.Lock()
+	svc.transcriptRecords = make(map[string]*transcriptRecord)
+	svc.transcriptRecords[noteID] = rec1
+	svc.mu.Unlock()
+
+	// Simulate cleanup for rec1
+	cleanup1 := func(state asr.ASRTaskState) {
+		if state == asr.StateFailed || state == asr.StateCompleted {
+			svc.mu.Lock()
+			if svc.transcriptRecords != nil && svc.transcriptRecords[noteID] == rec1 {
+				delete(svc.transcriptRecords, noteID)
+			}
+			svc.mu.Unlock()
+		}
+	}
+
+	// Retry installs rec2 before cleanup1 runs
+	svc.mu.Lock()
+	svc.transcriptRecords[noteID] = rec2
+	svc.mu.Unlock()
+
+	// Now cleanup1 runs for the failed/completed prior task
+	cleanup1(asr.StateFailed)
+
+	// rec2 must NOT be deleted by cleanup1
+	svc.mu.Lock()
+	current := svc.transcriptRecords[noteID]
+	svc.mu.Unlock()
+
+	if current != rec2 {
+		t.Fatalf("expected rec2 to be retained after prior task cleanup, got %+v", current)
+	}
+
+	// Cleanup for rec2 should delete it
+	cleanup2 := func(state asr.ASRTaskState) {
+		if state == asr.StateFailed || state == asr.StateCompleted {
+			svc.mu.Lock()
+			if svc.transcriptRecords != nil && svc.transcriptRecords[noteID] == rec2 {
+				delete(svc.transcriptRecords, noteID)
+			}
+			svc.mu.Unlock()
+		}
+	}
+	cleanup2(asr.StateCompleted)
+
+	svc.mu.Lock()
+	finalRec := svc.transcriptRecords[noteID]
+	svc.mu.Unlock()
+
+	if finalRec != nil {
+		t.Fatalf("expected rec2 to be deleted after its own cleanup, got %+v", finalRec)
 	}
 }
 

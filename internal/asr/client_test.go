@@ -710,6 +710,45 @@ func TestManager_ConcurrentStartTaskGuard(t *testing.T) {
 	}
 }
 
+func TestManager_PendingConfirmationGuard(t *testing.T) {
+	mgr := NewManager(nil, nil)
+	noteID := "n-pending-guard"
+
+	// Simulate a note already in StatePendingConfirmation
+	mgr.updateStatus(noteID, func(st *ASRTaskStatus) {
+		st.State = StatePendingConfirmation
+		st.StageMessage = "等待确认替换"
+		st.CandidateTranscript = "## 候选逐字稿内容\n\n[00:01](#t=00:01) 测试发言"
+	})
+
+	dummyAudio := filepath.Join(t.TempDir(), "dummy.mp3")
+	_ = os.WriteFile(dummyAudio, []byte("fake mp3"), 0644)
+
+	// Attempting to StartTask while pending confirmation must be rejected
+	started := mgr.StartTask(noteID, dummyAudio, false, "key", func(body string) error {
+		return nil
+	})
+	if started {
+		t.Fatalf("expected StartTask to return false when in StatePendingConfirmation, got true")
+	}
+
+	// Verify CandidateTranscript was not cleared
+	st := mgr.GetStatus(noteID)
+	if st.State != StatePendingConfirmation {
+		t.Fatalf("expected StatePendingConfirmation, got %v", st.State)
+	}
+	if !strings.Contains(st.CandidateTranscript, "候选逐字稿内容") {
+		t.Fatalf("expected CandidateTranscript to be preserved, got %q", st.CandidateTranscript)
+	}
+
+	// Discarding candidate allows StartTask to succeed
+	mgr.DiscardCandidate(noteID)
+	st = mgr.GetStatus(noteID)
+	if st.State != StateIdle {
+		t.Fatalf("expected StateIdle after discard, got %v", st.State)
+	}
+}
+
 func TestParseMaxFileSizeMB(t *testing.T) {
 	cases := []struct {
 		input    any

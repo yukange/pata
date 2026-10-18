@@ -1904,15 +1904,16 @@ func (s *VaultService) CreateAudioNote(sourcePath string) (*markdown.Note, error
 	}
 
 	noteID := note.ID
-	s.mu.Lock()
-	if s.transcriptRecords == nil {
-		s.transcriptRecords = make(map[string]*transcriptRecord)
-	}
-	s.transcriptRecords[noteID] = &transcriptRecord{
+	rec := &transcriptRecord{
 		vault:        v,
 		baseline:     initBaseline,
 		expectedBody: "",
 	}
+	s.mu.Lock()
+	if s.transcriptRecords == nil {
+		s.transcriptRecords = make(map[string]*transcriptRecord)
+	}
+	s.transcriptRecords[noteID] = rec
 	s.mu.Unlock()
 
 	// 2. Start asynchronous transcription in background
@@ -1922,15 +1923,21 @@ func (s *VaultService) CreateAudioNote(sourcePath string) (*markdown.Note, error
 	cleanup := func(state asr.ASRTaskState) {
 		if state == asr.StateFailed || state == asr.StateCompleted {
 			s.mu.Lock()
-			if s.transcriptRecords != nil {
+			if s.transcriptRecords != nil && s.transcriptRecords[noteID] == rec {
 				delete(s.transcriptRecords, noteID)
 			}
 			s.mu.Unlock()
 		}
 	}
-	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
+	if !mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
 		return s.saveTranscriptBody(originVault, noteID, transcriptBody)
-	}, cleanup)
+	}, cleanup) {
+		s.mu.Lock()
+		if s.transcriptRecords != nil && s.transcriptRecords[noteID] == rec {
+			delete(s.transcriptRecords, noteID)
+		}
+		s.mu.Unlock()
+	}
 
 	return note, nil
 }
@@ -1982,15 +1989,16 @@ func (s *VaultService) CreateAudioNoteData(name string, base64Data string) (*mar
 	}
 
 	noteID := note.ID
-	s.mu.Lock()
-	if s.transcriptRecords == nil {
-		s.transcriptRecords = make(map[string]*transcriptRecord)
-	}
-	s.transcriptRecords[noteID] = &transcriptRecord{
+	rec := &transcriptRecord{
 		vault:        v,
 		baseline:     initBaseline,
 		expectedBody: "",
 	}
+	s.mu.Lock()
+	if s.transcriptRecords == nil {
+		s.transcriptRecords = make(map[string]*transcriptRecord)
+	}
+	s.transcriptRecords[noteID] = rec
 	s.mu.Unlock()
 
 	originVault := v
@@ -1999,15 +2007,21 @@ func (s *VaultService) CreateAudioNoteData(name string, base64Data string) (*mar
 	cleanup := func(state asr.ASRTaskState) {
 		if state == asr.StateFailed || state == asr.StateCompleted {
 			s.mu.Lock()
-			if s.transcriptRecords != nil {
+			if s.transcriptRecords != nil && s.transcriptRecords[noteID] == rec {
 				delete(s.transcriptRecords, noteID)
 			}
 			s.mu.Unlock()
 		}
 	}
-	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
+	if !mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
 		return s.saveTranscriptBody(originVault, noteID, transcriptBody)
-	}, cleanup)
+	}, cleanup) {
+		s.mu.Lock()
+		if s.transcriptRecords != nil && s.transcriptRecords[noteID] == rec {
+			delete(s.transcriptRecords, noteID)
+		}
+		s.mu.Unlock()
+	}
 
 	return note, nil
 }
@@ -2082,6 +2096,14 @@ func (s *VaultService) StartAudioTranscription(noteID string) error {
 	}
 
 	mgr := s.getASRManager()
+	currStatus := mgr.GetStatus(trimmedID)
+	if currStatus.State == asr.StatePendingConfirmation {
+		return fmt.Errorf("当前逐字稿已有待确认的新结果，请先确认替换或放弃")
+	}
+	if currStatus.State == asr.StateUploading || currStatus.State == asr.StateTranscribing || currStatus.State == asr.StateWriting {
+		return fmt.Errorf("当前笔记已有正在进行的转写任务")
+	}
+
 	note, ok := v.Index.GetNote(trimmedID)
 	if !ok {
 		mgr.SetTaskFailed(trimmedID, "笔记不存在", fmt.Sprintf("笔记不存在: %s", trimmedID))
@@ -2112,30 +2134,38 @@ func (s *VaultService) StartAudioTranscription(noteID string) error {
 		cp := *b
 		initBaseline = &cp
 	}
-	s.mu.Lock()
-	if s.transcriptRecords == nil {
-		s.transcriptRecords = make(map[string]*transcriptRecord)
-	}
-	s.transcriptRecords[trimmedID] = &transcriptRecord{
+	rec := &transcriptRecord{
 		vault:        v,
 		baseline:     initBaseline,
 		expectedBody: note.Body,
 	}
+	s.mu.Lock()
+	if s.transcriptRecords == nil {
+		s.transcriptRecords = make(map[string]*transcriptRecord)
+	}
+	s.transcriptRecords[trimmedID] = rec
 	s.mu.Unlock()
 
 	originVault := v
 	cleanup := func(state asr.ASRTaskState) {
 		if state == asr.StateFailed || state == asr.StateCompleted {
 			s.mu.Lock()
-			if s.transcriptRecords != nil {
+			if s.transcriptRecords != nil && s.transcriptRecords[trimmedID] == rec {
 				delete(s.transcriptRecords, trimmedID)
 			}
 			s.mu.Unlock()
 		}
 	}
-	mgr.StartTask(trimmedID, audioAbsPath, isRetranscribe, apiKey, func(transcriptBody string) error {
+	if !mgr.StartTask(trimmedID, audioAbsPath, isRetranscribe, apiKey, func(transcriptBody string) error {
 		return s.saveTranscriptBody(originVault, trimmedID, transcriptBody)
-	}, cleanup)
+	}, cleanup) {
+		s.mu.Lock()
+		if s.transcriptRecords != nil && s.transcriptRecords[trimmedID] == rec {
+			delete(s.transcriptRecords, trimmedID)
+		}
+		s.mu.Unlock()
+		return fmt.Errorf("当前逐字稿已有正在进行的转写任务或等待确认")
+	}
 
 	return nil
 }
@@ -2216,7 +2246,7 @@ func (s *VaultService) ConfirmReplaceTranscript(noteID string) (*markdown.Note, 
 	}
 
 	s.mu.Lock()
-	if s.transcriptRecords != nil {
+	if s.transcriptRecords != nil && s.transcriptRecords[trimmedID] == rec {
 		delete(s.transcriptRecords, trimmedID)
 	}
 	s.mu.Unlock()

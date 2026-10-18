@@ -89,6 +89,7 @@ func (m *Manager) updateStatus(noteID string, fn func(st *ASRTaskStatus)) ASRTas
 }
 
 // StartTask launches the asynchronous upload and transcription pipeline in the background.
+// It returns true if the task was started, or false if a task is already active or pending confirmation.
 func (m *Manager) StartTask(
 	noteID string,
 	audioAbsPath string,
@@ -96,13 +97,13 @@ func (m *Manager) StartTask(
 	apiKey string,
 	onSave SaveTranscriptFunc,
 	onCompletion ...TaskCompletionFunc,
-) {
-	// Guard against starting duplicate active tasks on same note atomically
+) bool {
+	// Guard against starting duplicate active tasks or clobbering pending confirmation on same note atomically
 	m.mu.Lock()
 	st, ok := m.tasks[noteID]
-	if ok && (st.State == StateUploading || st.State == StateTranscribing || st.State == StateWriting) {
+	if ok && (st.State == StateUploading || st.State == StateTranscribing || st.State == StateWriting || st.State == StatePendingConfirmation) {
 		m.mu.Unlock()
-		return
+		return false
 	}
 	if !ok {
 		st = &ASRTaskStatus{
@@ -125,6 +126,7 @@ func (m *Manager) StartTask(
 	}
 
 	go m.runPipeline(noteID, audioAbsPath, isRetranscribe, apiKey, onSave, onCompletion...)
+	return true
 }
 
 func (m *Manager) runPipeline(
@@ -135,11 +137,11 @@ func (m *Manager) runPipeline(
 	onSave SaveTranscriptFunc,
 	onCompletion ...TaskCompletionFunc,
 ) {
+	var finalState ASRTaskState = StateFailed
 	defer func() {
-		st := m.GetStatus(noteID)
 		for _, fn := range onCompletion {
 			if fn != nil {
-				fn(st.State)
+				fn(finalState)
 			}
 		}
 	}()
@@ -388,6 +390,7 @@ TaskCompleted:
 			st.StageMessage = "重新转写完成，等待确认替换"
 			st.CandidateTranscript = formattedMarkdown
 		})
+		finalState = StatePendingConfirmation
 		return
 	}
 
@@ -412,6 +415,7 @@ TaskCompleted:
 		st.CandidateTranscript = ""
 		st.Error = ""
 	})
+	finalState = StateCompleted
 }
 
 // ConfirmReplace applies the candidate transcript to the Note via onSave.
