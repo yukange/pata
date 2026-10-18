@@ -2211,15 +2211,15 @@ func (s *VaultService) ConfirmReplaceTranscript(noteID string) (*markdown.Note, 
 		updatedNote = existing
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
 	s.mu.Lock()
 	if s.transcriptRecords != nil {
 		delete(s.transcriptRecords, trimmedID)
 	}
 	s.mu.Unlock()
-
-	if err != nil {
-		return nil, err
-	}
 
 	return updatedNote, nil
 }

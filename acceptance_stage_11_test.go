@@ -449,6 +449,16 @@ func TestStage11_AudioTranscriptionAcceptance(t *testing.T) {
 		t.Errorf("external edit was overwritten despite conflict!")
 	}
 
+	// Repeated confirmation attempt must continue to reject conflict and not bypass checks
+	_, secondConflictErr := svc.ConfirmReplaceTranscript(audioNote.ID)
+	if secondConflictErr == nil {
+		t.Fatalf("expected repeated ConfirmReplaceTranscript to also fail and protect external edits, but succeeded")
+	}
+	dataAfterSecond, _ := os.ReadFile(notePath)
+	if !strings.Contains(string(dataAfterSecond), "外部编辑新增内容") {
+		t.Errorf("external edit was overwritten on repeated confirm attempt!")
+	}
+
 	// 7c. In-app metadata edits (title/tags) during transcription/candidate must NOT trigger conflict rejection
 	// Re-start transcription
 	if err := svc.StartAudioTranscription(audioNote.ID); err != nil {
