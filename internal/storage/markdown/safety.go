@@ -336,11 +336,17 @@ func writeStreamExclusive(targetPath string, r io.Reader, tracker *WriteTracker)
 		if os.IsExist(err) {
 			return nil, fmt.Errorf("target file %s already exists: %w", absTarget, os.ErrExist)
 		}
-		// If filesystem does not support hard links, check stat and fall back to rename
-		if _, statErr := os.Stat(absTarget); statErr == nil {
-			return nil, fmt.Errorf("target file %s already exists: %w", absTarget, os.ErrExist)
+		// If filesystem does not support hard links (e.g. FAT/exFAT/SMB), exclusively reserve destination atomically
+		destFile, exclErr := os.OpenFile(absTarget, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
+		if exclErr != nil {
+			if os.IsExist(exclErr) {
+				return nil, fmt.Errorf("target file %s already exists: %w", absTarget, os.ErrExist)
+			}
+			return nil, fmt.Errorf("failed to exclusively reserve destination %s: %w", absTarget, exclErr)
 		}
+		_ = destFile.Close()
 		if err := os.Rename(tmpPath, absTarget); err != nil {
+			_ = os.Remove(absTarget)
 			return nil, fmt.Errorf("failed to rename %s to %s: %w", tmpPath, absTarget, err)
 		}
 	} else {

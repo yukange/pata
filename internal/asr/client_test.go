@@ -911,6 +911,58 @@ func TestManager_CompletionCallback(t *testing.T) {
 	}
 }
 
+func TestManager_ResetFencesOldTaskGenerations(t *testing.T) {
+	// Server that delays responding to simulate an in-flight request
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(500 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"policy":"fake","upload_host":"http://fake"}}`))
+	}))
+	defer server.Close()
+
+	client := NewClient("", "")
+	client.BaseURL = server.URL
+	mgr := NewManager(client, nil)
+
+	tmpDir := t.TempDir()
+	p := filepath.Join(tmpDir, "sample.mp3")
+	_ = os.WriteFile(p, []byte("fake mp3"), 0644)
+
+	noteID := "n-fence-test"
+	var callbackCalled bool
+	mgr.StartTask(noteID, p, false, "key", nil, func(state ASRTaskState) {
+		callbackCalled = true
+	})
+
+	// Wait briefly to ensure task enters uploading state
+	time.Sleep(20 * time.Millisecond)
+	st := mgr.GetStatus(noteID)
+	if st.State != StateUploading {
+		t.Fatalf("expected StateUploading, got %v", st.State)
+	}
+
+	// Reset manager (simulating vault switch)
+	mgr.Reset()
+
+	// Immediately after Reset, status must be StateIdle
+	if stAfter := mgr.GetStatus(noteID); stAfter.State != StateIdle {
+		t.Fatalf("expected StateIdle immediately after Reset, got %v", stAfter.State)
+	}
+
+	// Wait past the in-flight server delay to ensure old task cancels/finishes
+	time.Sleep(600 * time.Millisecond)
+
+	// Old task must NOT have recreated status or modified tasks
+	if stFinal := mgr.GetStatus(noteID); stFinal.State != StateIdle {
+		t.Fatalf("expected StateIdle to remain after old canceled task completes, got %v", stFinal.State)
+	}
+
+	// Stale task's completion callback must NOT have been called
+	if callbackCalled {
+		t.Fatalf("expected stale task's completion callback to be dropped after Reset, but was called")
+	}
+}
+
 
 
 
