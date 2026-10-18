@@ -512,18 +512,33 @@ function NoteEditor({
   useEffect(() => {
     let unlistenStatus: (() => void) | undefined;
     let unlistenVault: (() => void) | undefined;
+    let active = true;
 
     if (isAudioTranscriptNote(initialNote)) {
       VaultService.GetASRTaskStatus(noteId)
         .then((st) => {
+          if (!active) return;
           setAsrStatus(st);
           if (st.state === ASRTaskState.StatePendingConfirmation) {
             setShowReplaceConfirm(true);
+          }
+          if (st.state === ASRTaskState.StateCompleted) {
+            VaultService.GetNote(noteId).then((updated) => {
+              if (active && updated) {
+                setInitialNote(updated);
+                lastSavedStateRef.current = {
+                  title: updated.title,
+                  tags: updated.tags || [],
+                  body: updated.body || '',
+                };
+              }
+            });
           }
         })
         .catch(() => {});
 
       const subStatus = Events.On('asr:status', (event: any) => {
+        if (!active) return;
         if (event.data && event.data.note_id === noteId) {
           const st = event.data as ASRTaskStatus;
           setAsrStatus(st);
@@ -532,7 +547,7 @@ function NoteEditor({
           }
           if (st.state === ASRTaskState.StateCompleted) {
             VaultService.GetNote(noteId).then((updated) => {
-              if (updated) {
+              if (active && updated) {
                 setInitialNote(updated);
                 lastSavedStateRef.current = {
                   title: updated.title,
@@ -547,9 +562,10 @@ function NoteEditor({
       unlistenStatus = () => subStatus();
 
       const subVault = Events.On('vault:changed', (event: any) => {
+        if (!active) return;
         if (event.data && event.data.entity_id === noteId && event.data.op === 'update') {
           VaultService.GetNote(noteId).then((updated) => {
-            if (updated) {
+            if (active && updated) {
               setInitialNote(updated);
               lastSavedStateRef.current = {
                 title: updated.title,
@@ -564,6 +580,7 @@ function NoteEditor({
     }
 
     return () => {
+      active = false;
       if (unlistenStatus) unlistenStatus();
       if (unlistenVault) unlistenVault();
     };

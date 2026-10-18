@@ -963,6 +963,78 @@ func TestManager_ResetFencesOldTaskGenerations(t *testing.T) {
 	}
 }
 
+func TestManager_ResetAndRestartSameNotePreservesNewTaskCancel(t *testing.T) {
+	task1Entered := make(chan struct{})
+	task2Block := make(chan struct{})
+	var callCount int
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		callCount++
+		current := callCount
+		mu.Unlock()
+
+		if current == 1 {
+			close(task1Entered)
+			// Wait for cancel from context
+			<-r.Context().Done()
+			return
+		}
+		// Task 2: block until test releases it
+		<-task2Block
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"policy":"fake","upload_host":"http://fake"}}`))
+	}))
+	defer server.Close()
+	defer close(task2Block)
+
+	client := NewClient("", "")
+	client.BaseURL = server.URL
+	mgr := NewManager(client, nil)
+
+	tmpDir := t.TempDir()
+	p := filepath.Join(tmpDir, "sample.mp3")
+	monoFrame := []byte{0xFF, 0xFB, 0x90, 0xC0, 0x00, 0x00, 0x00, 0x00}
+	_ = os.WriteFile(p, monoFrame, 0644)
+
+	noteID := "n-cancel-scope-test"
+	mgr.StartTask(noteID, p, false, "key", nil)
+
+	// Wait for task 1 to reach HTTP server (so ctx & cancel are registered)
+	select {
+	case <-task1Entered:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for task 1 to start")
+	}
+
+	// Reset manager (cancels task 1)
+	mgr.Reset()
+
+	// Start new task 2 with the same noteID
+	started := mgr.StartTask(noteID, p, false, "key", nil)
+	if !started {
+		t.Fatalf("expected new task to start successfully after Reset")
+	}
+
+	// Wait briefly for task 2 to register its cancel and task 1's defer to execute
+	time.Sleep(100 * time.Millisecond)
+
+	// Verify that task 1's defer did NOT delete task 2's cancel func
+	mgr.mu.Lock()
+	cancelFn := mgr.cancels[noteID]
+	gen := mgr.taskGenerations[noteID]
+	mgr.mu.Unlock()
+
+	if cancelFn == nil {
+		t.Fatalf("expected new task's cancel function to still be present in manager, but was deleted by old task defer")
+	}
+	if gen == 0 {
+		t.Fatalf("expected task generation to be tracked for task 2")
+	}
+}
+
+
 
 
 

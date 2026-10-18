@@ -110,5 +110,25 @@ test('parseTranscript: rejects invalid timestamp ranges and mismatched anchors',
   assert.equal(blocks[1].text, '这是合法的时间戳。');
 });
 
+test('findSentenceAtTime: handles non-chronological blocks from external edits', () => {
+  const blocks = [
+    { id: '1', timestampStr: '00:00:10.000', timestampMs: 10000, speaker: 'S1', text: '10s block' },
+    { id: '2', timestampStr: '00:00:05.000', timestampMs: 5000, speaker: 'S2', text: '5s block' },
+    { id: '3', timestampStr: '00:00:15.000', timestampMs: 15000, speaker: 'S1', text: '15s block' },
+    { id: '4', timestampStr: '00:00:08.000', timestampMs: 8000, speaker: 'S2', text: '8s block' },
+  ];
+
+  // Seeking to 6s should pick the 5s block (index 1), not fail at the first 10s block
+  assert.equal(findSentenceAtTime(blocks, 6000), 1);
+  // Seeking to 9s should pick the 8s block (index 3)
+  assert.equal(findSentenceAtTime(blocks, 9000), 3);
+  // Seeking to 11s should pick the 10s block (index 0)
+  assert.equal(findSentenceAtTime(blocks, 11000), 0);
+  // Seeking to 20s should pick the 15s block (index 2)
+  assert.equal(findSentenceAtTime(blocks, 20000), 2);
+  // Seeking before any block (e.g. 2s) should return the first timed block (index 0)
+  assert.equal(findSentenceAtTime(blocks, 2000), 0);
+});
+
 
 

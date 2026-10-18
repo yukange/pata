@@ -117,6 +117,7 @@ export function findSentenceAtTime(blocks: TranscriptBlock[], timeMs: number): n
   if (!blocks || blocks.length === 0) return -1;
 
   let bestIdx = -1;
+  let bestMs = -1;
   let firstTimedIdx = -1;
 
   for (let i = 0; i < blocks.length; i++) {
@@ -126,9 +127,10 @@ export function findSentenceAtTime(blocks: TranscriptBlock[], timeMs: number): n
       firstTimedIdx = i;
     }
     if (ms <= timeMs) {
-      bestIdx = i;
-    } else {
-      break;
+      if (bestIdx === -1 || ms >= bestMs) {
+        bestIdx = i;
+        bestMs = ms;
+      }
     }
   }
 

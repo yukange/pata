@@ -187,8 +187,16 @@ func (m *Manager) runPipeline(
 	onSave SaveTranscriptFunc,
 	onCompletion ...TaskCompletionFunc,
 ) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	m.mu.Lock()
+	if m.taskGenerations[noteID] == gen {
+		m.cancels[noteID] = cancel
+	}
+	m.mu.Unlock()
+
 	var finalState ASRTaskState = StateFailed
 	defer func() {
+		cancel()
 		m.mu.Lock()
 		isCurrent := m.taskGenerations[noteID] == gen
 		if isCurrent {
@@ -214,17 +222,6 @@ func (m *Manager) runPipeline(
 		})
 		return
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
-	m.mu.Lock()
-	m.cancels[noteID] = cancel
-	m.mu.Unlock()
-	defer func() {
-		cancel()
-		m.mu.Lock()
-		delete(m.cancels, noteID)
-		m.mu.Unlock()
-	}()
 
 	// 0. Quick check on source audio file size before expensive preprocessing
 	if fi, err := os.Stat(audioAbsPath); err == nil && fi.Size() > MaxUploadSizeBytes {
