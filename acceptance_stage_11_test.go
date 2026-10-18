@@ -539,3 +539,54 @@ func TestStage11_AudioTranscriptionAcceptance(t *testing.T) {
 		t.Errorf("ordinary note must not have AudioFile set, got %q", normalNote.AudioFile)
 	}
 }
+
+func TestTranscriptRecord_CleanupOnFailure(t *testing.T) {
+	vaultDir := t.TempDir()
+	extDir := t.TempDir()
+	mp3Path := filepath.Join(extDir, "fail-sample.mp3")
+	createTestMP3(t, mp3Path, true)
+
+	svc := NewVaultService()
+	svc.keychain = keychain.NewMemoryStore() // unconfigured key
+	_, err := svc.openVault(vaultDir)
+	if err != nil {
+		t.Fatalf("openVault failed: %v", err)
+	}
+	defer func() {
+		if svc.stopWatcher != nil {
+			svc.stopWatcher()
+		}
+	}()
+
+	note, err := svc.CreateAudioNote(mp3Path)
+	if err != nil {
+		t.Fatalf("CreateAudioNote failed: %v", err)
+	}
+
+	// Task will fail due to missing API key
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		st, _ := svc.GetASRTaskStatus(note.ID)
+		if st.State == asr.StateFailed {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	st, _ := svc.GetASRTaskStatus(note.ID)
+	if st.State != asr.StateFailed {
+		t.Fatalf("expected task to fail, got %v", st.State)
+	}
+
+	// Wait briefly for completion cleanup to execute
+	time.Sleep(50 * time.Millisecond)
+
+	svc.mu.Lock()
+	rec := svc.transcriptRecords[note.ID]
+	svc.mu.Unlock()
+
+	if rec != nil {
+		t.Errorf("expected transcriptRecord to be cleaned up after task failure, but it still exists: %+v", rec)
+	}
+}
+

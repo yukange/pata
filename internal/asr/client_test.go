@@ -841,6 +841,38 @@ func TestManager_OversizedFile(t *testing.T) {
 	}
 }
 
+func TestManager_CompletionCallback(t *testing.T) {
+	mgr := NewManager(nil, nil)
+	tmpDir := t.TempDir()
+	p := filepath.Join(tmpDir, "sample.mp3")
+	_ = os.WriteFile(p, []byte("audio"), 0644)
+
+	var completedState ASRTaskState
+	var called bool
+
+	// Task with empty API key fails immediately in runPipeline
+	mgr.StartTask("n-cleanup", p, false, "", nil, func(state ASRTaskState) {
+		called = true
+		completedState = state
+	})
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if called {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if !called {
+		t.Fatalf("expected completion callback to be called")
+	}
+	if completedState != StateFailed {
+		t.Fatalf("expected StateFailed, got %v", completedState)
+	}
+}
+
+
 
 
 

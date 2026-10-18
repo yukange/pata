@@ -17,7 +17,9 @@ test('formatTime & parseTime: millisecond precision', () => {
   assert.equal(parseTime('00:00:00.000'), 0);
   assert.equal(parseTime('00:01:05.230'), 65230);
   assert.equal(parseTime('01:01:01.005'), 3661005);
-  assert.equal(parseTime('invalid'), 0);
+  assert.equal(parseTime('invalid'), null);
+  assert.equal(parseTime('00:99:00.000'), null);
+  assert.equal(parseTime('00:00:60.000'), null);
 });
 
 test('parseTranscript: parses markdown blocks with timestamps and speakers', () => {
@@ -85,5 +87,28 @@ test('parseTranscript: fallback for unformatted markdown has no fabricated times
   assert.equal(blocks[0].timestampStr, undefined);
   assert.equal(findSentenceAtTime(blocks, 5000), -1);
 });
+
+test('parseTranscript: rejects invalid timestamp ranges and mismatched anchors', () => {
+  const md = `[00:99:00.000](#t=garbage) 说话人 1
+这是分钟超限且锚点不符的内容。
+
+[00:01:00.000](#t=00:02:00.000) 说话人 2
+这是锚点不匹配的内容。
+
+[00:01:05.230](#t=00:01:05.230) 说话人 1
+这是合法的时间戳。`;
+
+  const blocks = parseTranscript(md);
+  assert.equal(blocks.length, 2);
+  assert.ok(blocks[0].text.includes('[00:99:00.000](#t=garbage)'));
+  assert.ok(blocks[0].text.includes('[00:01:00.000](#t=00:02:00.000)'));
+  assert.equal(blocks[0].timestampMs, undefined);
+  assert.equal(blocks[0].timestampStr, undefined);
+
+  assert.equal(blocks[1].timestampStr, '00:01:05.230');
+  assert.equal(blocks[1].timestampMs, 65230);
+  assert.equal(blocks[1].text, '这是合法的时间戳。');
+});
+
 
 

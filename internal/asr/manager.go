@@ -17,6 +17,9 @@ const EventASRStatus = "asr:status"
 // SaveTranscriptFunc writes the generated markdown transcript to disk safely.
 type SaveTranscriptFunc func(transcriptMarkdown string) error
 
+// TaskCompletionFunc is called when an ASR task finishes its background run with its final state.
+type TaskCompletionFunc func(state ASRTaskState)
+
 // Manager manages in-memory ASR tasks for Notes across view navigation.
 type Manager struct {
 	mu                       sync.Mutex
@@ -92,6 +95,7 @@ func (m *Manager) StartTask(
 	isRetranscribe bool,
 	apiKey string,
 	onSave SaveTranscriptFunc,
+	onCompletion ...TaskCompletionFunc,
 ) {
 	// Guard against starting duplicate active tasks on same note atomically
 	m.mu.Lock()
@@ -120,7 +124,7 @@ func (m *Manager) StartTask(
 		emit(EventASRStatus, copySt)
 	}
 
-	go m.runPipeline(noteID, audioAbsPath, isRetranscribe, apiKey, onSave)
+	go m.runPipeline(noteID, audioAbsPath, isRetranscribe, apiKey, onSave, onCompletion...)
 }
 
 func (m *Manager) runPipeline(
@@ -129,7 +133,17 @@ func (m *Manager) runPipeline(
 	isRetranscribe bool,
 	apiKey string,
 	onSave SaveTranscriptFunc,
+	onCompletion ...TaskCompletionFunc,
 ) {
+	defer func() {
+		st := m.GetStatus(noteID)
+		for _, fn := range onCompletion {
+			if fn != nil {
+				fn(st.State)
+			}
+		}
+	}()
+
 	if strings.TrimSpace(apiKey) == "" {
 		m.updateStatus(noteID, func(st *ASRTaskStatus) {
 			st.State = StateFailed

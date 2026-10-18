@@ -1919,9 +1919,18 @@ func (s *VaultService) CreateAudioNote(sourcePath string) (*markdown.Note, error
 	originVault := v
 	audioAbsPath := filepath.Join(v.RootPath, filepath.FromSlash(res.Path))
 	mgr := s.getASRManager()
+	cleanup := func(state asr.ASRTaskState) {
+		if state == asr.StateFailed || state == asr.StateCompleted {
+			s.mu.Lock()
+			if s.transcriptRecords != nil {
+				delete(s.transcriptRecords, noteID)
+			}
+			s.mu.Unlock()
+		}
+	}
 	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
 		return s.saveTranscriptBody(originVault, noteID, transcriptBody)
-	})
+	}, cleanup)
 
 	return note, nil
 }
@@ -1987,9 +1996,18 @@ func (s *VaultService) CreateAudioNoteData(name string, base64Data string) (*mar
 	originVault := v
 	audioAbsPath := filepath.Join(v.RootPath, filepath.FromSlash(res.Path))
 	mgr := s.getASRManager()
+	cleanup := func(state asr.ASRTaskState) {
+		if state == asr.StateFailed || state == asr.StateCompleted {
+			s.mu.Lock()
+			if s.transcriptRecords != nil {
+				delete(s.transcriptRecords, noteID)
+			}
+			s.mu.Unlock()
+		}
+	}
 	mgr.StartTask(noteID, audioAbsPath, false, apiKey, func(transcriptBody string) error {
 		return s.saveTranscriptBody(originVault, noteID, transcriptBody)
-	})
+	}, cleanup)
 
 	return note, nil
 }
@@ -2106,9 +2124,18 @@ func (s *VaultService) StartAudioTranscription(noteID string) error {
 	s.mu.Unlock()
 
 	originVault := v
+	cleanup := func(state asr.ASRTaskState) {
+		if state == asr.StateFailed || state == asr.StateCompleted {
+			s.mu.Lock()
+			if s.transcriptRecords != nil {
+				delete(s.transcriptRecords, trimmedID)
+			}
+			s.mu.Unlock()
+		}
+	}
 	mgr.StartTask(trimmedID, audioAbsPath, isRetranscribe, apiKey, func(transcriptBody string) error {
 		return s.saveTranscriptBody(originVault, trimmedID, transcriptBody)
-	})
+	}, cleanup)
 
 	return nil
 }
@@ -2184,15 +2211,15 @@ func (s *VaultService) ConfirmReplaceTranscript(noteID string) (*markdown.Note, 
 		updatedNote = existing
 		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-
 	s.mu.Lock()
 	if s.transcriptRecords != nil {
 		delete(s.transcriptRecords, trimmedID)
 	}
 	s.mu.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
 
 	return updatedNote, nil
 }

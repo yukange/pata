@@ -18,18 +18,19 @@ export function formatTime(ms: number): string {
   return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(millis, 3)}`;
 }
 
-export function parseTime(ts: string): number {
-  if (!ts) return 0;
+export function parseTime(ts: string): number | null {
+  if (!ts) return null;
   const match = ts.trim().match(/^(\d{2}):(\d{2}):(\d{2})\.(\d{3})$/);
-  if (!match) return 0;
+  if (!match) return null;
   const h = parseInt(match[1], 10);
   const m = parseInt(match[2], 10);
   const s = parseInt(match[3], 10);
   const ms = parseInt(match[4], 10);
+  if (m >= 60 || s >= 60) return null;
   return h * 3600000 + m * 60000 + s * 1000 + ms;
 }
 
-const TIMESTAMP_HEADER_REGEX = /^\[(\d{2}:\d{2}:\d{2}\.\d{3})\](?:\(#t=[^)]+\))?(?:\s+(.*?))?$/;
+const TIMESTAMP_HEADER_REGEX = /^\[(\d{2}:\d{2}:\d{2}\.\d{3})\](?:\(#t=([^)]*)\))?(?:\s+(.*?))?$/;
 
 /**
  * Parses a Stage 11 Markdown transcript into sentence blocks.
@@ -70,15 +71,23 @@ export function parseTranscript(body: string): TranscriptBlock[] {
     const line = lines[i].trim();
     const headerMatch = line.match(TIMESTAMP_HEADER_REGEX);
     if (headerMatch) {
-      flush();
       const tsStr = headerMatch[1];
-      const speaker = (headerMatch[2] || '').trim();
-      currentBlock = {
-        timestampStr: tsStr,
-        timestampMs: parseTime(tsStr),
-        speaker: speaker || '发言',
-      };
-    } else if (currentBlock) {
+      const anchor = headerMatch[2];
+      const speaker = (headerMatch[3] || '').trim();
+      const parsedMs = parseTime(tsStr);
+
+      if (parsedMs !== null && (anchor === undefined || anchor === tsStr)) {
+        flush();
+        currentBlock = {
+          timestampStr: tsStr,
+          timestampMs: parsedMs,
+          speaker: speaker || '发言',
+        };
+        continue;
+      }
+    }
+
+    if (currentBlock) {
       textLines.push(lines[i]);
     } else {
       // Non-transcript preamble or unformatted markdown
