@@ -94,22 +94,26 @@ export const TranscriptViewer = forwardRef<TranscriptViewerRef, TranscriptViewer
                   : 'bg-transparent border-transparent hover:bg-stone-50/60 dark:hover:bg-stone-900/40'
               }`}
             >
-              {/* Sentence Header: Clickable Timestamp + Speaker attribution */}
-              <div className="flex items-center space-x-2 pb-1.5 select-none">
-                <button
-                  type="button"
-                  onClick={() => onJumpToTime(b.timestampMs)}
-                  className="font-mono text-xs px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 transition cursor-pointer"
-                  title="点击跳到该时间播放"
-                >
-                  [{b.timestampStr}]
-                </button>
-                {b.speaker && (
-                  <span className="text-xs font-semibold text-stone-700 dark:text-stone-300">
-                    {b.speaker}
-                  </span>
-                )}
-              </div>
+              {/* Sentence Header: Clickable Timestamp + Speaker attribution (selectable & copyable) */}
+              {(b.timestampStr || b.speaker) && (
+                <div className="flex items-center space-x-2 pb-1.5">
+                  {b.timestampStr && (
+                    <button
+                      type="button"
+                      onClick={() => b.timestampMs !== undefined && onJumpToTime(b.timestampMs)}
+                      className="font-mono text-xs px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200/80 dark:border-emerald-800/60 transition cursor-pointer"
+                      title="点击跳到该时间播放"
+                    >
+                      [{b.timestampStr}]
+                    </button>
+                  )}
+                  {b.speaker && (
+                    <span className="text-xs font-semibold text-stone-700 dark:text-stone-300">
+                      {b.speaker}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Read-only sentence body: selectable, copyable, searchable */}
               <div className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed font-sans whitespace-pre-wrap break-words">

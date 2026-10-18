@@ -1,8 +1,8 @@
 export interface TranscriptBlock {
   id: string;
-  timestampStr: string;
-  timestampMs: number;
-  speaker: string;
+  timestampStr?: string;
+  timestampMs?: number;
+  speaker?: string;
   text: string;
 }
 
@@ -33,7 +33,7 @@ const TIMESTAMP_HEADER_REGEX = /^\[(\d{2}:\d{2}:\d{2}\.\d{3})\](?:\(#t=[^)]+\))?
 
 /**
  * Parses a Stage 11 Markdown transcript into sentence blocks.
- * If the markdown has no recognized timestamp blocks, it treats the markdown as a fallback single block.
+ * If the markdown has no recognized timestamp blocks, it treats the markdown as ordinary fallback text without fabricated timestamps.
  */
 export function parseTranscript(body: string): TranscriptBlock[] {
   if (!body || !body.trim()) {
@@ -49,9 +49,9 @@ export function parseTranscript(body: string): TranscriptBlock[] {
   const flush = () => {
     if (currentBlock) {
       blocks.push({
-        id: `tb-${blocks.length}-${currentBlock.timestampMs}`,
-        timestampStr: currentBlock.timestampStr || '00:00:00.000',
-        timestampMs: currentBlock.timestampMs || 0,
+        id: `tb-${blocks.length}-${currentBlock.timestampMs ?? 0}`,
+        timestampStr: currentBlock.timestampStr,
+        timestampMs: currentBlock.timestampMs,
         speaker: currentBlock.speaker || '发言',
         text: textLines.join('\n').trim(),
       });
@@ -60,9 +60,6 @@ export function parseTranscript(body: string): TranscriptBlock[] {
     } else if (textLines.join('\n').trim()) {
       blocks.push({
         id: `tb-preamble-${blocks.length}`,
-        timestampStr: '00:00:00.000',
-        timestampMs: 0,
-        speaker: '',
         text: textLines.join('\n').trim(),
       });
       textLines = [];
@@ -91,13 +88,10 @@ export function parseTranscript(body: string): TranscriptBlock[] {
 
   flush();
 
-  // If no blocks were parsed using headers but text exists, wrap as a single fallback block
+  // If no blocks were parsed using headers but text exists, wrap as a single fallback block without timestamps
   if (blocks.length === 0 && body.trim()) {
     blocks.push({
       id: 'tb-fallback',
-      timestampStr: '00:00:00.000',
-      timestampMs: 0,
-      speaker: '',
       text: body.trim(),
     });
   }
@@ -107,27 +101,28 @@ export function parseTranscript(body: string): TranscriptBlock[] {
 
 /**
  * Finds the index of the sentence that is closest to and not later than the given time (ms).
- * If all sentences start after timeMs, returns index 0.
- * If no blocks, returns -1.
+ * If all timed sentences start after timeMs, returns index of the first timed sentence.
+ * If no timed blocks, returns -1.
  */
 export function findSentenceAtTime(blocks: TranscriptBlock[], timeMs: number): number {
   if (!blocks || blocks.length === 0) return -1;
-  if (timeMs <= blocks[0].timestampMs) return 0;
-  if (timeMs >= blocks[blocks.length - 1].timestampMs) return blocks.length - 1;
 
-  let low = 0;
-  let high = blocks.length - 1;
-  let ans = 0;
+  let bestIdx = -1;
+  let firstTimedIdx = -1;
 
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    if (blocks[mid].timestampMs <= timeMs) {
-      ans = mid;
-      low = mid + 1;
+  for (let i = 0; i < blocks.length; i++) {
+    const ms = blocks[i].timestampMs;
+    if (ms === undefined) continue;
+    if (firstTimedIdx === -1) {
+      firstTimedIdx = i;
+    }
+    if (ms <= timeMs) {
+      bestIdx = i;
     } else {
-      high = mid - 1;
+      break;
     }
   }
 
-  return ans;
+  if (bestIdx !== -1) return bestIdx;
+  return firstTimedIdx;
 }

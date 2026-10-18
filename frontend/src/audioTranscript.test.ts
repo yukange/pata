@@ -58,7 +58,7 @@ test('findSentenceAtTime: binary search for closest sentence <= time', () => {
   assert.equal(findSentenceAtTime(blocks, 45000), 2);
 });
 
-test('parseTranscript: retains preamble text before first timestamp block', () => {
+test('parseTranscript: retains preamble text before first timestamp block without fabricating timestamps', () => {
   const md = `# 晨会记录
 这是前言说明内容。
 
@@ -69,8 +69,21 @@ test('parseTranscript: retains preamble text before first timestamp block', () =
   const blocks = parseTranscript(md);
   assert.equal(blocks.length, 2);
   assert.equal(blocks[0].text, '# 晨会记录\n这是前言说明内容。');
-  assert.equal(blocks[0].timestampMs, 0);
+  assert.equal(blocks[0].timestampMs, undefined);
+  assert.equal(blocks[0].timestampStr, undefined);
   assert.equal(blocks[1].text, '会议正式开始。');
   assert.equal(blocks[1].timestampMs, 5100);
+  assert.equal(blocks[1].timestampStr, '00:00:05.100');
 });
+
+test('parseTranscript: fallback for unformatted markdown has no fabricated timestamps', () => {
+  const md = '普通纯文本会议记录，未包含任何时间戳结构。';
+  const blocks = parseTranscript(md);
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0].text, md);
+  assert.equal(blocks[0].timestampMs, undefined);
+  assert.equal(blocks[0].timestampStr, undefined);
+  assert.equal(findSentenceAtTime(blocks, 5000), -1);
+});
+
 
