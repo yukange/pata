@@ -92,3 +92,138 @@ export function computeKeyboardReorder(
   const nextIds = reorderTaskIds(taskIds, currentIndex, targetIndex);
   return { nextIds, nextIndex: targetIndex };
 }
+
+/**
+ * 计算兄弟列表项在拖拽过程中的平滑让位位移（像素）。
+ *
+ * @param initialIndex 拖拽项的初始索引
+ * @param targetIndex 当前指针所在的目标落点索引
+ * @param itemIndex 正在计算位移的兄弟项索引
+ * @param draggedHeight 拖拽项的实际高度（像素）
+ * @returns 兄弟项应应用的 translateY 偏移量（像素）
+ */
+export function computeSiblingDisplacement(
+  initialIndex: number,
+  targetIndex: number,
+  itemIndex: number,
+  draggedHeight: number
+): number {
+  if (initialIndex === targetIndex || itemIndex === initialIndex || draggedHeight <= 0) {
+    return 0;
+  }
+
+  if (targetIndex > initialIndex) {
+    // 拖拽项向下移动：位于 (initialIndex, targetIndex] 之间的兄弟项向上让出拖拽项高度
+    if (itemIndex > initialIndex && itemIndex <= targetIndex) {
+      return -draggedHeight;
+    }
+  } else if (targetIndex < initialIndex) {
+    // 拖拽项向上移动：位于 [targetIndex, initialIndex) 之间的兄弟项向下让出拖拽项高度
+    if (itemIndex >= targetIndex && itemIndex < initialIndex) {
+      return draggedHeight;
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * 计算拖拽松手吸附时，拖拽项对齐到目标槽位的目标垂直位移（像素）。
+ * 基于拖拽开始时快照的各项真实边界矩形，完美适应不同行高场景。
+ *
+ * @param initialIndex 拖拽项初始索引
+ * @param targetIndex 目标吸附槽位索引
+ * @param itemRects 各项在列表流中的 top, bottom 矩形信息
+ * @returns 拖拽项相对其初始位置的 translateY 目标偏移量（像素）
+ */
+export function computeSnapOffset(
+  initialIndex: number,
+  targetIndex: number,
+  itemRects: Array<{ top: number; bottom: number; height?: number }>
+): number {
+  const n = itemRects.length;
+  if (n <= 1 || targetIndex === initialIndex) return 0;
+  if (initialIndex < 0 || initialIndex >= n) return 0;
+  if (targetIndex < 0 || targetIndex >= n) return 0;
+
+  if (targetIndex > initialIndex) {
+    // 向下移动：拖拽项底部对齐目标项原始底部
+    return itemRects[targetIndex].bottom - itemRects[initialIndex].bottom;
+  } else {
+    // 向上移动：拖拽项顶部对齐目标项原始顶部
+    return itemRects[targetIndex].top - itemRects[initialIndex].top;
+  }
+}
+
+export interface DragSessionConfig {
+  taskIds: string[];
+  initialIndex: number;
+  itemRects: Array<{ top: number; bottom: number; height: number }>;
+  containerRect: { top: number; bottom: number; left: number; right: number };
+  initialScrollTop: number;
+  startY: number;
+}
+
+export interface DragSessionUpdate {
+  pointerX: number;
+  pointerY: number;
+  scrollTop: number;
+}
+
+export interface DragSessionSnapshot {
+  targetIndex: number;
+  isOver: boolean;
+  draggedTranslateY: number;
+  siblingDisplacements: number[];
+  canCommit: boolean;
+}
+
+/**
+ * 单帧拖拽计算核心函数：统一处理指针位移、列表滚动差值、落点有效性判定、
+ * 拖动项连续跟手偏移量以及全量兄弟项平滑让位向量。
+ */
+export function evaluateDragSession(
+  config: DragSessionConfig,
+  update: DragSessionUpdate
+): DragSessionSnapshot {
+  const scrollDelta = update.scrollTop - config.initialScrollTop;
+  const containerTop = config.containerRect.top - scrollDelta;
+  const containerBottom = config.containerRect.bottom - scrollDelta;
+
+  const isOver = isPointerInDropZone(
+    {
+      top: containerTop,
+      bottom: containerBottom,
+      left: config.containerRect.left,
+      right: config.containerRect.right,
+    },
+    update.pointerX,
+    update.pointerY,
+    48
+  );
+
+  const itemMids = config.itemRects.map((r) => (r.top + r.bottom) / 2);
+  const adjustedY = update.pointerY + scrollDelta;
+  const targetIndex = isOver ? computeTargetIndex(itemMids, adjustedY) : config.initialIndex;
+
+  const draggedHeight = config.itemRects[config.initialIndex]?.height ?? 0;
+  const draggedTranslateY = update.pointerY - config.startY + scrollDelta;
+
+  const siblingDisplacements = config.itemRects.map((_, idx) =>
+    isOver
+      ? computeSiblingDisplacement(config.initialIndex, targetIndex, idx, draggedHeight)
+      : 0
+  );
+
+  const canCommit = isOver && targetIndex !== config.initialIndex;
+
+  return {
+    targetIndex,
+    isOver,
+    draggedTranslateY,
+    siblingDisplacements,
+    canCommit,
+  };
+}
+
+

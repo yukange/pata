@@ -5,8 +5,6 @@ import {
   ChevronRight,
   RotateCcw,
   CheckCircle2,
-  Circle,
-  GripVertical,
   Plus,
   Search,
   X,
@@ -22,10 +20,10 @@ import { Task, TaskStatus } from '../bindings/pata/internal/storage/markdown/mod
 import { VaultStatus, CreateTaskInput, TimelineItem, CreateActivityInput } from '../bindings/pata/models';
 import { playLogoSuccess } from './logoAnimation';
 import { QuickCreateInput } from './QuickCreateInput';
+import { TodayPlanList } from './TodayPlanList';
 import { TaskDetailPanel, TaskDetailHandle } from './TaskDetailPanel';
 import { DetailSplit, useDetailOrigin } from './DetailSplit';
 import { NoteRefText, NoteRefTextarea, NoteRefMap, pruneRefs, sameRefs, useNoteRefs } from './noteRefs';
-import { reorderTaskIds, computeTargetIndex, isPointerInDropZone, computeKeyboardReorder } from './todayReorder';
 
 interface TodayViewProps {
   vaultStatus: VaultStatus | null;
@@ -134,25 +132,6 @@ export function TodayView({
   const [noticeMsg, setNoticeMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // 拖拽排序状态
-  interface DragState {
-    taskId: string;
-    initialIndex: number;
-    previewIndex: number;
-    previewIds: string[];
-    isOverValidArea: boolean;
-  }
-  const [dragState, setDragState] = useState<DragState | null>(null);
-  const justDraggedRef = useRef(false);
-  const listRef = useRef<HTMLUListElement>(null);
-  const dragCleanupRef = useRef<(() => void) | null>(null);
-
-  useEffect(() => {
-    return () => {
-      dragCleanupRef.current?.();
-    };
-  }, []);
-
   // 任务已创建但加入计划失败：保留 ID，重试只写计划，不再创建任务
   const [pendingPlan, setPendingPlan] = useState<{ id: string; title: string; date: string; error: string } | null>(null);
 
@@ -231,8 +210,6 @@ export function TodayView({
       setSaveError(null);
       setActivityError(null);
       setEditingActivityId(null);
-      setDragState(null);
-      dragCleanupRef.current?.();
     }
   }, [vaultStatus?.path]);
 
@@ -241,8 +218,6 @@ export function TodayView({
     setSaveError(null);
     setActivityError(null);
     setEditingActivityId(null);
-    setDragState(null);
-    dragCleanupRef.current?.();
   }, [selectedDate]);
 
   useEffect(() => {
@@ -265,10 +240,9 @@ export function TodayView({
     [dayPlanTaskIds, taskMap]
   );
 
-  const activePlanIds = dragState ? dragState.previewIds : dayPlanTaskIds;
-  const planItems = useMemo(
-    () => activePlanIds.map((id) => ({ id, task: taskMap.get(id) ?? null })),
-    [activePlanIds, taskMap]
+  const completedCount = useMemo(
+    () => dayPlanTaskIds.filter((id) => taskMap.get(id)?.status === TaskStatus.TaskStatusDone).length,
+    [dayPlanTaskIds, taskMap]
   );
 
   const yesterdayCandidates = useMemo(() => {
@@ -361,204 +335,14 @@ export function TodayView({
     }
   };
 
-  const handleHandleKeyDown = async (e: React.KeyboardEvent, taskId: string) => {
-    if (saving || validPlanIds.length <= 1) return;
-    if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
-      e.preventDefault();
-      e.stopPropagation();
-      const res = computeKeyboardReorder(validPlanIds, taskId, e.key);
-      if (res) {
-        const ok = await persistPlan(res.nextIds);
-        if (ok) {
-          requestAnimationFrame(() => {
-            const handleEl = listRef.current?.querySelector<HTMLButtonElement>(`[data-drag-handle="${taskId}"]`);
-            handleEl?.focus();
-          });
-        }
-      }
-    } else if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      e.stopPropagation();
+  const handlePlanReorder = async (nextIds: string[]): Promise<boolean> => {
+    const prevIds = dayPlanTaskIds;
+    setDayPlanTaskIds(nextIds);
+    const ok = await persistPlan(nextIds);
+    if (!ok) {
+      setDayPlanTaskIds(prevIds);
     }
-  };
-
-  const handlePointerDown = (e: React.PointerEvent, taskId: string) => {
-    if (e.button !== 0 || validPlanIds.length <= 1 || saving) return;
-    e.stopPropagation();
-
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const initialIndex = validPlanIds.indexOf(taskId);
-    if (initialIndex === -1) return;
-
-    const container = listRef.current;
-    if (!container) return;
-
-    const itemElements = Array.from(container.querySelectorAll<HTMLElement>('[data-plan-task-id]'));
-    if (itemElements.length === 0) return;
-
-    const scrollParent = container.closest('.overflow-y-auto') as HTMLElement | null;
-    const initialScrollTop = scrollParent?.scrollTop ?? 0;
-
-    // 一次性缓存矩形与各项垂直中心点，避免 pointermove 内部反复调用 getBoundingClientRect 触发布局回流
-    const initialContainerRect = container.getBoundingClientRect();
-    const scrollParentRect = scrollParent?.getBoundingClientRect() ?? null;
-
-    const itemMids = itemElements.map((el) => {
-      const r = el.getBoundingClientRect();
-      return (r.top + r.bottom) / 2;
-    });
-
-    let draggingActive = false;
-    let currentPreviewIndex = initialIndex;
-    let currentPreviewIds = [...validPlanIds];
-    let currentIsOverValidArea = true;
-
-    let rafId = 0;
-    let autoScrollRafId = 0;
-    let autoScrollSpeed = 0;
-
-    const stopAutoScroll = () => {
-      if (autoScrollRafId) {
-        cancelAnimationFrame(autoScrollRafId);
-        autoScrollRafId = 0;
-      }
-      autoScrollSpeed = 0;
-    };
-
-    const startAutoScroll = () => {
-      if (autoScrollRafId) return;
-      const step = () => {
-        if (!scrollParent || autoScrollSpeed === 0) {
-          autoScrollRafId = 0;
-          return;
-        }
-        scrollParent.scrollTop += autoScrollSpeed;
-        autoScrollRafId = requestAnimationFrame(step);
-      };
-      autoScrollRafId = requestAnimationFrame(step);
-    };
-
-    const cleanup = () => {
-      if (rafId) {
-        cancelAnimationFrame(rafId);
-        rafId = 0;
-      }
-      stopAutoScroll();
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerCancel);
-      window.removeEventListener('keydown', onKeyDown);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      dragCleanupRef.current = null;
-    };
-    dragCleanupRef.current = cleanup;
-
-    const onPointerMove = (moveEvent: PointerEvent) => {
-      if (!draggingActive) {
-        if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 3) {
-          draggingActive = true;
-          document.body.style.cursor = 'grabbing';
-          document.body.style.userSelect = 'none';
-        } else {
-          return;
-        }
-      }
-
-      // 边缘自动滚动检测（使用缓存矩形，零回流）
-      if (scrollParent && scrollParentRect) {
-        const edgeDistance = 32;
-        if (moveEvent.clientY < scrollParentRect.top + edgeDistance) {
-          autoScrollSpeed = -6;
-          startAutoScroll();
-        } else if (moveEvent.clientY > scrollParentRect.bottom - edgeDistance) {
-          autoScrollSpeed = 6;
-          startAutoScroll();
-        } else {
-          stopAutoScroll();
-        }
-      }
-
-      // 根据初始区域与滚动差值判断是否在有效释放区域
-      const currentScrollTop = scrollParent?.scrollTop ?? 0;
-      const scrollDelta = currentScrollTop - initialScrollTop;
-
-      const containerTop = initialContainerRect.top - scrollDelta;
-      const containerBottom = initialContainerRect.bottom - scrollDelta;
-      const isOver = isPointerInDropZone(
-        {
-          top: containerTop,
-          bottom: containerBottom,
-          left: initialContainerRect.left,
-          right: initialContainerRect.right,
-        },
-        moveEvent.clientX,
-        moveEvent.clientY,
-        48
-      );
-
-      const adjustedY = moveEvent.clientY + scrollDelta;
-      const targetIndex = computeTargetIndex(itemMids, adjustedY);
-
-      // 若落点索引与有效状态均无变化，跳过 React 状态重设，杜绝多余重绘
-      if (targetIndex === currentPreviewIndex && isOver === currentIsOverValidArea) {
-        return;
-      }
-
-      currentPreviewIndex = targetIndex;
-      currentIsOverValidArea = isOver;
-      currentPreviewIds = reorderTaskIds(validPlanIds, initialIndex, targetIndex);
-
-      // 使用 requestAnimationFrame 对齐屏幕刷新率渲染
-      if (!rafId) {
-        rafId = requestAnimationFrame(() => {
-          rafId = 0;
-          setDragState({
-            taskId,
-            initialIndex,
-            previewIndex: currentPreviewIndex,
-            previewIds: currentPreviewIds,
-            isOverValidArea: currentIsOverValidArea,
-          });
-        });
-      }
-    };
-
-    const onPointerUp = () => {
-      cleanup();
-      if (draggingActive) {
-        justDraggedRef.current = true;
-        setTimeout(() => {
-          justDraggedRef.current = false;
-        }, 120);
-
-        setDragState(null);
-        if (currentIsOverValidArea && currentPreviewIndex !== initialIndex) {
-          void persistPlan(currentPreviewIds);
-        }
-      }
-    };
-
-    const onPointerCancel = () => {
-      cleanup();
-      if (draggingActive) {
-        setDragState(null);
-      }
-    };
-
-    const onKeyDown = (keyEvent: KeyboardEvent) => {
-      if (keyEvent.key === 'Escape') {
-        keyEvent.preventDefault();
-        cleanup();
-        setDragState(null);
-      }
-    };
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerCancel);
-    window.addEventListener('keydown', onKeyDown);
+    return ok;
   };
 
   const handleRemove = (taskId: string) => persistPlan(dayPlanTaskIds.filter((id) => id !== taskId));
@@ -745,7 +529,6 @@ export function TodayView({
   }
 
   const isToday = selectedDate === todayStr;
-  const completedCount = planItems.filter((i) => i.task?.status === TaskStatus.TaskStatusDone).length;
   const planWord = isToday ? '今日' : '当日';
 
   const taskLink = (taskId: string, title: string) => (
@@ -776,11 +559,15 @@ export function TodayView({
       }}
       onDeleted={closePanel}
       onOpenNote={onOpenNote}
-      planDateContext={{
-        date: openTaskDate,
-        isToday: openTaskDate === todayStr,
-        onRemoveFromPlan: (tId, d) => handleRemoveFromDate(tId, d),
-      }}
+      planDateContext={
+        openTaskDate === selectedDate && dayPlanTaskIds.includes(openTaskId)
+          ? {
+              date: openTaskDate,
+              isToday: openTaskDate === todayStr,
+              onRemoveFromPlan: (tId, d) => handleRemoveFromDate(tId, d),
+            }
+          : undefined
+      }
     />
   ) : null;
 
@@ -864,7 +651,7 @@ export function TodayView({
               <div className="flex items-baseline gap-2">
                 <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">{planWord}计划</h2>
                 <span className="font-mono text-stone-400">
-                  {completedCount} / {planItems.length}
+                  {completedCount} / {dayPlanTaskIds.length}
                 </span>
               </div>
               <button
@@ -911,139 +698,19 @@ export function TodayView({
               </div>
             )}
 
-            {planItems.length === 0 ? (
-              <p className="text-xs text-stone-400 py-1">
-                {isToday ? '今天还没有安排任务。' : '该日期无计划安排。'}输入标题添加，或从已有任务中选择。
-              </p>
-            ) : (
-              <ul ref={listRef} className="divide-y divide-stone-200/70 dark:divide-stone-800 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
-                {planItems.map(({ id, task }) => {
-                  if (!task) {
-                    return (
-                      <li key={id} className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs bg-rose-50/40 dark:bg-rose-950/20">
-                        <div className="flex items-center gap-2 text-rose-700 dark:text-rose-300 min-w-0">
-                          <AlertCircle className="w-4 h-4 shrink-0" />
-                          <span className="font-mono text-[11px] truncate">[已删除任务: {id}]</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void handleRemove(id)}
-                          disabled={saving}
-                          className="px-2 py-0.5 rounded text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/40 font-medium shrink-0"
-                          title="只清除计划中的失效引用"
-                        >
-                          清除占位
-                        </button>
-                      </li>
-                    );
-                  }
-
-                  const isDone = task.status === TaskStatus.TaskStatusDone;
-                  const isDraggingThis = dragState?.taskId === task.id;
-                  let dueBadge: React.ReactNode = null;
-                  if (task.due && !isDone) {
-                    dueBadge =
-                      task.due < todayStr ? (
-                        <span className="text-[10px] px-1.5 rounded font-medium bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 shrink-0">
-                          逾期 {task.due}
-                        </span>
-                      ) : task.due === todayStr ? (
-                        <span className="text-[10px] px-1.5 rounded font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 shrink-0">
-                          今日到期
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-stone-400 shrink-0">due {task.due}</span>
-                      );
-                  }
-
-                  return (
-                    <li
-                      key={task.id}
-                      data-plan-task-id={task.id}
-                      onClick={() => {
-                        if (justDraggedRef.current) return;
-                        void openTask(task.id);
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                          e.preventDefault();
-                          void openTask(task.id);
-                        }
-                      }}
-                      tabIndex={0}
-                      role="button"
-                      className={`group flex items-center gap-3 px-3 py-2.5 cursor-pointer first:rounded-t-xl last:rounded-b-xl hover:bg-stone-50 dark:hover:bg-stone-900/60 focus:outline-none focus:ring-0 ${
-                        dragState ? 'transition-none select-none' : 'transition-colors'
-                      } ${
-                        task.id === openTaskId ? 'bg-stone-100/80 dark:bg-stone-800/50' : ''
-                      } ${
-                        isDraggingThis
-                          ? dragState.isOverValidArea
-                            ? 'relative z-10 border-l-4 border-l-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 opacity-75 shadow-xs'
-                            : 'relative z-10 border-l-4 border-l-amber-500 bg-amber-50/40 dark:bg-amber-950/20 opacity-40 shadow-xs'
-                          : ''
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void handleToggleStatus(task);
-                        }}
-                        className="p-0.5 rounded shrink-0 focus:outline-none focus:ring-0"
-                        title={isDone ? '点击恢复为待办' : '点击标记为完成'}
-                      >
-                        {isDone ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <Circle className="w-4 h-4 text-stone-400 group-hover:text-stone-600" />
-                        )}
-                      </button>
-
-                      <div className="flex items-center gap-2 min-w-0 flex-1 text-xs">
-                        <span
-                          className={`font-medium truncate ${
-                            isDone ? 'line-through text-stone-400 dark:text-stone-500' : 'text-stone-900 dark:text-stone-100'
-                          }`}
-                        >
-                          {task.title}
-                        </span>
-                        {dueBadge}
-                        {(task.tags ?? []).length > 0 && (
-                          <span className="hidden sm:inline-flex items-center gap-1 shrink-0">
-                            {(task.tags ?? []).map((tag) => (
-                              <span key={tag} className="text-[10px] text-stone-400">
-                                #{tag}
-                              </span>
-                            ))}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="w-6 h-6 flex items-center justify-center shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          data-drag-handle={task.id}
-                          tabIndex={0}
-                          aria-label={`任务「${task.title}」排序手柄，按上下方向键调整顺序`}
-                          title="按住拖拽排序，或按上下方向键调整顺序"
-                          className={`w-6 h-6 flex items-center justify-center rounded text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
-                            isDraggingThis
-                              ? 'opacity-100 cursor-grabbing text-emerald-600 dark:text-emerald-400'
-                              : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 cursor-grab disabled:opacity-20'
-                          }`}
-                          disabled={saving || validPlanIds.length <= 1}
-                          onPointerDown={(e) => handlePointerDown(e, task.id)}
-                          onKeyDown={(e) => void handleHandleKeyDown(e, task.id)}
-                        >
-                          <GripVertical className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <TodayPlanList
+              taskIds={dayPlanTaskIds}
+              taskMap={taskMap}
+              isToday={isToday}
+              todayStr={todayStr}
+              selectedDate={selectedDate}
+              openTaskId={openTaskId}
+              saving={saving}
+              onOpenTask={(tId) => void openTask(tId)}
+              onToggleStatus={(task) => void handleToggleStatus(task)}
+              onRemoveTask={(tId) => void handleRemove(tId)}
+              onReorder={handlePlanReorder}
+            />
 
             <p className="text-[11px] text-stone-400">
               计划只是当天的执行安排，不改变截止日期（due）。
