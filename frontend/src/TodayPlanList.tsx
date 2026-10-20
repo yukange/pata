@@ -19,6 +19,25 @@ export interface TodayPlanListProps {
   onReorder: (newTaskIds: string[]) => Promise<boolean>;
 }
 
+function renderDueBadge(task: Task, todayStr: string): React.ReactNode {
+  if (!task.due || task.status === TaskStatus.TaskStatusDone) return null;
+  if (task.due < todayStr) {
+    return (
+      <span className="text-[10px] px-1.5 rounded font-medium bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 shrink-0">
+        逾期 {task.due}
+      </span>
+    );
+  }
+  if (task.due === todayStr) {
+    return (
+      <span className="text-[10px] px-1.5 rounded font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 shrink-0">
+        今日到期
+      </span>
+    );
+  }
+  return <span className="text-[10px] text-stone-400 shrink-0">due {task.due}</span>;
+}
+
 interface SortableTaskItemProps {
   task: Task;
   index: number;
@@ -47,21 +66,7 @@ function SortableTaskItem({
   });
 
   const isDone = task.status === TaskStatus.TaskStatusDone;
-  let dueBadge: React.ReactNode = null;
-  if (task.due && !isDone) {
-    dueBadge =
-      task.due < todayStr ? (
-        <span className="text-[10px] px-1.5 rounded font-medium bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 shrink-0">
-          逾期 {task.due}
-        </span>
-      ) : task.due === todayStr ? (
-        <span className="text-[10px] px-1.5 rounded font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 shrink-0">
-          今日到期
-        </span>
-      ) : (
-        <span className="text-[10px] text-stone-400 shrink-0">due {task.due}</span>
-      );
-  }
+  const dueBadge = renderDueBadge(task, todayStr);
 
   return (
     <li
@@ -126,8 +131,8 @@ function SortableTaskItem({
           ref={handleRef}
           data-drag-handle={task.id}
           tabIndex={0}
-          aria-label={`任务「${task.title}」排序手柄，按上下方向键调整顺序`}
-          title="按住拖拽排序，或按上下方向键调整顺序"
+          aria-label={`任务「${task.title}」排序手柄，按空格或回车抓取，按上下方向键移动，再次按空格或回车放下`}
+          title="按住拖拽排序，或按空格/回车抓取后按上下方向键调整顺序"
           className="w-6 h-6 flex items-center justify-center rounded text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 cursor-grab disabled:opacity-20"
           disabled={disabled}
         >
@@ -138,8 +143,9 @@ function SortableTaskItem({
   );
 }
 
-function TaskOverlayPreview({ task }: { task: Task }) {
+function TaskOverlayPreview({ task, todayStr }: { task: Task; todayStr: string }) {
   const isDone = task.status === TaskStatus.TaskStatusDone;
+  const dueBadge = renderDueBadge(task, todayStr);
   return (
     <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-emerald-500/60 bg-white dark:bg-stone-900 shadow-2xl select-none cursor-grabbing">
       <div className="p-0.5 rounded shrink-0">
@@ -157,6 +163,7 @@ function TaskOverlayPreview({ task }: { task: Task }) {
         >
           {task.title}
         </span>
+        {dueBadge}
         {(task.tags ?? []).length > 0 && (
           <span className="hidden sm:inline-flex items-center gap-1 shrink-0">
             {(task.tags ?? []).map((tag) => (
@@ -287,7 +294,7 @@ export function TodayPlanList({
         {(source) => {
           const task = taskMap.get(String(source.id));
           if (!task) return null;
-          return <TaskOverlayPreview task={task} />;
+          return <TaskOverlayPreview task={task} todayStr={todayStr} />;
         }}
       </DragOverlay>
     </DragDropProvider>
