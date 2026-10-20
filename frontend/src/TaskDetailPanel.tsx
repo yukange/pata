@@ -5,6 +5,7 @@ import {
   MoreHorizontal,
   Check,
   Calendar,
+  CalendarMinus,
   X,
   Trash2,
   AlertCircle,
@@ -85,6 +86,12 @@ export interface TaskDetailHandle {
   reload: () => Promise<void>;
 }
 
+export interface PlanDateContext {
+  date: string;
+  isToday: boolean;
+  onRemoveFromPlan: (taskId: string, date: string) => Promise<boolean>;
+}
+
 interface TaskDetailPanelProps {
   taskId: string;
   closeLabel: string;
@@ -94,6 +101,7 @@ interface TaskDetailPanelProps {
   onChanged: () => void;
   onDeleted: () => void;
   onOpenNote?: (noteId: string, fromTaskId?: string) => void;
+  planDateContext?: PlanDateContext;
 }
 
 const isConflictErr = (err: any) =>
@@ -101,11 +109,12 @@ const isConflictErr = (err: any) =>
   (err.message.includes('write conflict') || err.message.includes('conflict at'));
 
 export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps>(function TaskDetailPanel(
-  { taskId, closeLabel, tagNames = [], onClose, onChanged, onDeleted, onOpenNote },
+  { taskId, closeLabel, tagNames = [], onClose, onChanged, onDeleted, onOpenNote, planDateContext },
   ref
 ) {
   const [task, setTask] = useState<Task | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [removingFromPlan, setRemovingFromPlan] = useState(false);
 
   const [detailTitle, setDetailTitle] = useState('');
   const [detailStatus, setDetailStatus] = useState<TaskStatus>(TaskStatus.TaskStatusTodo);
@@ -561,7 +570,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-36 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-lg py-1 z-30">
+              <div className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-lg py-1 z-30">
                 <button
                   type="button"
                   onClick={() => {
@@ -573,6 +582,33 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                   <Info className="w-3.5 h-3.5 text-stone-400 shrink-0" />
                   <span>任务信息</span>
                 </button>
+                {planDateContext && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setMenuOpen(false);
+                      if (!(await confirmLeave())) return;
+                      setRemovingFromPlan(true);
+                      try {
+                        const ok = await planDateContext.onRemoveFromPlan(taskId, planDateContext.date);
+                        if (ok) {
+                          onClose();
+                        } else {
+                          setDetailError('移出计划失败，请重试');
+                        }
+                      } catch (err: any) {
+                        setDetailError(`移出计划失败: ${err?.message || err}`);
+                      } finally {
+                        setRemovingFromPlan(false);
+                      }
+                    }}
+                    disabled={removingFromPlan || saving}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition text-left disabled:opacity-50"
+                  >
+                    <CalendarMinus className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                    <span>{planDateContext.isToday ? '移出今日计划' : '移出当日计划'}</span>
+                  </button>
+                )}
                 <div className="my-1 border-t border-stone-100 dark:border-stone-800" />
                 <button
                   type="button"

@@ -6,9 +6,7 @@ import {
   RotateCcw,
   CheckCircle2,
   Circle,
-  ArrowUp,
-  ArrowDown,
-  CalendarMinus,
+  GripVertical,
   Plus,
   Search,
   X,
@@ -27,6 +25,7 @@ import { QuickCreateInput } from './QuickCreateInput';
 import { TaskDetailPanel, TaskDetailHandle } from './TaskDetailPanel';
 import { DetailSplit, useDetailOrigin } from './DetailSplit';
 import { NoteRefText, NoteRefTextarea, NoteRefMap, pruneRefs, sameRefs, useNoteRefs } from './noteRefs';
+import { reorderTaskIds, computeTargetIndex, isPointerInDropZone, computeKeyboardReorder } from './todayReorder';
 
 interface TodayViewProps {
   vaultStatus: VaultStatus | null;
@@ -135,6 +134,25 @@ export function TodayView({
   const [noticeMsg, setNoticeMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // 拖拽排序状态
+  interface DragState {
+    taskId: string;
+    initialIndex: number;
+    previewIndex: number;
+    previewIds: string[];
+    isOverValidArea: boolean;
+  }
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const justDraggedRef = useRef(false);
+  const listRef = useRef<HTMLUListElement>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+    };
+  }, []);
+
   // 任务已创建但加入计划失败：保留 ID，重试只写计划，不再创建任务
   const [pendingPlan, setPendingPlan] = useState<{ id: string; title: string; date: string; error: string } | null>(null);
 
@@ -155,6 +173,9 @@ export function TodayView({
 
   // 原地详情
   const [openTaskId, setOpenTaskId] = useState<string | null>(initialTaskId ?? null);
+  const [openTaskDate, setOpenTaskDate] = useState<string>(
+    initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : todayStr
+  );
   useEffect(() => {
     if (initialTaskId) onInitialTaskConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -210,6 +231,8 @@ export function TodayView({
       setSaveError(null);
       setActivityError(null);
       setEditingActivityId(null);
+      setDragState(null);
+      dragCleanupRef.current?.();
     }
   }, [vaultStatus?.path]);
 
@@ -218,6 +241,8 @@ export function TodayView({
     setSaveError(null);
     setActivityError(null);
     setEditingActivityId(null);
+    setDragState(null);
+    dragCleanupRef.current?.();
   }, [selectedDate]);
 
   useEffect(() => {
@@ -235,11 +260,16 @@ export function TodayView({
 
   const taskMap = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
-  const planItems = useMemo(
-    () => dayPlanTaskIds.map((id) => ({ id, task: taskMap.get(id) ?? null })),
+  const validPlanIds = useMemo(
+    () => dayPlanTaskIds.filter((id) => taskMap.has(id)),
     [dayPlanTaskIds, taskMap]
   );
-  const validPlanIds = useMemo(() => planItems.filter((i) => i.task).map((i) => i.id), [planItems]);
+
+  const activePlanIds = dragState ? dragState.previewIds : dayPlanTaskIds;
+  const planItems = useMemo(
+    () => activePlanIds.map((id) => ({ id, task: taskMap.get(id) ?? null })),
+    [activePlanIds, taskMap]
+  );
 
   const yesterdayCandidates = useMemo(() => {
     if (selectedDate !== todayStr) return [];
@@ -266,6 +296,7 @@ export function TodayView({
     if (openTaskId && openTaskId !== id && !((await panelRef.current?.confirmLeave()) ?? true)) return;
     origin.capture();
     setOpenTaskId(id);
+    setOpenTaskDate(selectedDate);
   };
 
   const closePanel = () => {
@@ -286,19 +317,21 @@ export function TodayView({
     return errStr;
   };
 
-  // 保存当前日期计划；已失效的 ID 一并剔除。成功返回 true。
-  const persistPlan = async (newTaskIds: string[]): Promise<boolean> => {
+  // 保存指定日期的计划；已失效的 ID 一并剔除。成功返回 true。
+  const persistPlanForDate = async (date: string, newTaskIds: string[]): Promise<boolean> => {
     setSaving(true);
     setSaveError(null);
     try {
       const filtered = newTaskIds.filter((id) => taskMap.has(id));
       const dropped = newTaskIds.length - filtered.length;
-      const updated = await VaultService.SaveDayPlan(selectedDate, filtered);
-      setDayPlanTaskIds((updated?.task_ids ?? filtered).filter((id): id is string => typeof id === 'string'));
+      const updated = await VaultService.SaveDayPlan(date, filtered);
+      if (date === selectedDate) {
+        setDayPlanTaskIds((updated?.task_ids ?? filtered).filter((id): id is string => typeof id === 'string'));
+      }
       setNoticeMsg(dropped > 0 ? `已同步移除 ${dropped} 个失效任务占位` : null);
       return true;
     } catch (err: any) {
-      console.error('Failed to save day plan:', err);
+      console.error('Failed to save day plan for date:', date, err);
       reportSaveError(err);
       await loadData();
       return false;
@@ -307,13 +340,225 @@ export function TodayView({
     }
   };
 
-  const handleMove = async (taskId: string, direction: 'up' | 'down') => {
-    const i = validPlanIds.indexOf(taskId);
-    const j = direction === 'up' ? i - 1 : i + 1;
-    if (i === -1 || j < 0 || j >= validPlanIds.length) return;
-    const ids = [...validPlanIds];
-    [ids[i], ids[j]] = [ids[j], ids[i]];
-    await persistPlan(ids);
+  // 保存当前日期计划
+  const persistPlan = (newTaskIds: string[]): Promise<boolean> => persistPlanForDate(selectedDate, newTaskIds);
+
+  // 从指定日期的计划中移出任务（任务详情「更多」调用）
+  const handleRemoveFromDate = async (taskId: string, date: string): Promise<boolean> => {
+    try {
+      const plan = await VaultService.GetDayPlan(date);
+      const existing = (plan?.task_ids ?? []).filter((id): id is string => typeof id === 'string');
+      const nextIds = existing.filter((id) => id !== taskId);
+      const ok = await persistPlanForDate(date, nextIds);
+      if (ok) {
+        await loadData();
+        onVaultDataChanged();
+      }
+      return ok;
+    } catch (err: any) {
+      reportSaveError(err);
+      return false;
+    }
+  };
+
+  const handleHandleKeyDown = async (e: React.KeyboardEvent, taskId: string) => {
+    if (saving || validPlanIds.length <= 1) return;
+    if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+      e.preventDefault();
+      e.stopPropagation();
+      const res = computeKeyboardReorder(validPlanIds, taskId, e.key);
+      if (res) {
+        const ok = await persistPlan(res.nextIds);
+        if (ok) {
+          requestAnimationFrame(() => {
+            const handleEl = listRef.current?.querySelector<HTMLButtonElement>(`[data-drag-handle="${taskId}"]`);
+            handleEl?.focus();
+          });
+        }
+      }
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
+  const handlePointerDown = (e: React.PointerEvent, taskId: string) => {
+    if (e.button !== 0 || validPlanIds.length <= 1 || saving) return;
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialIndex = validPlanIds.indexOf(taskId);
+    if (initialIndex === -1) return;
+
+    const container = listRef.current;
+    if (!container) return;
+
+    const itemElements = Array.from(container.querySelectorAll<HTMLElement>('[data-plan-task-id]'));
+    if (itemElements.length === 0) return;
+
+    const scrollParent = container.closest('.overflow-y-auto') as HTMLElement | null;
+    const initialScrollTop = scrollParent?.scrollTop ?? 0;
+
+    // 一次性缓存矩形与各项垂直中心点，避免 pointermove 内部反复调用 getBoundingClientRect 触发布局回流
+    const initialContainerRect = container.getBoundingClientRect();
+    const scrollParentRect = scrollParent?.getBoundingClientRect() ?? null;
+
+    const itemMids = itemElements.map((el) => {
+      const r = el.getBoundingClientRect();
+      return (r.top + r.bottom) / 2;
+    });
+
+    let draggingActive = false;
+    let currentPreviewIndex = initialIndex;
+    let currentPreviewIds = [...validPlanIds];
+    let currentIsOverValidArea = true;
+
+    let rafId = 0;
+    let autoScrollRafId = 0;
+    let autoScrollSpeed = 0;
+
+    const stopAutoScroll = () => {
+      if (autoScrollRafId) {
+        cancelAnimationFrame(autoScrollRafId);
+        autoScrollRafId = 0;
+      }
+      autoScrollSpeed = 0;
+    };
+
+    const startAutoScroll = () => {
+      if (autoScrollRafId) return;
+      const step = () => {
+        if (!scrollParent || autoScrollSpeed === 0) {
+          autoScrollRafId = 0;
+          return;
+        }
+        scrollParent.scrollTop += autoScrollSpeed;
+        autoScrollRafId = requestAnimationFrame(step);
+      };
+      autoScrollRafId = requestAnimationFrame(step);
+    };
+
+    const cleanup = () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      stopAutoScroll();
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      dragCleanupRef.current = null;
+    };
+    dragCleanupRef.current = cleanup;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      if (!draggingActive) {
+        if (Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY) > 3) {
+          draggingActive = true;
+          document.body.style.cursor = 'grabbing';
+          document.body.style.userSelect = 'none';
+        } else {
+          return;
+        }
+      }
+
+      // 边缘自动滚动检测（使用缓存矩形，零回流）
+      if (scrollParent && scrollParentRect) {
+        const edgeDistance = 32;
+        if (moveEvent.clientY < scrollParentRect.top + edgeDistance) {
+          autoScrollSpeed = -6;
+          startAutoScroll();
+        } else if (moveEvent.clientY > scrollParentRect.bottom - edgeDistance) {
+          autoScrollSpeed = 6;
+          startAutoScroll();
+        } else {
+          stopAutoScroll();
+        }
+      }
+
+      // 根据初始区域与滚动差值判断是否在有效释放区域
+      const currentScrollTop = scrollParent?.scrollTop ?? 0;
+      const scrollDelta = currentScrollTop - initialScrollTop;
+
+      const containerTop = initialContainerRect.top - scrollDelta;
+      const containerBottom = initialContainerRect.bottom - scrollDelta;
+      const isOver = isPointerInDropZone(
+        {
+          top: containerTop,
+          bottom: containerBottom,
+          left: initialContainerRect.left,
+          right: initialContainerRect.right,
+        },
+        moveEvent.clientX,
+        moveEvent.clientY,
+        48
+      );
+
+      const adjustedY = moveEvent.clientY + scrollDelta;
+      const targetIndex = computeTargetIndex(itemMids, adjustedY);
+
+      // 若落点索引与有效状态均无变化，跳过 React 状态重设，杜绝多余重绘
+      if (targetIndex === currentPreviewIndex && isOver === currentIsOverValidArea) {
+        return;
+      }
+
+      currentPreviewIndex = targetIndex;
+      currentIsOverValidArea = isOver;
+      currentPreviewIds = reorderTaskIds(validPlanIds, initialIndex, targetIndex);
+
+      // 使用 requestAnimationFrame 对齐屏幕刷新率渲染
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          rafId = 0;
+          setDragState({
+            taskId,
+            initialIndex,
+            previewIndex: currentPreviewIndex,
+            previewIds: currentPreviewIds,
+            isOverValidArea: currentIsOverValidArea,
+          });
+        });
+      }
+    };
+
+    const onPointerUp = () => {
+      cleanup();
+      if (draggingActive) {
+        justDraggedRef.current = true;
+        setTimeout(() => {
+          justDraggedRef.current = false;
+        }, 120);
+
+        setDragState(null);
+        if (currentIsOverValidArea && currentPreviewIndex !== initialIndex) {
+          void persistPlan(currentPreviewIds);
+        }
+      }
+    };
+
+    const onPointerCancel = () => {
+      cleanup();
+      if (draggingActive) {
+        setDragState(null);
+      }
+    };
+
+    const onKeyDown = (keyEvent: KeyboardEvent) => {
+      if (keyEvent.key === 'Escape') {
+        keyEvent.preventDefault();
+        cleanup();
+        setDragState(null);
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('keydown', onKeyDown);
   };
 
   const handleRemove = (taskId: string) => persistPlan(dayPlanTaskIds.filter((id) => id !== taskId));
@@ -531,6 +776,11 @@ export function TodayView({
       }}
       onDeleted={closePanel}
       onOpenNote={onOpenNote}
+      planDateContext={{
+        date: openTaskDate,
+        isToday: openTaskDate === todayStr,
+        onRemoveFromPlan: (tId, d) => handleRemoveFromDate(tId, d),
+      }}
     />
   ) : null;
 
@@ -666,7 +916,7 @@ export function TodayView({
                 {isToday ? '今天还没有安排任务。' : '该日期无计划安排。'}输入标题添加，或从已有任务中选择。
               </p>
             ) : (
-              <ul className="divide-y divide-stone-200/70 dark:divide-stone-800 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
+              <ul ref={listRef} className="divide-y divide-stone-200/70 dark:divide-stone-800 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950">
                 {planItems.map(({ id, task }) => {
                   if (!task) {
                     return (
@@ -689,7 +939,7 @@ export function TodayView({
                   }
 
                   const isDone = task.status === TaskStatus.TaskStatusDone;
-                  const idx = validPlanIds.indexOf(task.id);
+                  const isDraggingThis = dragState?.taskId === task.id;
                   let dueBadge: React.ReactNode = null;
                   if (task.due && !isDone) {
                     dueBadge =
@@ -709,7 +959,11 @@ export function TodayView({
                   return (
                     <li
                       key={task.id}
-                      onClick={() => void openTask(task.id)}
+                      data-plan-task-id={task.id}
+                      onClick={() => {
+                        if (justDraggedRef.current) return;
+                        void openTask(task.id);
+                      }}
                       onKeyDown={(e) => {
                         if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                           e.preventDefault();
@@ -718,8 +972,16 @@ export function TodayView({
                       }}
                       tabIndex={0}
                       role="button"
-                      className={`group flex items-center gap-3 px-3 py-2.5 cursor-pointer transition first:rounded-t-xl last:rounded-b-xl hover:bg-stone-50 dark:hover:bg-stone-900/60 focus:outline-none focus:ring-0 ${
+                      className={`group flex items-center gap-3 px-3 py-2.5 cursor-pointer first:rounded-t-xl last:rounded-b-xl hover:bg-stone-50 dark:hover:bg-stone-900/60 focus:outline-none focus:ring-0 ${
+                        dragState ? 'transition-none select-none' : 'transition-colors'
+                      } ${
                         task.id === openTaskId ? 'bg-stone-100/80 dark:bg-stone-800/50' : ''
+                      } ${
+                        isDraggingThis
+                          ? dragState.isOverValidArea
+                            ? 'relative z-10 border-l-4 border-l-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30 opacity-75 shadow-xs'
+                            : 'relative z-10 border-l-4 border-l-amber-500 bg-amber-50/40 dark:bg-amber-950/20 opacity-40 shadow-xs'
+                          : ''
                       }`}
                     >
                       <button
@@ -758,34 +1020,23 @@ export function TodayView({
                         )}
                       </div>
 
-                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <div className="w-6 h-6 flex items-center justify-center shrink-0" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
-                          onClick={() => void handleMove(task.id, 'up')}
-                          disabled={idx <= 0 || saving}
-                          className={iconBtn}
-                          title="上移"
+                          data-drag-handle={task.id}
+                          tabIndex={0}
+                          aria-label={`任务「${task.title}」排序手柄，按上下方向键调整顺序`}
+                          title="按住拖拽排序，或按上下方向键调整顺序"
+                          className={`w-6 h-6 flex items-center justify-center rounded text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 ${
+                            isDraggingThis
+                              ? 'opacity-100 cursor-grabbing text-emerald-600 dark:text-emerald-400'
+                              : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 cursor-grab disabled:opacity-20'
+                          }`}
+                          disabled={saving || validPlanIds.length <= 1}
+                          onPointerDown={(e) => handlePointerDown(e, task.id)}
+                          onKeyDown={(e) => void handleHandleKeyDown(e, task.id)}
                         >
-                          <ArrowUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleMove(task.id, 'down')}
-                          disabled={idx === validPlanIds.length - 1 || saving}
-                          className={iconBtn}
-                          title="下移"
-                        >
-                          <ArrowDown className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleRemove(task.id)}
-                          disabled={saving}
-                          className={iconBtn + ' hover:text-amber-700'}
-                          title={`移出${planWord}计划（不删除任务）`}
-                          aria-label={`移出${planWord}计划`}
-                        >
-                          <CalendarMinus className="w-3.5 h-3.5" />
+                          <GripVertical className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </li>
