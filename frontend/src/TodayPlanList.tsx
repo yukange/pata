@@ -45,6 +45,7 @@ interface SortableTaskItemProps {
   todayStr: string;
   isSelected: boolean;
   disabled: boolean;
+  isItemDragging: boolean;
   justDraggedRef: React.MutableRefObject<boolean>;
   onOpenTask: (taskId: string) => void;
   onToggleStatus: (task: Task) => void;
@@ -56,6 +57,7 @@ function SortableTaskItem({
   todayStr,
   isSelected,
   disabled,
+  isItemDragging,
   justDraggedRef,
   onOpenTask,
   onToggleStatus,
@@ -63,12 +65,14 @@ function SortableTaskItem({
   const prefersReducedMotion =
     typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const { ref, handleRef, isDragging } = useSortable({
+  const { ref, handleRef } = useSortable({
     id: task.id,
     index,
     disabled,
     collisionDetector: closestCenter,
-    transition: prefersReducedMotion ? { duration: 0 } : undefined,
+    transition: prefersReducedMotion
+      ? { duration: 0 }
+      : { duration: 150, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
   });
 
   const isDone = task.status === TaskStatus.TaskStatusDone;
@@ -90,11 +94,11 @@ function SortableTaskItem({
       }}
       tabIndex={0}
       role="button"
-      style={{ opacity: isDragging ? 0.25 : 1 }}
-      className={`group flex items-center gap-3 px-3 py-2.5 cursor-pointer first:rounded-t-xl last:rounded-b-xl hover:bg-stone-50 dark:hover:bg-stone-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pata-focus-ring)] transition-colors ${
+      style={{ opacity: isItemDragging ? 0.25 : 1 }}
+      className={`group flex items-center gap-3 px-3 py-2.5 cursor-pointer first:rounded-t-xl last:rounded-b-xl hover:bg-stone-50 dark:hover:bg-stone-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pata-focus-ring)] ${
         isSelected ? 'bg-stone-100/80 dark:bg-stone-800/50' : ''
       } ${
-        isDragging ? 'bg-stone-100/70 dark:bg-stone-900/70 border-dashed' : ''
+        isItemDragging ? 'bg-stone-100/70 dark:bg-stone-900/70 border-dashed' : ''
       }`}
     >
       <button
@@ -203,6 +207,7 @@ export function TodayPlanList({
   onReorder,
 }: TodayPlanListProps) {
   const [localTaskIds, setLocalTaskIds] = useState<string[]>(taskIds);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const justDraggedRef = useRef(false);
 
   useEffect(() => {
@@ -227,11 +232,17 @@ export function TodayPlanList({
     );
   }
 
-  const handleDragStart = () => {
+  const handleDragStart = (event: any) => {
     justDraggedRef.current = true;
+    const sourceId = event?.operation?.source?.id;
+    if (sourceId) {
+      setActiveId(String(sourceId));
+    }
   };
 
-  const handleDragEnd = async (event: any) => {
+  const handleDragEnd = (event: any) => {
+    // 立即解除拖拽激活态与悬浮层，消除松手时的等待与视觉闪烁
+    setActiveId(null);
     setTimeout(() => {
       justDraggedRef.current = false;
     }, 150);
@@ -249,14 +260,12 @@ export function TodayPlanList({
 
     const prevIds = localTaskIds;
     setLocalTaskIds(nextIds);
-    const ok = await onReorder(nextIds);
-    if (!ok) {
-      setLocalTaskIds(prevIds);
-    }
+    void onReorder(nextIds).then((ok) => {
+      if (!ok) {
+        setLocalTaskIds(prevIds);
+      }
+    });
   };
-
-  const prefersReducedMotion =
-    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   return (
     <DragDropProvider
@@ -295,7 +304,8 @@ export function TodayPlanList({
               index={index}
               todayStr={todayStr}
               isSelected={task.id === openTaskId}
-              disabled={saving || validPlanIds.length <= 1}
+              disabled={validPlanIds.length <= 1}
+              isItemDragging={activeId === task.id}
               justDraggedRef={justDraggedRef}
               onOpenTask={onOpenTask}
               onToggleStatus={onToggleStatus}
@@ -304,18 +314,14 @@ export function TodayPlanList({
         })}
       </ul>
 
-      <DragOverlay
-        dropAnimation={
-          prefersReducedMotion
-            ? { duration: 0 }
-            : { duration: 150, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
-        }
-      >
-        {(source) => {
-          const task = taskMap.get(String(source.id));
-          if (!task) return null;
-          return <TaskOverlayPreview task={task} todayStr={todayStr} />;
-        }}
+      <DragOverlay dropAnimation={null} disabled={!activeId}>
+        {activeId ? (
+          (source) => {
+            const task = taskMap.get(String(source.id));
+            if (!task) return null;
+            return <TaskOverlayPreview task={task} todayStr={todayStr} />;
+          }
+        ) : null}
       </DragOverlay>
     </DragDropProvider>
   );

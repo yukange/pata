@@ -56,4 +56,4 @@
 
 阶段 3 新增 Today 体验完善方案：末尾 `#标签` 快速创建、类似 ChatGPT 的左导航 / 中间 Today 或 Tasks / 右任务详情三栏、移除任务优先级、明确移出计划语义、紧凑日期及时间线。右栏按需打开，Notes 仍单列浏览与全主区域编辑。文档已整理，新增完成标准尚未验收，见 [idea](03-daily-loop/idea.md) 与 [proposal](03-daily-loop/proposal.md)；不改变原基础能力的已完成记录，也不新增阶段。
 
-**阶段 12：代码与实机验收完成。** 保留既有视觉风格，建立轻量 Design Tokens 并彻底解耦交互 Accent 与品牌绿；引入可复用基础组件（`Button` / `Input` / `Dialog` / `ConfirmDialog` / `DropdownMenu`）收敛确认弹层与弹窗；恢复全局可见的 `:focus-visible` 键盘焦点并局部隔离编辑器；校准 Note 长文本排版（15px / 1.68）；引入 `closestCenter` 算法并优化 Today dnd-kit 拖拽跟手性与占位反馈；完成 Reduce Motion 动效降级走查与零多余依赖控制。详见 [idea](12-frontend-foundation/idea.md)、[proposal](12-frontend-foundation/proposal.md)。
+**阶段 12：代码与实机验收完成。** 保留既有视觉风格，建立轻量 Design Tokens 并彻底解耦交互 Accent 与品牌绿；引入可复用基础组件（`Button` / `Dialog` / `ConfirmDialog`）收敛确认弹层与弹窗；恢复全局可见的 `:focus-visible` 键盘焦点并局部隔离编辑器；校准 Note 长文本排版（15px / 1.68）；引入 `closestCenter` 算法并优化 Today dnd-kit 拖拽跟手性与占位反馈；完成 Reduce Motion 动效降级走查与零多余依赖控制。详见 [idea](12-frontend-foundation/idea.md)、[proposal](12-frontend-foundation/proposal.md)。

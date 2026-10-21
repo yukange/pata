@@ -266,8 +266,13 @@ export function TodayView({
     void loadData();
   }, [loadData]);
 
+  const ignoreVaultChangedUntilRef = useRef<number>(0);
+
   useEffect(() => {
     const unsubscribe = Events.On('vault:changed', () => {
+      if (Date.now() < ignoreVaultChangedUntilRef.current) {
+        return;
+      }
       void loadData();
     });
     return () => {
@@ -338,6 +343,8 @@ export function TodayView({
     setSaving(true);
     setSaveError(null);
     try {
+      // 屏蔽保存 plans/ 触发的自身文件系统事件，避免松手重排后瞬间发生重复 loadData 与 DOM 震荡
+      ignoreVaultChangedUntilRef.current = Date.now() + 1000;
       const filtered = newTaskIds.filter((id) => taskMap.has(id));
       const dropped = newTaskIds.length - filtered.length;
       const updated = await VaultService.SaveDayPlan(date, filtered);
@@ -347,6 +354,7 @@ export function TodayView({
       setNoticeMsg(dropped > 0 ? `已同步移除 ${dropped} 个失效任务占位` : null);
       return true;
     } catch (err: any) {
+      ignoreVaultChangedUntilRef.current = 0;
       console.error('Failed to save day plan for date:', date, err);
       reportSaveError(err);
       await loadData();

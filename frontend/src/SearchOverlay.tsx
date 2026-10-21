@@ -252,7 +252,7 @@ export function SearchOverlay({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索任务、笔记、记录 (⌘K / ⌘P)..."
-            className="flex-1 bg-transparent text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 focus:outline-hidden"
+            className="flex-1 bg-transparent text-sm text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-stone-500 outline-none border-none focus:outline-none focus:ring-0"
           />
           {loading && <Loader2 className="w-3.5 h-3.5 text-stone-400 animate-spin shrink-0" />}
           {query && !loading && (

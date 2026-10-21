@@ -132,12 +132,12 @@ test('Today dnd-kit 拖拽优化: 引入 closestCenter 与降级动效控制', (
     'SortableItem 应配置 closestCenter 碰撞算法'
   );
   assert.ok(
-    todayListContent.includes("transition: prefersReducedMotion ? { duration: 0 } : undefined"),
+    todayListContent.includes("transition: prefersReducedMotion\n      ? { duration: 0 }"),
     '拖拽过渡应遵守 prefersReducedMotion 降级'
   );
   assert.ok(
-    todayListContent.includes("dropAnimation={\n          prefersReducedMotion\n            ? { duration: 0 }"),
-    '放手吸附动效应遵守 prefersReducedMotion 降级'
+    todayListContent.includes('dropAnimation={null}'),
+    '放手时应禁用滞后的悬浮动画以消除松手慢半拍感'
   );
 });
 
@@ -179,5 +179,24 @@ test('确认弹层收敛: NotesView 复用 ConfirmDialog 基础组件', () => {
   assert.ok(
     packageJson.dependencies['@dnd-kit/collision'],
     'package.json dependencies 必须声明 @dnd-kit/collision'
+  );
+
+  // DialogContent 支持 padded 控制并避免 edge-to-edge 弹窗样式冲突
+  const dialogPath = path.resolve(__dirname, 'components/ui/dialog.tsx');
+  const dialogContent = fs.readFileSync(dialogPath, 'utf-8');
+  assert.ok(
+    dialogContent.includes('padded = true'),
+    'DialogContent 默认应开启 padded 内边距'
+  );
+  assert.ok(
+    dialogContent.includes("padded ? 'p-5 space-y-4' : ''"),
+    'DialogContent 应按 padded 属性条件添加 p-5 space-y-4'
+  );
+
+  const appPath = path.resolve(__dirname, 'App.tsx');
+  const appContent = fs.readFileSync(appPath, 'utf-8');
+  assert.ok(
+    appContent.includes('padded={false}'),
+    'App.tsx Vault 健康弹窗应显式设置 padded={false} 保证贴边展示'
   );
 });

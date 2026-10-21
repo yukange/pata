@@ -20,6 +20,7 @@ export function Dialog({ open, onOpenChange, children, disablePointerDismissal =
 export interface DialogContentProps extends React.HTMLAttributes<HTMLDivElement> {
   showCloseButton?: boolean;
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
+  padded?: boolean;
 }
 
 const maxWidthMap = {
@@ -30,7 +31,7 @@ const maxWidthMap = {
 };
 
 export const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(function DialogContent(
-  { children, className = '', showCloseButton = false, maxWidth = 'md', ...props },
+  { children, className = '', showCloseButton = false, maxWidth = 'md', padded = true, ...props },
   ref
 ) {
   return (
@@ -39,7 +40,9 @@ export const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
         <BaseDialog.Popup
           ref={ref}
-          className={`pointer-events-auto relative w-full ${maxWidthMap[maxWidth]} rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-2xl space-y-4 pata-pop focus:outline-none ${className}`}
+          className={`pointer-events-auto relative w-full ${maxWidthMap[maxWidth]} rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 ${
+            padded ? 'p-5 space-y-4' : ''
+          } shadow-2xl pata-pop focus:outline-none ${className}`}
           {...props}
         >
           {showCloseButton && (

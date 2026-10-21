@@ -429,7 +429,7 @@ export default function App() {
             onClick={() => goNav('today')}
             className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               activeNav === 'today'
-                ? 'bg-[var(--pata-accent)] text-white shadow-xs'
+                ? 'bg-[var(--pata-brand)] text-white shadow-xs'
                 : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
             }`}
             title="Today"
@@ -442,7 +442,7 @@ export default function App() {
             onClick={() => goNav('tasks')}
             className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               activeNav === 'tasks'
-                ? 'bg-[var(--pata-accent)] text-white shadow-xs'
+                ? 'bg-[var(--pata-brand)] text-white shadow-xs'
                 : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
             }`}
             title="Tasks"
@@ -455,7 +455,7 @@ export default function App() {
             onClick={() => goNav('notes')}
             className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               activeNav === 'notes'
-                ? 'bg-[var(--pata-accent)] text-white shadow-xs'
+                ? 'bg-[var(--pata-brand)] text-white shadow-xs'
                 : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
             }`}
             title="Notes"
@@ -539,7 +539,7 @@ export default function App() {
               }}
               className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer ${
                 isSettingsOpen
-                  ? 'bg-[var(--pata-accent)] text-white shadow-xs'
+                  ? 'bg-[var(--pata-brand)] text-white shadow-xs'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
               }`}
               title="设置 (⌘,)"
@@ -686,7 +686,7 @@ export default function App() {
 
       {/* Vault Health Detail Modal */}
       <Dialog open={showHealthModal} onOpenChange={setShowHealthModal}>
-        <DialogContent maxWidth="lg" className="p-0 overflow-hidden max-h-[80vh] flex flex-col">
+        <DialogContent maxWidth="lg" padded={false} className="overflow-hidden max-h-[80vh] flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-stone-800">
             <div className="flex items-center space-x-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
