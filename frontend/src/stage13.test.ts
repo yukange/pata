@@ -7,6 +7,71 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+test('013-001: App Shell 提升 Inspector 所有权', () => {
+  const appPath = path.resolve(__dirname, 'App.tsx');
+  const appContent = fs.readFileSync(appPath, 'utf-8');
+
+  // App 顶层单实例 DetailSplit 与 TaskDetailPanel
+  assert.ok(
+    appContent.includes('<DetailSplit') && appContent.includes('<TaskDetailPanel'),
+    'App 顶层应持有全局唯一的 DetailSplit 与 TaskDetailPanel'
+  );
+
+  // 跨页面切换时不卸载右侧详情
+  assert.ok(
+    appContent.includes('key={detailSelection.taskId}'),
+    'TaskDetailPanel 应使用 taskId 作为 key 隔离任务，跨页面切换保持实例'
+  );
+
+  // Today、Tasks、Tag 等子视图不再私自包裹 DetailSplit
+  const todayPath = path.resolve(__dirname, 'TodayView.tsx');
+  const todayContent = fs.readFileSync(todayPath, 'utf-8');
+  assert.ok(
+    !todayContent.includes('<DetailSplit') && !todayContent.includes('<TaskDetailPanel'),
+    'TodayView 应不再私自渲染 DetailSplit 或 TaskDetailPanel'
+  );
+
+  const tasksPath = path.resolve(__dirname, 'TasksView.tsx');
+  const tasksContent = fs.readFileSync(tasksPath, 'utf-8');
+  assert.ok(
+    !tasksContent.includes('<DetailSplit') && !tasksContent.includes('<TaskDetailPanel'),
+    'TasksView 应不再私自渲染 DetailSplit 或 TaskDetailPanel'
+  );
+
+  const tagPath = path.resolve(__dirname, 'TagView.tsx');
+  const tagContent = fs.readFileSync(tagPath, 'utf-8');
+  assert.ok(
+    !tagContent.includes('<DetailSplit') && !tagContent.includes('<TaskDetailPanel'),
+    'TagView 应不再私自渲染 DetailSplit 或 TaskDetailPanel'
+  );
+});
+
+test('013-002: DetailSplit 拖拽、尺寸持久化与快捷键微调', () => {
+  const splitPath = path.resolve(__dirname, 'DetailSplit.tsx');
+  const splitContent = fs.readFileSync(splitPath, 'utf-8');
+
+  // 支持键盘微调
+  assert.ok(
+    splitContent.includes("event.key === 'ArrowLeft'") &&
+      splitContent.includes("event.key === 'ArrowRight'"),
+    'DetailSplit 应支持方向键微调'
+  );
+
+  // 支持 Home / End 极值定位
+  assert.ok(
+    splitContent.includes("event.key === 'Home'") &&
+      splitContent.includes("event.key === 'End'"),
+    'DetailSplit 应支持 Home/End 快捷极值定位'
+  );
+
+  // 面板卸载时光标与选择重置
+  assert.ok(
+    splitContent.includes("document.body.style.cursor = ''") &&
+      splitContent.includes("document.body.style.userSelect = ''"),
+    'DetailSplit 应在卸载或结束拖拽时恢复全局 cursor 与 userSelect'
+  );
+});
+
 test('013-003: ActivityItem 结构与视觉层次规范', () => {
   const itemPath = path.resolve(__dirname, 'ActivityItem.tsx');
   const content = fs.readFileSync(itemPath, 'utf-8');
