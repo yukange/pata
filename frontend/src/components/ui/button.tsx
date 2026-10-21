@@ -1,7 +1,7 @@
 import React, { forwardRef } from 'react';
 import { Loader2 } from 'lucide-react';
 
-export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive' | 'brand';
+export type ButtonVariant = 'default' | 'secondary' | 'outline' | 'ghost' | 'destructive' | 'warning' | 'brand';
 export type ButtonSize = 'sm' | 'default' | 'lg' | 'icon';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -22,6 +22,8 @@ const variantStyles: Record<ButtonVariant, string> = {
     'bg-transparent text-stone-600 dark:text-stone-400 hover:bg-stone-200/60 dark:hover:bg-stone-800/60 hover:text-stone-900 dark:hover:text-stone-100 active:bg-stone-200 dark:active:bg-stone-800',
   destructive:
     'bg-rose-600 dark:bg-rose-600 text-white hover:bg-rose-700 dark:hover:bg-rose-700 shadow-2xs active:bg-rose-800',
+  warning:
+    'bg-amber-600 dark:bg-amber-600 text-white hover:bg-amber-700 dark:hover:bg-amber-700 shadow-2xs active:bg-amber-800',
   brand:
     'bg-emerald-700 dark:bg-emerald-600 text-white hover:bg-emerald-800 dark:hover:bg-emerald-700 shadow-2xs active:bg-emerald-900',
 };

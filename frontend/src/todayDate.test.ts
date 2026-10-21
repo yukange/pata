@@ -36,3 +36,10 @@ test('TodayView 监听午夜、窗口重新聚焦和休眠恢复，并对活动�
   assert.ok(view.includes('pendingAutoFollowRef.current'));
   assert.ok(view.includes('window.clearInterval(interval)'));
 });
+
+test('TodayView 拖拽计划冷却期间不丢失外部 vault:changed 事件，通过定时器延后同步', () => {
+  const view = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'TodayView.tsx'), 'utf-8');
+  assert.ok(view.includes('pendingVaultChangeTimerRef'));
+  assert.ok(view.includes('window.setTimeout(() => {\n            pendingVaultChangeTimerRef.current = null;\n            void loadData();\n          }, remaining)'));
+  assert.ok(view.includes('window.clearTimeout(pendingVaultChangeTimerRef.current)'));
+});

@@ -36,6 +36,8 @@ export function ConfirmDialog({
     try {
       setLoading(true);
       await onConfirm();
+    } catch (err) {
+      console.error('ConfirmDialog action failed:', err);
     } finally {
       setLoading(false);
     }
@@ -82,11 +84,10 @@ export function ConfirmDialog({
             {cancelText}
           </Button>
           <Button
-            variant={variant === 'destructive' ? 'destructive' : variant === 'warning' ? 'default' : 'default'}
+            variant={variant}
             size="sm"
             onClick={handleConfirm}
             loading={loading}
-            className={variant === 'warning' ? 'bg-amber-600 hover:bg-amber-700 text-white' : undefined}
           >
             {confirmText}
           </Button>

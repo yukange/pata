@@ -172,6 +172,16 @@ test('确认弹层收敛: NotesView 复用 ConfirmDialog 基础组件', () => {
     confirmDialogContent.includes('disablePointerDismissal={preventDismissOnOutsideClick}'),
     'ConfirmDialog 应正确将 preventDismissOnOutsideClick 传入 disablePointerDismissal'
   );
+  assert.ok(
+    confirmDialogContent.includes('variant={variant}'),
+    'ConfirmDialog 应直接将 variant 传给 Button 避免类名样式冲突'
+  );
+
+  // Button 支持 warning 变体
+  const buttonPath = path.resolve(__dirname, 'components/ui/button.tsx');
+  const buttonContent = fs.readFileSync(buttonPath, 'utf-8');
+  assert.ok(buttonContent.includes("'warning'"), 'ButtonVariant 应包含 warning 变体');
+  assert.ok(buttonContent.includes('bg-amber-600'), 'Button 样式表应包含 amber 警示色');
 
   // package.json 声明直接依赖 @dnd-kit/collision
   const packageJsonPath = path.resolve(__dirname, '../package.json');

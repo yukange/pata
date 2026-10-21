@@ -267,16 +267,32 @@ export function TodayView({
   }, [loadData]);
 
   const ignoreVaultChangedUntilRef = useRef<number>(0);
+  const pendingVaultChangeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const unsubscribe = Events.On('vault:changed', () => {
-      if (Date.now() < ignoreVaultChangedUntilRef.current) {
+      const remaining = ignoreVaultChangedUntilRef.current - Date.now();
+      if (remaining > 0) {
+        if (pendingVaultChangeTimerRef.current === null) {
+          pendingVaultChangeTimerRef.current = window.setTimeout(() => {
+            pendingVaultChangeTimerRef.current = null;
+            void loadData();
+          }, remaining);
+        }
         return;
+      }
+      if (pendingVaultChangeTimerRef.current !== null) {
+        window.clearTimeout(pendingVaultChangeTimerRef.current);
+        pendingVaultChangeTimerRef.current = null;
       }
       void loadData();
     });
     return () => {
       unsubscribe();
+      if (pendingVaultChangeTimerRef.current !== null) {
+        window.clearTimeout(pendingVaultChangeTimerRef.current);
+        pendingVaultChangeTimerRef.current = null;
+      }
     };
   }, [loadData]);
 
@@ -355,6 +371,10 @@ export function TodayView({
       return true;
     } catch (err: any) {
       ignoreVaultChangedUntilRef.current = 0;
+      if (pendingVaultChangeTimerRef.current !== null) {
+        window.clearTimeout(pendingVaultChangeTimerRef.current);
+        pendingVaultChangeTimerRef.current = null;
+      }
       console.error('Failed to save day plan for date:', date, err);
       reportSaveError(err);
       await loadData();
