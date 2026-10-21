@@ -61,7 +61,12 @@ export function DetailSplit({ panel, children }: { panel: ReactNode | null; chil
     });
     observer.observe(element);
     setContainerWidth(element.getBoundingClientRect().width);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      // 面板在指针捕获期间卸载时，也不能遗留系统 resize 光标。
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
   }, []);
 
   const maxWidthForWindow = maxInspectorWidth(containerWidth);
