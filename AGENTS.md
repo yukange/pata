@@ -4,7 +4,7 @@
 
 ## 开始阅读
 
-1. 阅读 [docs/README.md](docs/README.md)，按 01 → 11 的顺序了解开发计划。
+1. 阅读 [docs/README.md](docs/README.md)，按 01 → 11 的顺序了解已完成阶段，并阅读阶段 12 前端工程整理方案。
 2. 阅读 [阶段 1 产品提案](docs/01-validate/proposal.md)、[已确认的取舍](docs/01-validate/decisions.md)、[UI 规范](docs/01-validate/ui.md)。
    - macOS 原生窗口细节和 Magpie 源码参考见 [macos-native.md](docs/01-validate/macos-native.md)；浏览器原型不等于真实 Liquid Glass 验证。
 3. 数据 Schema 的**单一来源**为 [阶段 2 schema.md](docs/02-foundation/schema.md)；旧 `docs/02-foundation/examples/` 为历史测试固件，不是生产数据。
@@ -32,3 +32,17 @@
 - 参照 macOS 27 HIG + Magpie 的窗口实现；尊重系统主题、强调色、辅助功能；Liquid Glass 可选，非 MVP 必须。
 - 核心原则：Less is More / Record Once / Local First。
 - 阶段 6 不再开发菜单栏帧动画或额外悬停动效；阶段 7 不实现外部移动跨文件自动维护、批量链接更新重试或精确光标/滚动恢复。已绑定 `note_refs` ID 失效时不得按同名笔记重新推断（已修复），详情见 [阶段 7 proposal](docs/07-note-links/proposal.md)。
+
+## 前端工程约束（阶段 12）
+
+- **优先统一已有体验，不为统一而重构**：保留现有 Today / Tasks / Notes 视觉与交互，仅对真实重复、缺陷及可访问性问题做局部优化；不得整体套用 Nova 主题。
+- 新 UI 先查找并复用项目内基础组件、Hooks 与已安装成熟库，确有缺口才增加依赖；组件样式以 Pata 语义 Design Tokens 为准。
+- 通用组件采用 shadcn/ui Nova 作为风格参考、组件源码在本仓库可控；Headless primitives 优先评估 Base UI，避免并行使用功能重复的套件；不要覆盖已自定义组件。
+- 图标统一使用 `lucide-react`（品牌 Logo 和系统原生图标除外）；字体使用 macOS 系统 SF / 苹方 / 等宽回退，不引入额外字体。
+- 交互强调色优先跟随 **macOS 系统 Accent**；品牌绿主要用于品牌识别，成功/警告/错误各自独立。不能把固定绿/蓝误称为系统跟随；WKWebView 能力须实机验证并有清楚降级策略。
+- Today 拖拽复用现有 `@dnd-kit/react`，禁止另造拖拽引擎；简单动效用 CSS，复杂动效才评估 Motion，避免与 dnd-kit 重复控制 `transform`。
+- 布局延续现有实现，仅明确出现可调多面板需求时评估 `react-resizable-panels`；状态默认 React Hooks，仅真实共享状态需求再评估 Zustand。
+- 所有交互控件应有可见键盘焦点；Dialog / Popover / 菜单必须正确处理 Esc、Tab、关闭后焦点恢复和必要的危险确认；遵循减少动态效果及中文输入法兼容。
+- 操作成功尽量轻量提示，失败保留草稿、明确原因并可恢复；不改变 Go Core / Markdown 数据语义，不破坏保存冲突保护。
+- 新依赖必须经过 peer dependency、依赖树、打包体积、离线可用性及 macOS 实机兼容性检查；不为安装组件而升级无关技术栈。
+- 具体选型、实施边界与验收标准的**唯一来源**：[阶段 12 proposal](docs/12-frontend-foundation/proposal.md)，不要在 AGENTS.md 再复制整套颜色表或阶段验收清单。
