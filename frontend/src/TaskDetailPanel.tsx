@@ -891,7 +891,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                         {isCompleted ? (
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         ) : (
-                          <Undo2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                          <Undo2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                         )}
                         <span className="text-stone-600 dark:text-stone-300">
                           {isCompleted ? '已完成' : '重新打开'}
@@ -942,7 +942,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
       {/* 3. Docked Activity Input Bar */}
       <div className="shrink-0 p-4 border-t border-stone-200/80 dark:border-stone-800/80 bg-stone-50/70 dark:bg-stone-900/70 backdrop-blur-md">
         <form onSubmit={handleAddActivity} className="space-y-2">
-          <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-2.5 focus-within:border-stone-300 dark:focus-within:border-stone-700 transition shadow-2xs">
+          <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-2.5 focus-within:border-emerald-600/80 dark:focus-within:border-emerald-500/80 focus-within:ring-2 focus-within:ring-emerald-500/20 transition shadow-2xs">
             <NoteRefTextarea
               value={newActivityBody}
               onChange={setNewActivityBody}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { DragDropProvider, DragOverlay } from '@dnd-kit/react';
 import { useSortable } from '@dnd-kit/react/sortable';
+import { closestCenter } from '@dnd-kit/collision';
 import { move } from '@dnd-kit/helpers';
 import { CheckCircle2, Circle, GripVertical, AlertCircle } from 'lucide-react';
 import { Task, TaskStatus } from '../bindings/pata/internal/storage/markdown/models';
@@ -59,10 +60,15 @@ function SortableTaskItem({
   onOpenTask,
   onToggleStatus,
 }: SortableTaskItemProps) {
+  const prefersReducedMotion =
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   const { ref, handleRef, isDragging } = useSortable({
     id: task.id,
     index,
     disabled,
+    collisionDetector: closestCenter,
+    transition: prefersReducedMotion ? { duration: 0 } : undefined,
   });
 
   const isDone = task.status === TaskStatus.TaskStatusDone;
@@ -84,9 +90,11 @@ function SortableTaskItem({
       }}
       tabIndex={0}
       role="button"
-      style={{ opacity: isDragging ? 0.35 : 1 }}
-      className={`group flex items-center gap-3 px-3 py-2.5 cursor-pointer first:rounded-t-xl last:rounded-b-xl hover:bg-stone-50 dark:hover:bg-stone-900/60 focus:outline-none focus:ring-0 transition-colors ${
+      style={{ opacity: isDragging ? 0.25 : 1 }}
+      className={`group flex items-center gap-3 px-3 py-2.5 cursor-pointer first:rounded-t-xl last:rounded-b-xl hover:bg-stone-50 dark:hover:bg-stone-900/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pata-focus-ring)] transition-colors ${
         isSelected ? 'bg-stone-100/80 dark:bg-stone-800/50' : ''
+      } ${
+        isDragging ? 'bg-stone-100/70 dark:bg-stone-900/70 border-dashed' : ''
       }`}
     >
       <button
@@ -95,7 +103,7 @@ function SortableTaskItem({
           e.stopPropagation();
           onToggleStatus(task);
         }}
-        className="p-0.5 rounded shrink-0 focus:outline-none focus:ring-0"
+        className="p-0.5 rounded shrink-0 focus:outline-none focus-visible:ring-1 focus-visible:ring-[var(--pata-focus-ring)]"
         title={isDone ? '点击恢复为待办' : '点击标记为完成'}
       >
         {isDone ? (
@@ -133,7 +141,7 @@ function SortableTaskItem({
           tabIndex={0}
           aria-label={`任务「${task.title}」排序手柄，按空格或回车抓取，按上下方向键移动，再次按空格或回车放下`}
           title="按住拖拽排序，或按空格/回车抓取后按上下方向键调整顺序"
-          className="w-6 h-6 flex items-center justify-center rounded text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 cursor-grab disabled:opacity-20"
+          className="w-6 h-6 flex items-center justify-center rounded text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pata-focus-ring)] opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 cursor-grab disabled:opacity-20"
           disabled={disabled}
         >
           <GripVertical className="w-3.5 h-3.5" />
@@ -147,7 +155,7 @@ function TaskOverlayPreview({ task, todayStr }: { task: Task; todayStr: string }
   const isDone = task.status === TaskStatus.TaskStatusDone;
   const dueBadge = renderDueBadge(task, todayStr);
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-emerald-500/60 bg-white dark:bg-stone-900 shadow-2xl select-none cursor-grabbing">
+    <div className="w-full box-border flex items-center gap-3 px-3 py-2.5 rounded-xl border border-stone-300/90 dark:border-stone-700 bg-white/95 dark:bg-stone-900/95 backdrop-blur-xs shadow-xl select-none cursor-grabbing">
       <div className="p-0.5 rounded shrink-0">
         {isDone ? (
           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
@@ -174,7 +182,7 @@ function TaskOverlayPreview({ task, todayStr }: { task: Task; todayStr: string }
           </span>
         )}
       </div>
-      <div className="w-6 h-6 flex items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400">
+      <div className="w-6 h-6 flex items-center justify-center shrink-0 text-stone-500 dark:text-stone-400">
         <GripVertical className="w-3.5 h-3.5" />
       </div>
     </div>
@@ -247,8 +255,14 @@ export function TodayPlanList({
     }
   };
 
+  const prefersReducedMotion =
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   return (
-    <DragDropProvider onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+    <DragDropProvider
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
       <ul className="divide-y divide-stone-200/70 dark:divide-stone-800 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 relative">
         {planItems.map(({ id, task }, index) => {
           if (!task) {
@@ -290,7 +304,13 @@ export function TodayPlanList({
         })}
       </ul>
 
-      <DragOverlay dropAnimation={{ duration: 150, easing: 'cubic-bezier(0.2, 0, 0, 1)' }}>
+      <DragOverlay
+        dropAnimation={
+          prefersReducedMotion
+            ? { duration: 0 }
+            : { duration: 150, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+        }
+      >
         {(source) => {
           const task = taskMap.get(String(source.id));
           if (!task) return null;

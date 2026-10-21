@@ -4,6 +4,70 @@
 :root {
   --wails-draggable: no-drag;
   color-scheme: light dark;
+
+  /* ========================================================================
+     Pata Minimal Design Tokens (Stage 12)
+     ======================================================================== */
+  --pata-font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Roboto, sans-serif;
+  --pata-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Surfaces & Text (Light Theme) */
+  --pata-bg: #fafaf8;
+  --pata-surface: #ffffff;
+  --pata-surface-hover: rgba(231, 229, 228, 0.6); /* stone-200/60 */
+  --pata-foreground: #1c1917; /* stone-900 */
+  --pata-muted-foreground: #78716c; /* stone-500 */
+  --pata-border: #e7e5e4; /* stone-200 */
+  --pata-border-subtle: #f5f5f4; /* stone-100 */
+
+  /* Pata Unified Accent & Brand Colors (Unified to Signature Emerald Green) */
+  --pata-accent: #047857; /* emerald-700 */
+  --pata-accent-hover: #065f46; /* emerald-800 */
+  --pata-accent-foreground: #ffffff;
+  --pata-focus-ring: #059669; /* emerald-600 */
+
+  /* Brand Emerald */
+  --pata-brand: #047857; /* emerald-700 */
+  --pata-brand-hover: #065f46; /* emerald-800 */
+  --pata-brand-foreground: #ffffff;
+
+  /* Functional Status */
+  --pata-success: #16a34a; /* green-600 */
+  --pata-warning: #d97706; /* amber-600 */
+  --pata-destructive: #dc2626; /* rose-600 */
+
+  /* Radii */
+  --pata-radius-sm: 4px;
+  --pata-radius-md: 6px;
+  --pata-radius-lg: 10px;
+}
+
+:where(.dark, .dark *) {
+  /* Surfaces & Text (Dark Theme) */
+  --pata-bg: #1c1917;
+  --pata-surface: #1c1917;
+  --pata-surface-hover: rgba(41, 37, 36, 0.6); /* stone-800/60 */
+  --pata-foreground: #fafaf9; /* stone-100 */
+  --pata-muted-foreground: #a8a29e; /* stone-400 */
+  --pata-border: #292524; /* stone-800 */
+  --pata-border-subtle: #1c1917;
+
+  /* Unified Accent & Brand (Dark Mode) */
+  --pata-accent: #059669; /* emerald-600 */
+  --pata-accent-hover: #10b981; /* emerald-500 */
+  --pata-accent-foreground: #ffffff;
+  --pata-focus-ring: #10b981;
+
+  /* Brand Emerald */
+  --pata-brand: #10b981; /* emerald-500 */
+  --pata-brand-hover: #34d399; /* emerald-400 */
+  --pata-brand-foreground: #ffffff;
+  --pata-brand-foreground: #ffffff;
+
+  /* Functional Status */
+  --pata-success: #22c55e;
+  --pata-warning: #f59e0b;
+  --pata-destructive: #ef4444;
 }
 
 .drag-region {
@@ -28,15 +92,42 @@ button, input, textarea, select, a, [role="button"], .vditor {
   -webkit-user-select: text;
 }
 
-/* 不使用选中光圈，保持 macOS 原生克制风格 */
-:focus,
-:focus-visible {
+/* 统一键盘可访问焦点：普通点击不显示光圈，键盘 Tab / 方向键聚焦显示清晰焦点环 */
+:focus {
   outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--pata-focus-ring, #059669);
+  outline-offset: 1px;
+}
+
+/* 编辑器正文、无边框透明输入框与复合卡片内部输入避免双重内部焦点环 */
+.vditor:focus,
+.vditor:focus-visible,
+.vditor-reset:focus,
+.vditor-reset:focus-visible,
+.vditor-ir:focus,
+.vditor-ir:focus-visible,
+[contenteditable]:focus,
+[contenteditable]:focus-visible,
+textarea.outline-none:focus,
+textarea.outline-none:focus-visible,
+input.outline-none:focus,
+input.outline-none:focus-visible,
+.border-0:focus,
+.border-0:focus-visible,
+.border-none:focus,
+.border-none:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .quick-entry:focus,
 .quick-entry:focus-visible {
   outline: none;
+  border-color: var(--pata-accent, #047857);
+  box-shadow: 0 0 0 2px rgba(5, 150, 105, 0.2);
 }
 
 /* 弹出层（菜单/建议/模态）的轻量出现动效；系统开启「减少动态效果」时关闭 */
@@ -196,8 +287,8 @@ button, input, textarea, select, a, [role="button"], .vditor {
 .vditor-editor-wrapper .vditor-reset,
 .vditor-editor-wrapper .vditor-ir pre.vditor-reset,
 .vditor-editor-wrapper .vditor-wysiwyg pre.vditor-reset {
-  font-size: 14px !important;
-  line-height: 1.55 !important;
+  font-size: 15px !important;
+  line-height: 1.68 !important;
   letter-spacing: -0.01em;
 }
 
@@ -297,8 +388,8 @@ button, input, textarea, select, a, [role="button"], .vditor {
   margin-top: 4px !important;
   margin-bottom: 8px !important;
   padding: 8px 12px !important;
-  font-size: 12.5px !important;
-  line-height: 1.45 !important;
+  font-size: 13px !important;
+  line-height: 1.5 !important;
   border-radius: 6px !important;
 }
 

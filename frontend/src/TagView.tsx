@@ -291,12 +291,12 @@ export function TagView({
                         onOpenNote(item.id);
                       }
                     }}
-                    className="w-full p-3.5 rounded-xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/90 hover:border-blue-500/50 hover:bg-stone-50/80 dark:hover:bg-stone-800/50 transition text-left cursor-pointer group"
+                    className="w-full p-3.5 rounded-xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/90 hover:border-emerald-500/50 hover:bg-stone-50/80 dark:hover:bg-stone-800/50 transition text-left cursor-pointer group"
                     title={`打开笔记: ${item.title || item.id}`}
                   >
                     <div className="flex items-center justify-between text-xs mb-1.5">
                       <div className="flex items-center space-x-1.5">
-                        <span className="inline-flex items-center space-x-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60 font-medium">
+                        <span className="inline-flex items-center space-x-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60 font-medium">
                           <FileText className="w-3 h-3" />
                           <span>笔记</span>
                         </span>
@@ -308,7 +308,7 @@ export function TagView({
 
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium text-stone-800 dark:text-stone-200 group-hover:text-blue-700 dark:group-hover:text-blue-400 truncate">
+                        <div className="text-xs font-medium text-stone-800 dark:text-stone-200 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 truncate">
                           {item.title || item.id}
                         </div>
                         {item.snippet && (
@@ -317,7 +317,7 @@ export function TagView({
                           </p>
                         )}
                       </div>
-                      <span className="text-[10px] text-stone-400 flex items-center space-x-0.5 shrink-0 group-hover:text-blue-600 transition">
+                      <span className="text-[10px] text-stone-400 flex items-center space-x-0.5 shrink-0 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
                         <span>打开笔记</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </span>

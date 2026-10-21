@@ -133,7 +133,7 @@ export function NotePicker({
               }`}
             >
               {kind === 'file' ? (
-                <Paperclip className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                <Paperclip className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               ) : (
                 <FileText className="w-3.5 h-3.5 text-stone-400 shrink-0" />
               )}

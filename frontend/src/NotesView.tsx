@@ -21,6 +21,9 @@ import * as VaultService from '../bindings/pata/vaultservice';
 import { VaultStatus, CreateNoteInput, UpdateNoteInput } from '../bindings/pata/models';
 import { Note, LinkSource, EntityType } from '../bindings/pata/internal/storage/markdown/models';
 import { ASRTaskStatus, ASRTaskState } from '../bindings/pata/internal/asr/models';
+import { Button } from './components/ui/button';
+import { ConfirmDialog } from './components/ui/confirm-dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from './components/ui/dialog';
 import { AudioPlayer } from './AudioPlayer';
 import { TranscriptViewer, TranscriptViewerRef } from './TranscriptViewer';
 import { TagChipEditor } from './TagChipEditor';
@@ -1509,127 +1512,114 @@ function NoteEditor({
       )}
 
       {/* Confirmation Modal for Discarding Local Changes on Reload */}
-      {showReloadConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 shrink-0">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  确认重新加载？
-                </h3>
-                <p className="text-xs text-stone-500 leading-relaxed">
-                  重新加载将从磁盘读取最新的笔记内容，您当前在编辑器中未保存的本地修改将被全部丢弃。
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={() => setShowReloadConfirm(false)}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmReload}
-                className="px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition shadow-xs"
-              >
-                确认重新加载
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showReloadConfirm}
+        variant="warning"
+        title="确认重新加载？"
+        description="重新加载将从磁盘读取最新的笔记内容，您当前在编辑器中未保存的本地修改将被全部丢弃。"
+        confirmText="确认重新加载"
+        cancelText="取消"
+        onCancel={() => setShowReloadConfirm(false)}
+        onConfirm={handleConfirmReload}
+      />
 
       {/* Confirmation Modal for Leaving During Conflict */}
-      {showLeaveConflictConfirm && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 shrink-0">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  存在未解决冲突
-                </h3>
-                <p className="text-xs text-stone-500 leading-relaxed">
-                  当前笔记存在外部文件修改冲突。直接返回列表将放弃本地未保存的内容。确认离开吗？
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLeaveConflictConfirm(false);
-                  pendingGoRef.current = null;
-                  const resolve = leavePromptResolverRef.current;
-                  leavePromptResolverRef.current = null;
-                  resolve?.(false);
-                }}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
-              >
-                继续编辑
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLeaveConflictConfirm(false);
-                  handleAbandonAndReturn();
-                  const resolve = leavePromptResolverRef.current;
-                  leavePromptResolverRef.current = null;
-                  resolve?.(true);
-                }}
-                className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition shadow-xs"
-              >
-                放弃修改并离开
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <ConfirmDialog
+        open={showLeaveConflictConfirm}
+        variant="destructive"
+        title="存在未解决冲突"
+        description="当前笔记存在外部文件修改冲突。直接返回列表将放弃本地未保存的内容。确认离开吗？"
+        confirmText="放弃修改并离开"
+        cancelText="继续编辑"
+        onCancel={() => {
+          setShowLeaveConflictConfirm(false);
+          pendingGoRef.current = null;
+          const resolve = leavePromptResolverRef.current;
+          leavePromptResolverRef.current = null;
+          resolve?.(false);
+        }}
+        onConfirm={() => {
+          setShowLeaveConflictConfirm(false);
+          handleAbandonAndReturn();
+          const resolve = leavePromptResolverRef.current;
+          leavePromptResolverRef.current = null;
+          resolve?.(true);
+        }}
+      />
 
       {/* Confirmation Modal for Save Failure on Exit (must-fix 3) */}
-      {showSaveFailedConfirm && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 shrink-0">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  保存未成功
-                </h3>
-                <p className="text-xs text-stone-500 leading-relaxed">
-                  当前笔记未能成功保存到磁盘（可能标题为空或写入异常）。直接返回将丢弃未保存的修改，是否确定离开？
-                </p>
-              </div>
+      <ConfirmDialog
+        open={showSaveFailedConfirm}
+        variant="destructive"
+        title="保存未成功"
+        description="当前笔记未能成功保存到磁盘（可能标题为空或写入异常）。直接返回将丢弃未保存的修改，是否确定离开？"
+        confirmText="丢弃并返回"
+        cancelText="留在页面"
+        onCancel={() => {
+          setShowSaveFailedConfirm(false);
+          pendingGoRef.current = null;
+          const resolve = leavePromptResolverRef.current;
+          leavePromptResolverRef.current = null;
+          resolve?.(false);
+        }}
+        onConfirm={() => {
+          setShowSaveFailedConfirm(false);
+          if (debounceTimerRef.current) {
+            window.clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
+          }
+          const go = pendingGoRef.current ?? onBack;
+          pendingGoRef.current = null;
+          go();
+          const resolve = leavePromptResolverRef.current;
+          leavePromptResolverRef.current = null;
+          resolve?.(true);
+        }}
+      />
+
+      {/* Confirmation Modal for Leaving Empty-Title Draft with Content */}
+      <Dialog open={showDraftNoTitleConfirm} onOpenChange={setShowDraftNoTitleConfirm} disablePointerDismissal={true}>
+        <DialogContent maxWidth="sm">
+          <div className="flex items-start space-x-3">
+            <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 shrink-0">
+              <AlertCircle className="w-5 h-5" />
             </div>
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
+            <div className="space-y-1">
+              <DialogTitle>草稿未设置标题</DialogTitle>
+              <DialogDescription>
+                当前草稿尚未填写标题，无法写入文件。如果现在离开，您刚刚输入的内容将被丢弃。
+              </DialogDescription>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-stone-100 dark:border-stone-800">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopyDraft}
+              title="将当前草稿复制到剪贴板"
+            >
+              {copiedDraft ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedDraft ? '已复制' : '复制草稿'}</span>
+            </Button>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="brand"
+                size="sm"
                 onClick={() => {
-                  setShowSaveFailedConfirm(false);
+                  setShowDraftNoTitleConfirm(false);
                   pendingGoRef.current = null;
                   const resolve = leavePromptResolverRef.current;
                   leavePromptResolverRef.current = null;
                   resolve?.(false);
                 }}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
               >
-                留在页面
-              </button>
-              <button
-                type="button"
+                继续编辑
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => {
-                  setShowSaveFailedConfirm(false);
+                  setShowDraftNoTitleConfirm(false);
                   if (debounceTimerRef.current) {
                     window.clearTimeout(debounceTimerRef.current);
                     debounceTimerRef.current = null;
@@ -1641,175 +1631,62 @@ function NoteEditor({
                   leavePromptResolverRef.current = null;
                   resolve?.(true);
                 }}
-                className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition shadow-xs"
               >
-                丢弃并返回
-              </button>
+                放弃草稿
+              </Button>
             </div>
           </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Confirmation Modal for Leaving Empty-Title Draft with Content */}
-      {showDraftNoTitleConfirm && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 shrink-0">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  草稿未设置标题
-                </h3>
-                <p className="text-xs text-stone-500 leading-relaxed">
-                  当前草稿尚未填写标题，无法写入文件。如果现在离开，您刚刚输入的内容将被丢弃。
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-between pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={handleCopyDraft}
-                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
-                title="将当前草稿复制到剪贴板"
-              >
-                {copiedDraft ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copiedDraft ? '已复制' : '复制草稿'}</span>
-              </button>
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDraftNoTitleConfirm(false);
-                    pendingGoRef.current = null;
-                    const resolve = leavePromptResolverRef.current;
-                    leavePromptResolverRef.current = null;
-                    resolve?.(false);
-                  }}
-                  className="px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-700 hover:bg-emerald-800 text-white transition shadow-xs"
-                >
-                  继续编辑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowDraftNoTitleConfirm(false);
-                    if (debounceTimerRef.current) {
-                      window.clearTimeout(debounceTimerRef.current);
-                      debounceTimerRef.current = null;
-                    }
-                    const go = pendingGoRef.current ?? onBack;
-                    pendingGoRef.current = null;
-                    go();
-                    const resolve = leavePromptResolverRef.current;
-                    leavePromptResolverRef.current = null;
-                    resolve?.(true);
-                  }}
-                  className="px-2.5 py-1.5 rounded-md border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 text-xs transition"
-                >
-                  放弃草稿
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+        </DialogContent>
+      </Dialog>
 
       {/* Confirmation Modal for Replacing Transcript */}
-      {showReplaceConfirm && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 shrink-0">
-                <RefreshCw className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  发现新转写结果
-                </h3>
-                <p className="text-xs text-stone-500 leading-relaxed">
-                  当前音频已生成新的逐字稿内容。您可以选择替换原逐字稿，或者保留原稿（保留原稿将放弃新生成的逐字稿）。
-                </p>
-                {replaceError && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400 font-medium pt-1">
-                    {replaceError}
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={handleDiscardCandidate}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
-              >
-                保留原稿
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmReplace}
-                className="px-3 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition shadow-xs cursor-pointer"
-              >
-                替换逐字稿
-              </button>
-            </div>
+      <ConfirmDialog
+        open={showReplaceConfirm}
+        variant="default"
+        title="发现新转写结果"
+        description={
+          <div className="space-y-1">
+            <span>当前音频已生成新的逐字稿内容。您可以选择替换原逐字稿，或者保留原稿（保留原稿将放弃新生成的逐字稿）。</span>
+            {replaceError && (
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium pt-1">
+                {replaceError}
+              </p>
+            )}
           </div>
-        </div>,
-        document.body
-      )}
+        }
+        confirmText="替换逐字稿"
+        cancelText="保留原稿"
+        onCancel={handleDiscardCandidate}
+        onConfirm={handleConfirmReplace}
+      />
 
       {/* Confirmation Modal for Deleting Note */}
-      {showDeleteConfirm && createPortal(
-        <div className="pata-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 shrink-0">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  确认删除笔记？
-                </h3>
-                <p className="text-xs text-stone-500 leading-relaxed">
-                  {isNewDraftRef.current
-                    ? '当前为未保存的新建草稿，确认丢弃当前输入的内容吗？'
-                    : `笔记「${editTitle || initialNote?.title || '未命名'}」的文件将从 Vault 中永久删除，此操作不可撤销。`}
-                </p>
-                {deleteError && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400 font-medium pt-1">
-                    {deleteError}
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  setDeleteError(null);
-                }}
-                disabled={isDeleting}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-                className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition shadow-xs disabled:opacity-50 cursor-pointer"
-              >
-                {isDeleting ? '删除中...' : '确认删除'}
-              </button>
-            </div>
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        variant="destructive"
+        title="确认删除笔记？"
+        description={
+          <div className="space-y-1">
+            <span>
+              {isNewDraftRef.current
+                ? '当前为未保存的新建草稿，确认丢弃当前输入的内容吗？'
+                : `笔记「${editTitle || initialNote?.title || '未命名'}」的文件将从 Vault 中永久删除，此操作不可撤销。`}
+            </span>
+            {deleteError && (
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium pt-1">
+                {deleteError}
+              </p>
+            )}
           </div>
-        </div>,
-        document.body
-      )}
+        }
+        confirmText={isDeleting ? '删除中...' : '确认删除'}
+        cancelText="取消"
+        onCancel={() => {
+          setShowDeleteConfirm(false);
+          setDeleteError(null);
+        }}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }
@@ -2326,45 +2203,19 @@ export function NotesView({
       )}
 
       {/* Missing Key Modal */}
-      {showMissingKeyModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 shrink-0">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  需配置语音转写 API Key
-                </h3>
-                <p className="text-xs text-stone-500 leading-relaxed">
-                  音频逐字稿生成依赖阿里云百炼 DashScope 语音服务。请先在「设置 - 语音转写」中配置 API Key。
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={() => setShowMissingKeyModal(false)}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMissingKeyModal(false);
-                  onOpenSettings?.('transcription');
-                }}
-                className="px-3 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition shadow-xs cursor-pointer"
-              >
-                前往设置
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <ConfirmDialog
+        open={showMissingKeyModal}
+        variant="warning"
+        title="需配置语音转写 API Key"
+        description="音频逐字稿生成依赖阿里云百炼 DashScope 语音服务。请先在「设置 - 语音转写」中配置 API Key。"
+        confirmText="前往设置"
+        cancelText="取消"
+        onCancel={() => setShowMissingKeyModal(false)}
+        onConfirm={() => {
+          setShowMissingKeyModal(false);
+          onOpenSettings?.('transcription');
+        }}
+      />
 
       {/* Creating Audio Note Loading Overlay */}
       {creatingAudioNote && createPortal(
@@ -2407,52 +2258,28 @@ export function NotesView({
       )}
 
       {/* Confirmation Modal for Deleting Note from List */}
-      {noteToDelete && createPortal(
-        <div className="pata-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 shrink-0">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  确认删除笔记？
-                </h3>
-                <p className="text-xs text-stone-500 leading-relaxed">
-                  笔记「{noteToDelete.title}」的文件将从 Vault 中永久删除，此操作不可撤销。
-                </p>
-                {deleteListError && (
-                  <p className="text-xs text-rose-600 dark:text-rose-400 font-medium pt-1">
-                    {deleteListError}
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={() => {
-                  setNoteToDelete(null);
-                  setDeleteListError(null);
-                }}
-                disabled={isDeletingFromList}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmDeleteFromList}
-                disabled={isDeletingFromList}
-                className="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 text-white text-xs font-medium transition shadow-xs disabled:opacity-50 cursor-pointer"
-              >
-                {isDeletingFromList ? '删除中...' : '确认删除'}
-              </button>
-            </div>
+      <ConfirmDialog
+        open={Boolean(noteToDelete)}
+        variant="destructive"
+        title="确认删除笔记？"
+        description={
+          <div className="space-y-1">
+            <span>{noteToDelete ? `笔记「${noteToDelete.title}」的文件将从 Vault 中永久删除，此操作不可撤销。` : ''}</span>
+            {deleteListError && (
+              <p className="text-xs text-rose-600 dark:text-rose-400 font-medium pt-1">
+                {deleteListError}
+              </p>
+            )}
           </div>
-        </div>,
-        document.body
-      )}
+        }
+        confirmText={isDeletingFromList ? '删除中...' : '确认删除'}
+        cancelText="取消"
+        onCancel={() => {
+          setNoteToDelete(null);
+          setDeleteListError(null);
+        }}
+        onConfirm={handleConfirmDeleteFromList}
+      />
     </div>
   );
 }

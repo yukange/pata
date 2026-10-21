@@ -27,7 +27,9 @@ export const TranscriptViewer = forwardRef<TranscriptViewerRef, TranscriptViewer
           const targetBlock = blocks[targetIdx];
           const el = blockRefs.current.get(targetBlock.id);
           if (el) {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const prefersReducedMotion =
+              typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            el.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'center' });
             setHighlightedId(targetBlock.id);
             if (highlightTimeoutRef.current) {
               clearTimeout(highlightTimeoutRef.current);

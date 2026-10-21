@@ -13,6 +13,8 @@ import {
 import * as VaultService from '../bindings/pata/vaultservice';
 import { VaultStatus, VaultHealth } from '../bindings/pata/models';
 import { TagOverviewItem } from '../bindings/pata/internal/storage/markdown/models';
+import { Dialog, DialogContent, DialogTitle } from './components/ui/dialog';
+import { Button } from './components/ui/button';
 import { TasksView } from './TasksView';
 import { TodayView } from './TodayView';
 import { NotesView } from './NotesView';
@@ -60,24 +62,6 @@ export default function App() {
   // Vault health state
   const [health, setHealth] = useState<VaultHealth | null>(null);
   const [showHealthModal, setShowHealthModal] = useState(false);
-  const healthTriggerRef = useRef<HTMLElement | null>(null);
-  const healthModalRef = useRef<HTMLDivElement>(null);
-
-  // Manage focus movement and restoration for health modal
-  useEffect(() => {
-    if (showHealthModal) {
-      healthTriggerRef.current = document.activeElement as HTMLElement | null;
-      const timer = setTimeout(() => {
-        healthModalRef.current?.focus();
-      }, 50);
-      return () => clearTimeout(timer);
-    } else {
-      if (healthTriggerRef.current && typeof healthTriggerRef.current.focus === 'function') {
-        healthTriggerRef.current.focus();
-        healthTriggerRef.current = null;
-      }
-    }
-  }, [showHealthModal]);
 
   // Titlebar logo initialization: play launch animation once on initial app ready
   useEffect(() => {
@@ -443,9 +427,9 @@ export default function App() {
 
           <button
             onClick={() => goNav('today')}
-            className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors ${
+            className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               activeNav === 'today'
-                ? 'bg-emerald-700 text-white shadow-xs'
+                ? 'bg-[var(--pata-accent)] text-white shadow-xs'
                 : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
             }`}
             title="Today"
@@ -456,9 +440,9 @@ export default function App() {
 
           <button
             onClick={() => goNav('tasks')}
-            className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors ${
+            className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               activeNav === 'tasks'
-                ? 'bg-emerald-700 text-white shadow-xs'
+                ? 'bg-[var(--pata-accent)] text-white shadow-xs'
                 : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
             }`}
             title="Tasks"
@@ -469,9 +453,9 @@ export default function App() {
 
           <button
             onClick={() => goNav('notes')}
-            className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors ${
+            className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
               activeNav === 'notes'
-                ? 'bg-emerald-700 text-white shadow-xs'
+                ? 'bg-[var(--pata-accent)] text-white shadow-xs'
                 : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
             }`}
             title="Notes"
@@ -498,7 +482,7 @@ export default function App() {
                       onClick={handleSelectAllTags}
                       className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors min-h-[32px] text-left cursor-pointer ${
                         activeNav === 'tag' && isVirtualAllTag(selectedTag)
-                          ? 'bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 font-medium'
+                          ? 'bg-stone-200/90 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-semibold ring-1 ring-[var(--pata-border)]'
                           : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50'
                       }`}
                       title="全部"
@@ -520,7 +504,7 @@ export default function App() {
                           onClick={() => handleSelectTag(item.tag)}
                           className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors min-h-[32px] text-left cursor-pointer ${
                             activeNav === 'tag' && selectedTag === item.tag
-                              ? 'bg-emerald-100/70 dark:bg-emerald-950/60 text-emerald-900 dark:text-emerald-200 font-medium'
+                              ? 'bg-stone-200/90 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-semibold ring-1 ring-[var(--pata-border)]'
                               : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50'
                           }`}
                           title={`#${item.tag} (共 ${item.total} 项)`}
@@ -555,7 +539,7 @@ export default function App() {
               }}
               className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer ${
                 isSettingsOpen
-                  ? 'bg-emerald-700 text-white shadow-xs'
+                  ? 'bg-[var(--pata-accent)] text-white shadow-xs'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
               }`}
               title="设置 (⌘,)"
@@ -567,7 +551,6 @@ export default function App() {
             {(hasHealthIssues || rescanError || (vaultStatus?.configured && !vaultStatus?.open)) && (
               <button
                 onClick={() => {
-                  healthTriggerRef.current = document.activeElement as HTMLElement | null;
                   setShowHealthModal(true);
                 }}
                 className={`flex items-center space-x-1 px-1.5 py-1 rounded text-xs font-medium border transition cursor-pointer shrink-0 ${
@@ -702,169 +685,130 @@ export default function App() {
       />
 
       {/* Vault Health Detail Modal */}
-      {showHealthModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Vault 健康与降级状态"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 dark:bg-black/60 backdrop-blur-xs select-none"
-          onClick={() => setShowHealthModal(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setShowHealthModal(false);
-          }}
-        >
-          <div
-            ref={healthModalRef}
-            tabIndex={-1}
-            className="w-full max-w-lg bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[80vh] text-stone-900 dark:text-stone-100 outline-none"
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.stopPropagation();
-                setShowHealthModal(false);
-              } else if (e.key === 'Tab') {
-                const focusable = healthModalRef.current?.querySelectorAll<HTMLElement>(
-                  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-                );
-                if (focusable && focusable.length > 0) {
-                  const first = focusable[0];
-                  const last = focusable[focusable.length - 1];
-                  if (e.shiftKey) {
-                    if (document.activeElement === first || document.activeElement === healthModalRef.current) {
-                      e.preventDefault();
-                      last.focus();
-                    }
-                  } else {
-                    if (document.activeElement === last) {
-                      e.preventDefault();
-                      first.focus();
-                    }
-                  }
-                }
-              }
-            }}
-          >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-stone-800">
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">
-                  Vault 降级状态与异常诊断
-                </h2>
-              </div>
-              <button
-                onClick={() => setShowHealthModal(false)}
-                className="p-1 rounded text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-                title="关闭"
-              >
-                <X className="w-4 h-4" />
-              </button>
+      <Dialog open={showHealthModal} onOpenChange={setShowHealthModal}>
+        <DialogContent maxWidth="lg" className="p-0 overflow-hidden max-h-[80vh] flex flex-col">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-stone-200 dark:border-stone-800">
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <DialogTitle className="text-sm font-semibold text-stone-900 dark:text-stone-100">
+                Vault 降级状态与异常诊断
+              </DialogTitle>
             </div>
+            <button
+              onClick={() => setShowHealthModal(false)}
+              className="p-1 rounded-md text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pata-focus-ring)] cursor-pointer"
+              title="关闭"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-              {(!vaultStatus?.open && vaultStatus?.configured) && (
-                <div className="p-3 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/40 text-xs text-rose-700 dark:text-rose-300 space-y-1">
-                  <div className="font-semibold flex items-center space-x-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
-                    <span>Vault 目录无法打开</span>
-                  </div>
-                  <div className="font-mono text-[11px] break-all">{vaultStatus.path}</div>
-                  <div>{vaultStatus.error || '无法打开当前工作区，请检查权限或在设置中重新选择目录。'}</div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+            {(!vaultStatus?.open && vaultStatus?.configured) && (
+              <div className="p-3 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/40 text-xs text-rose-700 dark:text-rose-300 space-y-1">
+                <div className="font-semibold flex items-center space-x-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
+                  <span>Vault 目录无法打开</span>
                 </div>
-              )}
-
-              {rescanError && (
-                <div className="p-3 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/40 text-xs text-rose-700 dark:text-rose-300 space-y-1">
-                  <div className="font-semibold flex items-center space-x-1.5">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
-                    <span>重新扫描失败</span>
-                  </div>
-                  <div className="break-all">{rescanError}</div>
-                </div>
-              )}
-
-              {parseErrorCount > 0 && (
-                <div className="space-y-2">
-                  <div className="font-semibold text-amber-800 dark:text-amber-300 flex items-center justify-between">
-                    <span>文件未识别 (解析失败，已隔离保护)</span>
-                    <span className="font-mono text-[11px] bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 rounded">
-                      {parseErrorCount}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {health?.parse_errors?.map((pe, idx) => (
-                      <div
-                        key={idx}
-                        className="p-2.5 rounded-lg border border-amber-200/80 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/30"
-                      >
-                        <div className="font-mono text-[11px] text-stone-800 dark:text-stone-200 break-all">
-                          {pe.path}
-                        </div>
-                        <div className="text-stone-600 dark:text-stone-400 mt-1">
-                          {pe.reason}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {danglingRefCount > 0 && (
-                <div className="space-y-2">
-                  <div className="font-semibold text-amber-800 dark:text-amber-300 flex items-center justify-between">
-                    <span>引用悬空 (关联目标缺失，动态降级)</span>
-                    <span className="font-mono text-[11px] bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 rounded">
-                      {danglingRefCount}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {health?.dangling_refs?.map((dr, idx) => (
-                      <div
-                        key={idx}
-                        className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-100/50 dark:bg-stone-800/40"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium text-stone-800 dark:text-stone-200">
-                            [{dr.source_type}:{dr.source_id}] 关联缺失的 {dr.target_type} ({dr.target_id})
-                          </span>
-                        </div>
-                        <div className="font-mono text-[10px] text-stone-400 mt-0.5 break-all">
-                          来源文件: {dr.source_path}
-                        </div>
-                        <div className="text-stone-600 dark:text-stone-400 mt-1">
-                          {dr.reason}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="p-2.5 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 text-[11px] leading-relaxed">
-                ℹ️ 依据 Pata Local First 规范，异常或未识别文件会被独立隔离保护，不会被程序静默覆盖或删除。在外部编辑器纠正 Frontmatter 或恢复关联后，系统将自动自愈并恢复索引。
+                <div className="font-mono text-[11px] break-all">{vaultStatus.path}</div>
+                <div>{vaultStatus.error || '无法打开当前工作区，请检查权限或在设置中重新选择目录。'}</div>
               </div>
-            </div>
+            )}
 
-            <div className="px-4 py-2.5 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-100/60 dark:bg-stone-950/60">
-              <button
-                onClick={() => {
-                  setShowHealthModal(false);
-                  handleOpenSettings('storage');
-                }}
-                className="px-3 py-1.5 rounded-md border border-stone-300 dark:border-stone-700 hover:bg-stone-200/60 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-medium transition cursor-pointer"
-              >
-                前往存储设置
-              </button>
+            {rescanError && (
+              <div className="p-3 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/40 text-xs text-rose-700 dark:text-rose-300 space-y-1">
+                <div className="font-semibold flex items-center space-x-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600 dark:text-rose-400" />
+                  <span>重新扫描失败</span>
+                </div>
+                <div className="break-all">{rescanError}</div>
+              </div>
+            )}
 
-              <button
-                onClick={() => setShowHealthModal(false)}
-                className="px-3 py-1.5 rounded-md bg-stone-200 dark:bg-stone-800 hover:bg-stone-300 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs font-medium transition cursor-pointer"
-              >
-                关闭
-              </button>
+            {parseErrorCount > 0 && (
+              <div className="space-y-2">
+                <div className="font-semibold text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                  <span>文件未识别 (解析失败，已隔离保护)</span>
+                  <span className="font-mono text-[11px] bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 rounded">
+                    {parseErrorCount}
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {health?.parse_errors?.map((pe, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-lg border border-amber-200/80 dark:border-amber-900/50 bg-amber-50/60 dark:bg-amber-950/30"
+                    >
+                      <div className="font-mono text-[11px] text-stone-800 dark:text-stone-200 break-all">
+                        {pe.path}
+                      </div>
+                      <div className="text-stone-600 dark:text-stone-400 mt-1">
+                        {pe.reason}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {danglingRefCount > 0 && (
+              <div className="space-y-2">
+                <div className="font-semibold text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                  <span>引用悬空 (关联目标缺失，动态降级)</span>
+                  <span className="font-mono text-[11px] bg-amber-100 dark:bg-amber-950 px-1.5 py-0.5 rounded">
+                    {danglingRefCount}
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {health?.dangling_refs?.map((dr, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2.5 rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-100/50 dark:bg-stone-800/40"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-stone-800 dark:text-stone-200">
+                          [{dr.source_type}:{dr.source_id}] 关联缺失的 {dr.target_type} ({dr.target_id})
+                        </span>
+                      </div>
+                      <div className="font-mono text-[10px] text-stone-400 mt-0.5 break-all">
+                        来源文件: {dr.source_path}
+                      </div>
+                      <div className="text-stone-600 dark:text-stone-400 mt-1">
+                        {dr.reason}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="p-2.5 rounded-lg bg-stone-100 dark:bg-stone-800/60 text-stone-500 dark:text-stone-400 text-[11px] leading-relaxed">
+              ℹ️ 依据 Pata Local First 规范，异常或未识别文件会被独立隔离保护，不会被程序静默覆盖或删除。在外部编辑器纠正 Frontmatter 或恢复关联后，系统将自动自愈并恢复索引。
             </div>
           </div>
-        </div>
-      )}
+
+          <div className="px-4 py-2.5 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-100/60 dark:bg-stone-950/60">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setShowHealthModal(false);
+                handleOpenSettings('storage');
+              }}
+            >
+              前往存储设置
+            </Button>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowHealthModal(false)}
+            >
+              关闭
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

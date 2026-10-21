@@ -90,7 +90,9 @@ export function SettingsView({
       else if (initialSection === 'transcription') target = transcriptionRef.current;
 
       if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const prefersReducedMotion =
+          typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        target.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
       }
     }, 100);
     return () => clearTimeout(timer);
