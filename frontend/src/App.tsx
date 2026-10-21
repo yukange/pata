@@ -317,6 +317,8 @@ export default function App() {
   };
 
   const handleSelectVault = async () => {
+    // 切换 Vault 将卸载当前详情，先保护未保存的任务草稿。
+    if (detailRef.current && !(await detailRef.current.confirmLeave())) return;
     setVaultBusy(true);
     try {
       const prevPath = vaultStatus?.path;
