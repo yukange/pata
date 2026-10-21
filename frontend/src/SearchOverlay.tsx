@@ -366,7 +366,7 @@ export function SearchOverlay({
                 <div>
                   <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-stone-500 dark:text-stone-400 bg-stone-100/60 dark:bg-stone-800/40">
                     <div className="flex items-center space-x-1.5">
-                      <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                       <span>笔记</span>
                     </div>
                     <span className="font-mono text-[10px] text-stone-400">
@@ -395,7 +395,7 @@ export function SearchOverlay({
                           }`}
                         >
                           <div className="flex items-center space-x-2.5 min-w-0 mr-2 flex-1">
-                            <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 opacity-80" />
+                            <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 opacity-80" />
                             <div className="min-w-0 flex-1">
                               <div className="font-medium truncate">{note.title || '(无标题笔记)'}</div>
                               {note.snippet && (
@@ -473,7 +473,7 @@ export function SearchOverlay({
                                     关联任务评论
                                   </span>
                                 ) : hasDate ? (
-                                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono">
+                                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-mono">
                                     日计划活动 ({act.title})
                                   </span>
                                 ) : (
@@ -508,7 +508,7 @@ export function SearchOverlay({
                 <div>
                   <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-stone-500 dark:text-stone-400 bg-stone-100/60 dark:bg-stone-800/40">
                     <div className="flex items-center space-x-1.5">
-                      <Paperclip className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <Paperclip className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                       <span>文件资源</span>
                     </div>
                     <span className="font-mono text-[10px] text-stone-400">
@@ -538,7 +538,7 @@ export function SearchOverlay({
                           }`}
                         >
                           <div className="flex items-center space-x-2.5 min-w-0 mr-2 flex-1">
-                            <Paperclip className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 opacity-80" />
+                            <Paperclip className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 opacity-80" />
                             <div className="min-w-0 flex-1">
                               <div className="font-medium truncate">{file.title}</div>
                               <div className="text-[11px] text-stone-500 dark:text-stone-400 truncate mt-0.5 opacity-90">

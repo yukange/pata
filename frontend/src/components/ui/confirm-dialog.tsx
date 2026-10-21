@@ -42,7 +42,8 @@ export function ConfirmDialog({
   };
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen && !loading) {
+    if (loading) return;
+    if (!newOpen) {
       onCancel();
     }
     onOpenChange?.(newOpen);

@@ -1578,7 +1578,19 @@ function NoteEditor({
       />
 
       {/* Confirmation Modal for Leaving Empty-Title Draft with Content */}
-      <Dialog open={showDraftNoTitleConfirm} onOpenChange={setShowDraftNoTitleConfirm} disablePointerDismissal={true}>
+      <Dialog
+        open={showDraftNoTitleConfirm}
+        onOpenChange={(open) => {
+          setShowDraftNoTitleConfirm(open);
+          if (!open) {
+            pendingGoRef.current = null;
+            const resolve = leavePromptResolverRef.current;
+            leavePromptResolverRef.current = null;
+            resolve?.(false);
+          }
+        }}
+        disablePointerDismissal={true}
+      >
         <DialogContent maxWidth="sm">
           <div className="flex items-start space-x-3">
             <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 shrink-0">
@@ -1606,10 +1618,10 @@ function NoteEditor({
                 variant="brand"
                 size="sm"
                 onClick={() => {
-                  setShowDraftNoTitleConfirm(false);
                   pendingGoRef.current = null;
                   const resolve = leavePromptResolverRef.current;
                   leavePromptResolverRef.current = null;
+                  setShowDraftNoTitleConfirm(false);
                   resolve?.(false);
                 }}
               >
@@ -1619,16 +1631,16 @@ function NoteEditor({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  setShowDraftNoTitleConfirm(false);
                   if (debounceTimerRef.current) {
                     window.clearTimeout(debounceTimerRef.current);
                     debounceTimerRef.current = null;
                   }
                   const go = pendingGoRef.current ?? onBack;
                   pendingGoRef.current = null;
-                  go();
                   const resolve = leavePromptResolverRef.current;
                   leavePromptResolverRef.current = null;
+                  setShowDraftNoTitleConfirm(false);
+                  go();
                   resolve?.(true);
                 }}
               >

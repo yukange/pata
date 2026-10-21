@@ -787,7 +787,7 @@ export function TodayView({
                         {done ? (
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                         ) : (
-                          <Undo2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <Undo2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                         )}
                         <span className="min-w-0 truncate">
                           {label(done ? '完成了 ' : '重新打开 ')}

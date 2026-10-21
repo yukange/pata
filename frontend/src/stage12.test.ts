@@ -39,9 +39,9 @@ test('Design Tokens in index.css: 核心语义色与变量定义完备', () => {
     assert.ok(cssContent.includes(token), `CSS 中应定义 ${token}`);
   }
 
-  // 3. 强调色与品牌绿统一为翡翠绿规范
-  assert.ok(cssContent.includes('--pata-accent: #047857;'), '浅色强调色统一为 emerald-700');
-  assert.ok(cssContent.includes('--pata-accent: #059669;'), '深色强调色统一为 emerald-600');
+  // 3. 强调色跟随系统 AccentColor，与品牌绿保持语义分离
+  assert.ok(cssContent.includes('--pata-accent: AccentColor;'), '强调色跟随系统 AccentColor');
+  assert.ok(cssContent.includes('--pata-focus-ring: AccentColor;'), '焦点环跟随系统 AccentColor');
   assert.ok(cssContent.includes('--pata-brand: #047857;'), '浅色品牌绿为 emerald-700');
   assert.ok(cssContent.includes('--pata-brand: #10b981;'), '深色品牌绿为 emerald-500');
 });
@@ -58,8 +58,8 @@ test('可访问键盘焦点: 恢复可见的 :focus-visible，局部隔离编辑
 
   // 统一的可见焦点定义
   assert.ok(
-    cssContent.includes(':focus-visible {\n  outline: 2px solid var(--pata-focus-ring, #059669);'),
-    ':focus-visible 应使用统一可见的绿色焦点环'
+    cssContent.includes(':focus-visible {\n  outline: 2px solid var(--pata-focus-ring, AccentColor);'),
+    ':focus-visible 应使用系统强调色焦点环'
   );
 
   // Vditor 编辑区局部排除
@@ -158,4 +158,26 @@ test('确认弹层收敛: NotesView 复用 ConfirmDialog 基础组件', () => {
   assert.ok(notesContent.includes('<ConfirmDialog\n        open={showDeleteConfirm}'), '删除笔记确认应复用 ConfirmDialog');
   assert.ok(notesContent.includes('<ConfirmDialog\n        open={showMissingKeyModal}'), '缺失密钥确认应复用 ConfirmDialog');
   assert.ok(notesContent.includes('<ConfirmDialog\n        open={Boolean(noteToDelete)}'), '列表卡片删除确认应复用 ConfirmDialog');
+
+  // 无标题草稿离开弹层按 Esc 必须正确恢复 Promise
+  assert.ok(
+    notesContent.includes('leavePromptResolverRef.current = null;\n            resolve?.(false);'),
+    '无标题草稿弹窗关闭/按 Esc 时必须调用 resolve(false) 避免页面死锁'
+  );
+
+  // ConfirmDialog 阻断外部点击
+  const confirmDialogPath = path.resolve(__dirname, 'components/ui/confirm-dialog.tsx');
+  const confirmDialogContent = fs.readFileSync(confirmDialogPath, 'utf-8');
+  assert.ok(
+    confirmDialogContent.includes('disablePointerDismissal={preventDismissOnOutsideClick}'),
+    'ConfirmDialog 应正确将 preventDismissOnOutsideClick 传入 disablePointerDismissal'
+  );
+
+  // package.json 声明直接依赖 @dnd-kit/collision
+  const packageJsonPath = path.resolve(__dirname, '../package.json');
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+  assert.ok(
+    packageJson.dependencies['@dnd-kit/collision'],
+    'package.json dependencies 必须声明 @dnd-kit/collision'
+  );
 });
