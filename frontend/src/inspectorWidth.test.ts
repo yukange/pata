@@ -10,7 +10,11 @@ import {
 test('inspector starts at 400px and accepts only sensible persisted widths', () => {
   assert.equal(parseInspectorWidth(null), DEFAULT_INSPECTOR_WIDTH);
   assert.equal(parseInspectorWidth('440'), 440);
+  assert.equal(parseInspectorWidth('280'), 280);
+  assert.equal(parseInspectorWidth('720'), 720);
   assert.equal(parseInspectorWidth('Infinity'), DEFAULT_INSPECTOR_WIDTH);
+  assert.equal(parseInspectorWidth('NaN'), DEFAULT_INSPECTOR_WIDTH);
+  assert.equal(parseInspectorWidth(''), DEFAULT_INSPECTOR_WIDTH);
   assert.equal(parseInspectorWidth('99'), DEFAULT_INSPECTOR_WIDTH);
   assert.equal(parseInspectorWidth('2000'), DEFAULT_INSPECTOR_WIDTH);
 });

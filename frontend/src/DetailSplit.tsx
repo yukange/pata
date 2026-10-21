@@ -3,6 +3,7 @@ import type { ReactNode, PointerEvent, KeyboardEvent } from 'react';
 import {
   DEFAULT_INSPECTOR_WIDTH,
   MIN_INSPECTOR_WIDTH,
+  MAX_INSPECTOR_WIDTH,
   clampInspectorWidth,
   maxInspectorWidth,
   parseInspectorWidth,
@@ -69,6 +70,13 @@ export function DetailSplit({ panel, children }: { panel: ReactNode | null; chil
     };
   }, []);
 
+  useEffect(() => {
+    if (!panel) {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  }, [panel]);
+
   const maxWidthForWindow = maxInspectorWidth(containerWidth);
   const effectiveWidth = Math.min(panelWidth, maxWidthForWindow);
 
@@ -111,13 +119,18 @@ export function DetailSplit({ panel, children }: { panel: ReactNode | null; chil
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-    event.preventDefault();
-    setClampedWidth(currentWidthRef.current + (event.key === 'ArrowLeft' ? 16 : -16));
-    try {
-      localStorage.setItem(WIDTH_STORAGE_KEY, String(currentWidthRef.current));
-    } catch {
-      // ignore
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      setClampedWidth(currentWidthRef.current + (event.key === 'ArrowLeft' ? 16 : -16));
+      saveWidth();
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      setClampedWidth(MIN_INSPECTOR_WIDTH);
+      saveWidth();
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      setClampedWidth(MAX_INSPECTOR_WIDTH);
+      saveWidth();
     }
   };
 
