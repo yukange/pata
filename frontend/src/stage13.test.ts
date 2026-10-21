@@ -179,10 +179,14 @@ test('013 回归：Today 记录中的任务链接在右栏已打开时仍应切�
 
   // ActivityItem 有两类任务链接：系统状态事件与人工评论。
   // 两者都需要屏蔽右栏输入框的先行 blur 自动保存，再将 taskId 交给 App Shell。
-  const links = itemContent.match(/taskContext\.onOpenTask\(taskContext\.taskId\)/g) ?? [];
-  const preventBlur = itemContent.match(/onMouseDown=\{\(e\) => e\.preventDefault\(\)\}/g) ?? [];
-  assert.equal(links.length, 2, '完成/重开事件与普通评论都应能打开对应任务');
-  assert.ok(preventBlur.length >= links.length, '任务链接不应先触发右栏输入框的 blur 自动保存');
+  const taskButtons = itemContent.match(/<button[\s\S]*?taskContext\.onOpenTask\(taskContext\.taskId\)[\s\S]*?<\/button>/g) ?? [];
+  assert.equal(taskButtons.length, 2, '完成/重开事件与普通评论都应能打开对应任务');
+  for (const taskButton of taskButtons) {
+    assert.ok(
+      taskButton.includes('onMouseDown={(e) => e.preventDefault()}'),
+      '每个任务链接都应避免在切换前触发详情失焦自动保存'
+    );
+  }
 
   // Today 的任务链接不能只在右栏为空时打开，必须使用 App 级选择入口。
   assert.ok(todayContent.includes('onOpenTask(id, dayPlanTaskIds.includes(id)'));
