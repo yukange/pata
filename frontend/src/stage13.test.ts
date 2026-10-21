@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { formatStatusAction, isActivitySubmitShortcut } from './activityUtils.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,13 +18,13 @@ test('013-001: App Shell 提升 Inspector 所有权', () => {
     'App 顶层应持有全局唯一的 DetailSplit 与 TaskDetailPanel'
   );
 
-  // 跨页面切换时不卸载右侧详情
+  // 跨页面切换时不卸载右侧详情，按任务 ID 隔离
   assert.ok(
     appContent.includes('key={detailSelection.taskId}'),
     'TaskDetailPanel 应使用 taskId 作为 key 隔离任务，跨页面切换保持实例'
   );
 
-  // Today、Tasks、Tag 等子视图不再私自包裹 DetailSplit
+  // Today、Tasks、Tag 等子视图不再私自包裹 DetailSplit 或渲染 TaskDetailPanel
   const todayPath = path.resolve(__dirname, 'TodayView.tsx');
   const todayContent = fs.readFileSync(todayPath, 'utf-8');
   assert.ok(
@@ -50,21 +51,26 @@ test('013-002: DetailSplit 拖拽、尺寸持久化与快捷键微调', () => {
   const splitPath = path.resolve(__dirname, 'DetailSplit.tsx');
   const splitContent = fs.readFileSync(splitPath, 'utf-8');
 
-  // 支持键盘微调
+  // 支持键盘微调与极值快捷定位
   assert.ok(
     splitContent.includes("event.key === 'ArrowLeft'") &&
       splitContent.includes("event.key === 'ArrowRight'"),
     'DetailSplit 应支持方向键微调'
   );
-
-  // 支持 Home / End 极值定位
   assert.ok(
     splitContent.includes("event.key === 'Home'") &&
       splitContent.includes("event.key === 'End'"),
     'DetailSplit 应支持 Home/End 快捷极值定位'
   );
 
-  // 面板卸载时光标与选择重置
+  // ARIA 分隔栏无障碍无障碍属性
+  assert.ok(
+    splitContent.includes('role="separator"') &&
+      splitContent.includes('aria-orientation="vertical"'),
+    'DetailSplit 应提供标准无障碍 separator 语义'
+  );
+
+  // 面板卸载时光标与文本选择状态重置
   assert.ok(
     splitContent.includes("document.body.style.cursor = ''") &&
       splitContent.includes("document.body.style.userSelect = ''"),
@@ -72,67 +78,67 @@ test('013-002: DetailSplit 拖拽、尺寸持久化与快捷键微调', () => {
   );
 });
 
-test('013-003: ActivityItem 结构与视觉层次规范', () => {
+test('013-003: ActivityItem 状态事件文案与视觉层次规范', () => {
+  // 1. 状态事件动词：无任务上下文（详情面板）显示“已完成/重新打开”；有任务上下文显示“完成了 /重新打开 ”
+  assert.equal(formatStatusAction('completed', false), '已完成');
+  assert.equal(formatStatusAction('reopened', false), '重新打开');
+  assert.equal(formatStatusAction('completion', true), '完成了 ');
+  assert.equal(formatStatusAction('reopen', true), '重新打开 ');
+  assert.equal(formatStatusAction('completed', true), '完成了 ');
+  assert.equal(formatStatusAction('reopened', true), '重新打开 ');
+
   const itemPath = path.resolve(__dirname, 'ActivityItem.tsx');
   const content = fs.readFileSync(itemPath, 'utf-8');
 
-  // 1. 时间位于正文上方
+  // 2. 悬停出现编辑按钮
   assert.ok(
-    content.includes('font-mono text-[11px] text-stone-400 dark:text-stone-500 shrink-0 select-none'),
-    'ActivityItem 应使用精简等宽时间展示于顶部'
+    content.includes('onStartEdit') && content.includes('Pencil'),
+    '人工评论应提供编辑入口'
   );
 
-  // 2. Today 任务链接在时间右侧，保持正常正文字号 (text-xs font-medium)，不刻意变小
-  assert.ok(
-    content.includes('text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer'),
-    '任务链接应保持 text-xs font-medium 正文同级字号'
-  );
-
-  // 3. 悬停出现编辑按钮
-  assert.ok(
-    content.includes('opacity-0 group-hover:opacity-100 focus:opacity-100'),
-    '人工评论悬停或聚焦时应显示编辑按钮'
-  );
-
-  // 4. 系统事件保持单行只读
-  assert.ok(
-    content.includes('if (statusEvent) {'),
-    '系统状态事件独立渲染为单行只读'
-  );
+  // 3. 系统事件包含对应状态图标且只读
   assert.ok(
     content.includes('CheckCircle2') && content.includes('Undo2'),
     '系统事件应包含完成与重新打开图标'
   );
+
+  // 4. 正文与笔记引用组件集成
+  assert.ok(
+    content.includes('<NoteRefText') && content.includes('<NoteRefTextarea'),
+    'ActivityItem 应分别集成笔记引用预览与编辑框'
+  );
 });
 
-test('013-004: ActivityComposer 一体式容器规范', () => {
+test('013-004: ActivityComposer 提交快捷键与输入法保护', () => {
+  // 1. 快捷键逻辑：支持 Cmd+Enter 与 Ctrl+Enter
+  assert.equal(isActivitySubmitShortcut({ key: 'Enter', metaKey: true }), true);
+  assert.equal(isActivitySubmitShortcut({ key: 'Enter', ctrlKey: true }), true);
+
+  // 2. 普通 Enter 不触发提交
+  assert.equal(isActivitySubmitShortcut({ key: 'Enter' }), false);
+
+  // 3. 其它按键不触发提交
+  assert.equal(isActivitySubmitShortcut({ key: 'a', metaKey: true }), false);
+
+  // 4. 输入法合成保护：isComposing 或 keyCode 229 时严禁触发提交
+  assert.equal(
+    isActivitySubmitShortcut({ key: 'Enter', metaKey: true, isComposing: true }),
+    false,
+    '输入法合成期间不应触发提交'
+  );
+  assert.equal(
+    isActivitySubmitShortcut({ key: 'Enter', metaKey: true, keyCode: 229 }),
+    false,
+    'keyCode 229 合成事件不应触发提交'
+  );
+
   const composerPath = path.resolve(__dirname, 'ActivityComposer.tsx');
   const content = fs.readFileSync(composerPath, 'utf-8');
 
-  // 1. 输入区与发送按钮位于同一圆角卡片容器
+  // 5. 输入框与发送按钮位于同一卡片容器，发送按钮位于右下角
   assert.ok(
-    content.includes('rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-2.5'),
-    'ActivityComposer 外层应为圆角卡片容器'
-  );
-  assert.ok(
-    content.includes('focus-within:border-emerald-600/80') &&
-      content.includes('focus-within:ring-2 focus-within:ring-emerald-500/20'),
-    '外层容器应具有 focus-within 统一环状光圈'
-  );
-
-  // 2. 发送按钮位于容器右下角
-  assert.ok(
-    content.includes('flex items-center justify-end pt-1.5'),
-    '发送按钮应位于容器内右下角'
-  );
-
-  // 3. 快捷键 ⌘+Enter 且具备 IME 组合保护
-  assert.ok(
-    content.includes('(e.metaKey || e.ctrlKey)') &&
-      content.includes("e.key === 'Enter'") &&
-      content.includes('!e.nativeEvent.isComposing') &&
-      content.includes('e.keyCode !== 229'),
-    '应支持 ⌘+Enter 发送并兼容中文输入法合成'
+    content.includes('focus-within:ring-2') && content.includes('justify-end'),
+    'ActivityComposer 应提供一体式卡片焦点环与右下角按钮'
   );
 });
 

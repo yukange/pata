@@ -5,6 +5,9 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { NoteRefText, NoteRefTextarea, NoteRefMap, NoteRef } from './noteRefs';
+import { formatStatusAction } from './activityUtils';
+
+export { formatStatusAction };
 
 export interface ActivityTaskContext {
   taskId: string;
@@ -90,7 +93,7 @@ export function ActivityItem({
           <Undo2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
         )}
         <span className="min-w-0">
-          <span>{isCompleted ? '完成了 ' : '重新打开 '}</span>
+          <span>{formatStatusAction(statusEvent.action, Boolean(taskContext))}</span>
           {taskContext && (
             taskContext.taskExists !== false ? (
               <button
@@ -107,14 +110,11 @@ export function ActivityItem({
                 {taskContext.taskTitle || taskContext.taskId}
               </button>
             ) : (
-              <span className="font-mono text-stone-500 break-words">
+              <span className="text-xs font-mono text-stone-400 dark:text-stone-500 break-words">
                 {taskContext.taskTitle || taskContext.taskId}
                 <span className="ml-1 text-[10px] text-rose-500/80">(任务已删除)</span>
               </span>
             )
-          )}
-          {!taskContext && (
-            <span>{isCompleted ? '任务' : '任务'}</span>
           )}
         </span>
       </div>

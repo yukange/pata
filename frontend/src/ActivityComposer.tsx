@@ -1,6 +1,9 @@
 import { Send, RefreshCw, AlertCircle, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { NoteRefTextarea, NoteRefMap, NoteRef } from './noteRefs';
+import { isActivitySubmitShortcut } from './activityUtils';
+
+export { isActivitySubmitShortcut };
 
 export interface ActivityComposerProps {
   value: string;
@@ -57,10 +60,13 @@ export function ActivityComposer({
           disabled={submitting}
           onKeyDown={(e) => {
             if (
-              (e.metaKey || e.ctrlKey) &&
-              e.key === 'Enter' &&
-              !e.nativeEvent.isComposing &&
-              e.keyCode !== 229 &&
+              isActivitySubmitShortcut({
+                key: e.key,
+                metaKey: e.metaKey,
+                ctrlKey: e.ctrlKey,
+                isComposing: e.nativeEvent.isComposing,
+                keyCode: e.keyCode,
+              }) &&
               !submitting &&
               value.trim()
             ) {
