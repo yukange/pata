@@ -1,6 +1,6 @@
 # Pata · 文档与实施路线
 
-**文档按实施阶段组织，而不是按功能模块组织。** 当前路线包含 **11 个顺序阶段**：阶段 1～11 的代码与实机验收已完成；阶段 10 将主题、Vault 与语音 Keychain 凭证集中到主窗口单页设置，阶段 11 增加以普通 Note 为载体的音频逐字稿与双向时间定位。只有实际新增一个独立交付阶段时，才新增对应的 `docs/NN-name/` 目录。
+**文档按实施阶段组织，而不是按功能模块组织。** 当前路线包含 **12 个顺序阶段**：阶段 1～11 的代码与实机验收已完成；阶段 12「前端基础设施与设计系统整理」已完成设计裁决，**尚未实施与验收**。阶段 10 将主题、Vault 与语音 Keychain 凭证集中到主窗口单页设置，阶段 11 增加以普通 Note 为载体的音频逐字稿与双向时间定位。只有实际新增一个独立交付阶段时，才新增对应的 `docs/NN-name/` 目录。
 
 | 顺序 | 目录 / 阶段 | 阶段结束应交付什么 | 核心文档 |
 |---|---|---|---|
@@ -15,6 +15,7 @@
 | 9 | [`09-vault-files`](09-vault-files/) · 专属 Vault 与统一资源引用 | Vault 目录边界、拖入文件与 `[[` 复用、文件名搜索和系统预览 | [idea](09-vault-files/idea.md) · [proposal](09-vault-files/proposal.md) |
 | 10 | [`10-settings`](10-settings/) · 统一应用设置 | 主窗口单页「外观 / 存储 / 语音转写」，迁移主题与 Vault 管理，Keychain 保存北京地域 API Key | [idea](10-settings/idea.md) · [proposal](10-settings/proposal.md) |
 | 11 | [`11-audio-transcription`](11-audio-transcription/) · 本地音频转写为 Note | MP3 导入后创建只读逐字稿 Note、句级毫秒时间戳、音频双向定位、确认后重新转写 | [idea](11-audio-transcription/idea.md) · [proposal](11-audio-transcription/proposal.md) |
+| 12 | [`12-frontend-foundation`](12-frontend-foundation/) · 前端基础设施与设计系统整理 | 保留 Pata 现有视觉，按需统一 Design Tokens/基础组件/键盘交互与拖拽体验，系统强调色优先（待实施） | [idea](12-frontend-foundation/idea.md) · [proposal](12-frontend-foundation/proposal.md) |
 
 阶段 1 的 UI 附加设计： [macOS 27 原生体验与 Magpie 源码参考](01-validate/macos-native.md)，其真实 Wails 验证安排在阶段 2。
 
@@ -54,3 +55,5 @@
 **阶段 11：代码与实机验收完成。** 以普通 Markdown Note 文件承载**只读逐字稿正文**（标题/标签仍可修改，普通 Note 不受影响），复用 `files/`，支持说话人、毫秒时间戳、顶部播放器、时间戳点击播放、进度拖动结束时定位正文及安全重新转写；不做多供应商、JSON 侧车或会议摘要。经实机自动化测试（`TestStage11_AudioTranscriptionAcceptance`）与 live GUI 走查验证通过。详见 [11](11-audio-transcription/proposal.md)。
 
 阶段 3 新增 Today 体验完善方案：末尾 `#标签` 快速创建、类似 ChatGPT 的左导航 / 中间 Today 或 Tasks / 右任务详情三栏、移除任务优先级、明确移出计划语义、紧凑日期及时间线。右栏按需打开，Notes 仍单列浏览与全主区域编辑。文档已整理，新增完成标准尚未验收，见 [idea](03-daily-loop/idea.md) 与 [proposal](03-daily-loop/proposal.md)；不改变原基础能力的已完成记录，也不新增阶段。
+
+**阶段 12：设计已定稿，待实施。** 两项裁决：保留现有视觉，仅局部优化；常规交互 Accent 优先跟随 macOS 系统强调色，品牌绿主要用于品牌识别。具体实现、验证路径与完成标准见 [12-frontend-foundation/proposal.md](12-frontend-foundation/proposal.md)。
