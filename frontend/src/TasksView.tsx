@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Events } from '@wailsio/runtime';
 import {
   Circle,
@@ -11,41 +11,37 @@ import * as VaultService from '../bindings/pata/vaultservice';
 import { Task, TaskStatus } from '../bindings/pata/internal/storage/markdown/models';
 import { VaultStatus, CreateTaskInput } from '../bindings/pata/models';
 import { QuickCreateInput } from './QuickCreateInput';
-import { TaskDetailPanel, TaskDetailHandle } from './TaskDetailPanel';
-import { DetailSplit, useDetailOrigin } from './DetailSplit';
+import { WorkspacePage } from './DetailSplit';
 
 interface TasksViewProps {
   vaultStatus: VaultStatus | null;
   onSelectVault: () => void;
   vaultBusy?: boolean;
-  focusTaskId?: string | null;
-  onClearFocusTask?: () => void;
-  onOpenNote?: (noteId: string, fromTaskId?: string) => void;
+  selectedTaskId: string | null;
+  onOpenTask: (taskId: string) => void;
+  onGuardTask: (taskId: string) => Promise<boolean>;
+  onTaskWritten: (taskId: string) => Promise<void>;
+  detailRevision: number;
   /** 已有全局标签名（不带 #），用于快速创建补全。 */
   tagNames: string[];
   /** 任务写入成功后刷新全局标签等跨页面数据。 */
   onVaultDataChanged: () => void;
-  /** 页面离开前的未保存草稿确认；返回 false 表示取消离开。 */
-  leaveGuardRef: React.MutableRefObject<(() => Promise<boolean>) | null>;
 }
 
 export function TasksView({
   vaultStatus,
   onSelectVault,
   vaultBusy = false,
-  focusTaskId,
-  onClearFocusTask,
-  onOpenNote,
+  selectedTaskId,
+  onOpenTask,
+  onGuardTask,
+  onTaskWritten,
+  detailRevision,
   tagNames,
   onVaultDataChanged,
-  leaveGuardRef,
 }: TasksViewProps) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [listError, setListError] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const panelRef = useRef<TaskDetailHandle>(null);
-  const origin = useDetailOrigin();
-
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'done'>('all');
 
   const loadTasks = useCallback(async () => {
@@ -77,42 +73,12 @@ export function TasksView({
     };
   }, [loadTasks]);
 
-  const currentPathRef = useRef(vaultStatus?.path);
   useEffect(() => {
-    if (currentPathRef.current !== vaultStatus?.path) {
-      currentPathRef.current = vaultStatus?.path;
-      setSelectedTaskId(null);
-    }
-  }, [vaultStatus?.path]);
+    if (detailRevision) void loadTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailRevision]);
 
-  useEffect(() => {
-    leaveGuardRef.current = async () => (await panelRef.current?.confirmLeave()) ?? true;
-    return () => {
-      leaveGuardRef.current = null;
-    };
-  }, [leaveGuardRef]);
-
-  const openTask = useCallback(
-    async (id: string) => {
-      if (selectedTaskId && selectedTaskId !== id && !((await panelRef.current?.confirmLeave()) ?? true)) return;
-      origin.capture();
-      setSelectedTaskId(id);
-    },
-    [selectedTaskId, origin]
-  );
-
-  const closePanel = () => {
-    setSelectedTaskId(null);
-    origin.restore();
-  };
-
-  // 来自 Today / 搜索 / 标签页的跳转
-  useEffect(() => {
-    if (focusTaskId) {
-      void openTask(focusTaskId);
-      onClearFocusTask?.();
-    }
-  }, [focusTaskId, onClearFocusTask, openTask]);
+  const openTask = onOpenTask;
 
   const refreshAll = useCallback(() => {
     void loadTasks();
@@ -133,7 +99,7 @@ export function TasksView({
   const handleToggleStatus = async (task: Task, e: React.MouseEvent) => {
     e.stopPropagation();
     // 同一任务有未保存草稿时，先让用户决定，避免随后的保存覆盖这次状态修改
-    if (task.id === selectedTaskId && !((await panelRef.current?.confirmLeave()) ?? true)) return;
+    if (!(await onGuardTask(task.id))) return;
     const nextStatus =
       task.status === TaskStatus.TaskStatusDone
         ? TaskStatus.TaskStatusTodo
@@ -142,7 +108,7 @@ export function TasksView({
     try {
       await VaultService.SetTaskStatus(task.id, nextStatus);
       refreshAll();
-      if (task.id === selectedTaskId) await panelRef.current?.reload();
+      await onTaskWritten(task.id);
     } catch (err: any) {
       const isConflict =
         typeof err?.message === 'string' &&
@@ -208,22 +174,8 @@ export function TasksView({
     );
   }
 
-  const panel = selectedTaskId ? (
-    <TaskDetailPanel
-      key={selectedTaskId}
-      ref={panelRef}
-      taskId={selectedTaskId}
-      closeLabel="关闭详情"
-      tagNames={tagNames}
-      onClose={closePanel}
-      onChanged={refreshAll}
-      onDeleted={closePanel}
-      onOpenNote={onOpenNote}
-    />
-  ) : null;
-
   return (
-    <DetailSplit panel={panel}>
+    <WorkspacePage>
       <div className="space-y-5">
         {/* Quick Create Bar */}
         <QuickCreateInput
@@ -387,6 +339,6 @@ export function TasksView({
           </div>
         )}
       </div>
-    </DetailSplit>
+    </WorkspacePage>
   );
 }
