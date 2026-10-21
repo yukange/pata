@@ -24,6 +24,8 @@ import { SearchOverlay } from './SearchOverlay';
 import { PataLogo } from './components/PataLogo';
 import { registerTitlebarLogo, playLogoLaunch } from './logoAnimation';
 import { isVirtualAllTag } from './tagAll';
+import { DetailSplit, useDetailOrigin } from './DetailSplit';
+import { TaskDetailPanel, TaskDetailHandle } from './TaskDetailPanel';
 
 export default function App() {
   const titlebarLogoRef = useRef<SVGSVGElement | null>(null);
@@ -52,7 +54,10 @@ export default function App() {
   const [vaultStatus, setVaultStatus] = useState<VaultStatus | null>(null);
   const [vaultBusy, setVaultBusy] = useState(false);
   const [rescanError, setRescanError] = useState<string | null>(null);
-  const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
+  const [detailSelection, setDetailSelection] = useState<{ taskId: string; planContext?: { date: string; isToday: boolean } } | null>(null);
+  const [detailRevision, setDetailRevision] = useState(0);
+  const detailRef = useRef<TaskDetailHandle>(null);
+  const detailOrigin = useDetailOrigin();
   const [focusNoteId, setFocusNoteId] = useState<string | null>(null);
 
   // Global tags state
@@ -82,7 +87,7 @@ export default function App() {
     }
   }, [activeNav]);
 
-  // 当前页面登记的离开前确认（任务详情有未保存草稿时返回 false 表示取消离开）
+  // 只保护页面内的草稿；右侧 Inspector 的草稿由它自己保护。
   const leaveGuardRef = useRef<(() => Promise<boolean>) | null>(null);
   const guarded = async (go: () => void) => {
     if (leaveGuardRef.current && !(await leaveGuardRef.current())) {
@@ -105,22 +110,34 @@ export default function App() {
     });
   };
 
-  const handleOpenTask = (taskID: string) => {
-    const go = () => {
-      setIsSettingsOpen(false);
-      setActiveNav('tasks');
-      setFocusTaskId(taskID);
-    };
-    // 已在 Tasks 且不在设置时由其详情面板自行确认草稿，避免重复提示
-    if (activeNav === 'tasks' && !isSettingsOpen) go();
-    else void guarded(go);
+  // 一个应用级 Inspector，跨工作区页面保持任务选择和草稿。
+  const handleOpenTask = async (taskID: string, planContext?: { date: string; isToday: boolean }) => {
+    if (detailSelection?.taskId !== taskID && detailRef.current && !(await detailRef.current.confirmLeave())) return;
+    if (!detailSelection) detailOrigin.capture();
+    setIsSettingsOpen(false);
+    setDetailSelection({ taskId: taskID, planContext });
   };
 
-  // 从任务详情打开笔记时记录来源，笔记页「返回」回到该任务
+  const closeInspector = () => {
+    setDetailSelection(null);
+    detailOrigin.restore();
+  };
+
+  const guardInspectedTask = async (id: string): Promise<boolean> =>
+    detailSelection?.taskId !== id || ((await detailRef.current?.confirmLeave()) ?? true);
+
+  const afterTaskWrite = async (id: string) => {
+    if (detailSelection?.taskId === id) await detailRef.current?.reload();
+  };
+
+  const handleTodayDateSelected = useCallback((date: string) => {
+    setDetailSelection((prev) =>
+      prev?.planContext && prev.planContext.date !== date ? { ...prev, planContext: undefined } : prev
+    );
+  }, []);
+
   const [noteOrigin, setNoteOrigin] = useState<{ nav: 'today' | 'tasks' | 'tag'; taskId: string } | null>(null);
-  const [todayTaskId, setTodayTaskId] = useState<string | null>(null);
   const [todayDate, setTodayDate] = useState<string | null>(null);
-  const [tagTaskId, setTagTaskId] = useState<string | null>(null);
 
   const handleOpenTodayDate = (date: string) => {
     void guarded(() => {
@@ -143,9 +160,7 @@ export default function App() {
     if (!noteOrigin) return;
     setIsSettingsOpen(false);
     setActiveNav(noteOrigin.nav);
-    if (noteOrigin.nav === 'tasks') setFocusTaskId(noteOrigin.taskId);
-    else if (noteOrigin.nav === 'today') setTodayTaskId(noteOrigin.taskId);
-    else if (noteOrigin.nav === 'tag') setTagTaskId(noteOrigin.taskId);
+    void handleOpenTask(noteOrigin.taskId);
     setNoteOrigin(null);
   };
 
@@ -198,6 +213,33 @@ export default function App() {
       console.error('Failed to refresh vault status:', err);
     }
   }, [loadTags]);
+
+  const handleInspectorChanged = () => {
+    setDetailRevision((revision) => revision + 1);
+    void refreshVault();
+  };
+
+  const removeTaskFromDayPlan = async (taskId: string, date: string): Promise<boolean> => {
+    try {
+      const plan = await VaultService.GetDayPlan(date);
+      const existing = (plan?.task_ids ?? []).filter((id): id is string => typeof id === 'string');
+      await VaultService.SaveDayPlan(date, existing.filter((id) => id !== taskId));
+      handleInspectorChanged();
+      return true;
+    } catch (err) {
+      console.error('Failed to remove task from day plan:', err);
+      return false;
+    }
+  };
+
+  const vaultPathForInspectorRef = useRef<string | null>(null);
+  useEffect(() => {
+    const path = vaultStatus?.path ?? null;
+    if (vaultPathForInspectorRef.current !== null && vaultPathForInspectorRef.current !== path) {
+      setDetailSelection(null);
+    }
+    vaultPathForInspectorRef.current = path;
+  }, [vaultStatus?.path]);
 
   // Fetch vault status on load
   useEffect(() => {
@@ -373,6 +415,23 @@ export default function App() {
   const parseErrorCount = health?.parse_errors?.length ?? 0;
   const danglingRefCount = health?.dangling_refs?.length ?? 0;
   const hasHealthIssues = parseErrorCount > 0 || danglingRefCount > 0;
+
+  const detailPanel = detailSelection ? (
+    <TaskDetailPanel
+      key={detailSelection.taskId}
+      ref={detailRef}
+      taskId={detailSelection.taskId}
+      closeLabel="关闭详情"
+      tagNames={tagNames}
+      onClose={closeInspector}
+      onChanged={handleInspectorChanged}
+      onDeleted={closeInspector}
+      onOpenNote={handleOpenNote}
+      planDateContext={activeNav === 'today' && detailSelection.planContext
+        ? { ...detailSelection.planContext, onRemoveFromPlan: removeTaskFromDayPlan }
+        : undefined}
+    />
+  ) : null;
 
   return (
     <div className="relative flex h-screen w-screen overflow-hidden bg-stone-100/60 dark:bg-transparent text-stone-900 dark:text-stone-100 font-sans">
@@ -581,11 +640,12 @@ export default function App() {
           key={vaultStatus?.path ?? 'unconfigured'}
           className={`flex-1 min-h-0 flex flex-col ${isSettingsOpen ? 'hidden' : ''}`}
         >
+          <DetailSplit panel={detailPanel}>
           <div
             className={
               activeNav === 'today' || activeNav === 'tasks' || activeNav === 'tag' || (activeNav === 'notes' && isEditingNote)
-                ? 'flex-1 min-h-0 overflow-hidden' // 三栏或编辑页：内部自适应高度
-                : 'flex-1 overflow-y-auto p-6'
+                ? 'h-full min-h-0 overflow-hidden'
+                : 'h-full overflow-y-auto p-6'
             }
           >
             {activeNav === 'today' && (
@@ -595,8 +655,12 @@ export default function App() {
                 onSelectVault={handleSelectVault}
                 vaultBusy={vaultBusy}
                 onOpenNote={handleOpenNote}
-                initialTaskId={todayTaskId}
-                onInitialTaskConsumed={() => setTodayTaskId(null)}
+                selectedTaskId={detailSelection?.taskId ?? null}
+                onOpenTask={handleOpenTask}
+                onGuardTask={guardInspectedTask}
+                onTaskWritten={afterTaskWrite}
+                onDateSelected={handleTodayDateSelected}
+                detailRevision={detailRevision}
                 initialDate={todayDate}
                 onInitialDateConsumed={() => setTodayDate(null)}
                 tagNames={tagNames}
@@ -611,12 +675,13 @@ export default function App() {
                 vaultStatus={vaultStatus}
                 onSelectVault={handleSelectVault}
                 vaultBusy={vaultBusy}
-                focusTaskId={focusTaskId}
-                onClearFocusTask={() => setFocusTaskId(null)}
-                onOpenNote={handleOpenNote}
+                selectedTaskId={detailSelection?.taskId ?? null}
+                onOpenTask={handleOpenTask}
+                onGuardTask={guardInspectedTask}
+                onTaskWritten={afterTaskWrite}
+                detailRevision={detailRevision}
                 tagNames={tagNames}
                 onVaultDataChanged={refreshVault}
-                leaveGuardRef={leaveGuardRef}
               />
             )}
 
@@ -644,14 +709,13 @@ export default function App() {
                 key={vaultStatus?.path ?? 'tag'}
                 selectedTag={selectedTag}
                 onOpenNote={handleOpenNote}
-                initialTaskId={tagTaskId}
-                onInitialTaskConsumed={() => setTagTaskId(null)}
-                tagNames={tagNames}
-                onVaultDataChanged={refreshVault}
-                leaveGuardRef={leaveGuardRef}
+                selectedTaskId={detailSelection?.taskId ?? null}
+                onOpenTask={handleOpenTask}
+                detailRevision={detailRevision}
               />
             )}
           </div>
+          </DetailSplit>
         </div>
 
         {/* Settings View */}
