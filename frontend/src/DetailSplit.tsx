@@ -1,12 +1,12 @@
-import { useRef } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { ReactNode, PointerEvent, KeyboardEvent } from 'react';
 
-/** 记录详情打开前的焦点元素，关闭后恢复（滚动位置随列表保持挂载而自然保留）。 */
+/** 记录详情打开前的焦点元素，关闭后恢复。 */
 export function useDetailOrigin() {
   const origin = useRef<HTMLElement | null>(null);
   return {
     capture() {
-      if (!origin.current) origin.current = document.activeElement as HTMLElement | null; // 切换任务时保留最初来源
+      if (!origin.current) origin.current = document.activeElement as HTMLElement | null;
     },
     restore() {
       const el = origin.current;
@@ -16,25 +16,141 @@ export function useDetailOrigin() {
   };
 }
 
-const PANEL_WIDTH = 400;
+const WIDTH_STORAGE_KEY = 'pata_detail_panel_width';
+const DEFAULT_WIDTH = 400;
+const MIN_PANEL_WIDTH = 280;
+const MAX_PANEL_WIDTH = 720;
+const MIN_WORKSPACE_WIDTH = 320;
+
+function loadPanelWidth(): number {
+  try {
+    const saved = Number(localStorage.getItem(WIDTH_STORAGE_KEY));
+    if (Number.isFinite(saved) && saved >= MIN_PANEL_WIDTH && saved <= MAX_PANEL_WIDTH) return saved;
+  } catch {
+    // Storage is optional: keep the default width in restricted WebViews.
+  }
+  return DEFAULT_WIDTH;
+}
+
+/** 主工作区的排版与滚动。详情面板不再由具体页面提供。 */
+export function WorkspacePage({ children }: { children: ReactNode }) {
+  return (
+    <div className="h-full min-h-0 overflow-y-auto p-6">
+      <div className="mx-auto max-w-3xl">{children}</div>
+    </div>
+  );
+}
 
 /**
- * 三栏中的「中间 + 右」两栏（左导航在 App）：各自独立滚动。
- * 详情并排显示在最右侧，宽度固定，绝不覆盖中间列表，点击聚焦不改变大小。
+ * App 级中间工作区 + 可选右侧 Inspector。
+ * 组件始终位于 Today / Tasks / Notes / Tag 之外；各页面只负责工作区内容。
  */
 export function DetailSplit({ panel, children }: { panel: ReactNode | null; children: ReactNode }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const currentWidthRef = useRef(DEFAULT_WIDTH);
+  const [panelWidth, setPanelWidth] = useState(loadPanelWidth);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  currentWidthRef.current = panelWidth;
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      setContainerWidth(element.getBoundingClientRect().width);
+    });
+    observer.observe(element);
+    setContainerWidth(element.getBoundingClientRect().width);
+    return () => observer.disconnect();
+  }, []);
+
+  const maxWidthForWindow = containerWidth
+    ? Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, containerWidth - MIN_WORKSPACE_WIDTH))
+    : MAX_PANEL_WIDTH;
+  const effectiveWidth = Math.min(panelWidth, maxWidthForWindow);
+
+  const setClampedWidth = (next: number) => {
+    const available = containerRef.current?.getBoundingClientRect().width ?? 0;
+    const max = available
+      ? Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, available - MIN_WORKSPACE_WIDTH))
+      : MAX_PANEL_WIDTH;
+    const value = Math.round(Math.min(max, Math.max(MIN_PANEL_WIDTH, next)));
+    currentWidthRef.current = value;
+    setPanelWidth(value);
+  };
+
+  const saveWidth = () => {
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    try {
+      localStorage.setItem(WIDTH_STORAGE_KEY, String(currentWidthRef.current));
+    } catch {
+      // Persisting user preference must not block the resize interaction.
+    }
+  };
+
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (rect) setClampedWidth(rect.right - event.clientX);
+  };
+
+  const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    saveWidth();
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    setClampedWidth(currentWidthRef.current + (event.key === 'ArrowLeft' ? 16 : -16));
+    try {
+      localStorage.setItem(WIDTH_STORAGE_KEY, String(currentWidthRef.current));
+    } catch {
+      // ignore
+    }
+  };
+
   return (
-    <div className="relative h-full flex min-h-0 overflow-hidden">
-      <div className="flex-1 min-w-0 overflow-y-auto p-6">
-        <div className="mx-auto max-w-3xl">{children}</div>
-      </div>
+    <div ref={containerRef} className="relative h-full min-h-0 flex overflow-hidden">
+      <div className="flex-1 min-w-0 min-h-0 overflow-hidden">{children}</div>
       {panel && (
-        <aside
-          style={{ width: PANEL_WIDTH }}
-          className="shrink-0 h-full border-l border-stone-200 dark:border-stone-800 overflow-hidden flex flex-col"
-        >
-          {panel}
-        </aside>
+        <>
+          <div
+            role="separator"
+            aria-label="调整任务详情宽度"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_PANEL_WIDTH}
+            aria-valuemax={Math.round(maxWidthForWindow)}
+            aria-valuenow={Math.round(effectiveWidth)}
+            tabIndex={0}
+            onKeyDown={handleKeyDown}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onLostPointerCapture={saveWidth}
+            className="relative z-10 w-1.5 shrink-0 cursor-col-resize touch-none no-drag-region focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--pata-accent)] before:absolute before:inset-y-0 before:left-[2px] before:w-px before:bg-stone-200 dark:before:bg-stone-800 hover:before:bg-stone-400 dark:hover:before:bg-stone-600"
+            title="拖拽调整任务详情宽度（方向键微调）"
+          />
+          <aside
+            style={{ width: effectiveWidth }}
+            className="shrink-0 h-full min-h-0 overflow-hidden flex flex-col"
+            aria-label="任务详情"
+          >
+            {panel}
+          </aside>
+        </>
       )}
     </div>
   );
