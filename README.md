@@ -6,11 +6,11 @@
 
 **Today 管当下，Tasks 管进展，Notes 管沉淀，Activity 负责留痕，标签负责关联。**
 
-> **当前状态（2026-10）**：阶段 1～9 的桌面代码与 macOS 实机验收已完成；阶段 10「设置能力」与阶段 11「音频转写」已收敛设计、尚未编码。实际进度以 [docs/README.md](docs/README.md) 为准。
+> **当前状态（2026-10）**：阶段 1～11 的桌面代码与 macOS 实机验收已完成；阶段 12「前端基础设施与设计系统整理」设计已定稿，尚未实施。实际进度以 [docs/README.md](docs/README.md) 为准。
 
 ## 项目推进方式
 
-`docs/` **按交付顺序划分实施阶段，不按功能模块划分**。每阶段以 `idea.md` 和 `proposal.md` 记录目标、实现与验收。阶段 1～9 已完成；第 10 阶段为 [统一设置（主题、Vault、Keychain）](docs/10-settings/proposal.md)，第 11 阶段为 [MP3 语音转写为普通 Note](docs/11-audio-transcription/proposal.md)。
+`docs/` **按交付顺序划分实施阶段，不按功能模块划分**。每阶段以 `idea.md` 和 `proposal.md` 记录目标、实现与验收。阶段 1～11 已完成；第 12 阶段为 [前端基础设施与设计系统整理](docs/12-frontend-foundation/proposal.md)，保留现有视觉，按需统一组件、Tokens 与交互体验。
 
 **完整阶段清单：[docs/README.md](docs/README.md)**
 
