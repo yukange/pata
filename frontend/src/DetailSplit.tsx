@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode, PointerEvent, KeyboardEvent } from 'react';
+import {
+  DEFAULT_INSPECTOR_WIDTH,
+  MIN_INSPECTOR_WIDTH,
+  clampInspectorWidth,
+  maxInspectorWidth,
+  parseInspectorWidth,
+} from './inspectorWidth';
 
 /** 记录详情打开前的焦点元素，关闭后恢复。 */
 export function useDetailOrigin() {
@@ -17,19 +24,12 @@ export function useDetailOrigin() {
 }
 
 const WIDTH_STORAGE_KEY = 'pata_detail_panel_width';
-const DEFAULT_WIDTH = 400;
-const MIN_PANEL_WIDTH = 280;
-const MAX_PANEL_WIDTH = 720;
-const MIN_WORKSPACE_WIDTH = 320;
-
 function loadPanelWidth(): number {
   try {
-    const saved = Number(localStorage.getItem(WIDTH_STORAGE_KEY));
-    if (Number.isFinite(saved) && saved >= MIN_PANEL_WIDTH && saved <= MAX_PANEL_WIDTH) return saved;
+    return parseInspectorWidth(localStorage.getItem(WIDTH_STORAGE_KEY));
   } catch {
-    // Storage is optional: keep the default width in restricted WebViews.
+    return DEFAULT_INSPECTOR_WIDTH;
   }
-  return DEFAULT_WIDTH;
 }
 
 /** 主工作区的排版与滚动。详情面板不再由具体页面提供。 */
@@ -47,7 +47,7 @@ export function WorkspacePage({ children }: { children: ReactNode }) {
  */
 export function DetailSplit({ panel, children }: { panel: ReactNode | null; children: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const currentWidthRef = useRef(DEFAULT_WIDTH);
+  const currentWidthRef = useRef(DEFAULT_INSPECTOR_WIDTH);
   const [panelWidth, setPanelWidth] = useState(loadPanelWidth);
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -64,17 +64,12 @@ export function DetailSplit({ panel, children }: { panel: ReactNode | null; chil
     return () => observer.disconnect();
   }, []);
 
-  const maxWidthForWindow = containerWidth
-    ? Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, containerWidth - MIN_WORKSPACE_WIDTH))
-    : MAX_PANEL_WIDTH;
+  const maxWidthForWindow = maxInspectorWidth(containerWidth);
   const effectiveWidth = Math.min(panelWidth, maxWidthForWindow);
 
   const setClampedWidth = (next: number) => {
     const available = containerRef.current?.getBoundingClientRect().width ?? 0;
-    const max = available
-      ? Math.max(MIN_PANEL_WIDTH, Math.min(MAX_PANEL_WIDTH, available - MIN_WORKSPACE_WIDTH))
-      : MAX_PANEL_WIDTH;
-    const value = Math.round(Math.min(max, Math.max(MIN_PANEL_WIDTH, next)));
+    const value = clampInspectorWidth(next, available);
     currentWidthRef.current = value;
     setPanelWidth(value);
   };
@@ -130,7 +125,7 @@ export function DetailSplit({ panel, children }: { panel: ReactNode | null; chil
             role="separator"
             aria-label="调整任务详情宽度"
             aria-orientation="vertical"
-            aria-valuemin={MIN_PANEL_WIDTH}
+            aria-valuemin={MIN_INSPECTOR_WIDTH}
             aria-valuemax={Math.round(maxWidthForWindow)}
             aria-valuenow={Math.round(effectiveWidth)}
             tabIndex={0}
