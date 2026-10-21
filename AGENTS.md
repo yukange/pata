@@ -1,10 +1,10 @@
 # Pata · Agent 项目指引
 
-**项目名称：啪嗒 / Pata。** 阶段 1～11 代码实现与 macOS 实机验收均已完成。实际进度以 [docs/README.md](docs/README.md) 为准。
+**项目名称：啪嗒 / Pata。** 阶段 1～12 的代码与 macOS 实机验收已完成；**阶段 13 已立项、正在实施、尚未完成验收**。实际进度以 [docs/README.md](docs/README.md) 为准。
 
 ## 开始阅读
 
-1. 阅读 [docs/README.md](docs/README.md)，按 01 → 11 的顺序了解已完成阶段，并阅读阶段 12 前端工程整理方案。
+1. 阅读 [docs/README.md](docs/README.md)，按 01 → 12 了解已完成阶段；当前实现以 [阶段 13 Proposal](docs/13-app-shell-activity/proposal.md) 为准。
 2. 阅读 [阶段 1 产品提案](docs/01-validate/proposal.md)、[已确认的取舍](docs/01-validate/decisions.md)、[UI 规范](docs/01-validate/ui.md)。
    - macOS 原生窗口细节和 Magpie 源码参考见 [macos-native.md](docs/01-validate/macos-native.md)；浏览器原型不等于真实 Liquid Glass 验证。
 3. 数据 Schema 的**单一来源**为 [阶段 2 schema.md](docs/02-foundation/schema.md)；旧 `docs/02-foundation/examples/` 为历史测试固件，不是生产数据。
@@ -41,8 +41,8 @@
 - 图标统一使用 `lucide-react`（品牌 Logo 和系统原生图标除外）；字体使用 macOS 系统 SF / 苹方 / 等宽回退，不引入额外字体。
 - 交互强调色优先跟随 **macOS 系统 Accent**；品牌绿主要用于品牌识别，成功/警告/错误各自独立。不能把固定绿/蓝误称为系统跟随；WKWebView 能力须实机验证并有清楚降级策略。
 - Today 拖拽复用现有 `@dnd-kit/react`，禁止另造拖拽引擎；简单动效用 CSS，复杂动效才评估 Motion，避免与 dnd-kit 重复控制 `transform`。
-- 布局延续现有实现，仅明确出现可调多面板需求时评估 `react-resizable-panels`；状态默认 React Hooks，仅真实共享状态需求再评估 Zustand。
+- 阶段 12 的布局约束是已完成历史基线；**阶段 13 明确要求恢复 App Shell 级三栏**：左侧导航、中间 Workspace、全局唯一的可收起/拖拽 Task Inspector。Today / Tasks / Tag 不得分别创建详情栏；只在实测有必要时才评估 `react-resizable-panels`。状态优先 React Hooks，仅真实需求再评估 Zustand。
 - 所有交互控件应有可见键盘焦点；Dialog / Popover / 菜单必须正确处理 Esc、Tab、关闭后焦点恢复和必要的危险确认；遵循减少动态效果及中文输入法兼容。
 - 操作成功尽量轻量提示，失败保留草稿、明确原因并可恢复；不改变 Go Core / Markdown 数据语义，不破坏保存冲突保护。
 - 新依赖必须经过 peer dependency、依赖树、打包体积、离线可用性及 macOS 实机兼容性检查；不为安装组件而升级无关技术栈。
-- 具体选型、实施边界与验收标准的**唯一来源**：[阶段 12 proposal](docs/12-frontend-foundation/proposal.md)，不要在 AGENTS.md 再复制整套颜色表或阶段验收清单。
+- 阶段 12 的历史选型与验收记录见 [012 proposal](docs/12-frontend-foundation/proposal.md)；**013 的布局和 Activity UI 实施及验收唯一主文档**是 [013 proposal](docs/13-app-shell-activity/proposal.md)。不在 AGENTS.md 复制设计 Tokens 或验收清单。
