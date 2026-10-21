@@ -12,8 +12,7 @@ import {
 } from 'lucide-react';
 import * as VaultService from '../bindings/pata/vaultservice';
 import { EntityRef } from '../bindings/pata/internal/storage/markdown/models';
-import { DetailSplit, useDetailOrigin } from './DetailSplit';
-import { TaskDetailPanel, TaskDetailHandle } from './TaskDetailPanel';
+import { WorkspacePage } from './DetailSplit';
 import {
   isVirtualAllTag,
   formatTagViewHeader,
@@ -25,11 +24,9 @@ import {
 interface TagViewProps {
   selectedTag: string | null;
   onOpenNote: (noteId: string, fromTaskId?: string) => void;
-  initialTaskId?: string | null;
-  onInitialTaskConsumed?: () => void;
-  tagNames: string[];
-  onVaultDataChanged: () => void;
-  leaveGuardRef: React.MutableRefObject<(() => Promise<boolean>) | null>;
+  selectedTaskId: string | null;
+  onOpenTask: (taskId: string) => void;
+  detailRevision: number;
 }
 
 function formatItemTime(isoString?: string): string {
@@ -60,28 +57,14 @@ function formatItemTime(isoString?: string): string {
 export function TagView({
   selectedTag,
   onOpenNote,
-  initialTaskId,
-  onInitialTaskConsumed,
-  tagNames,
-  onVaultDataChanged,
-  leaveGuardRef,
+  selectedTaskId,
+  onOpenTask,
+  detailRevision,
 }: TagViewProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<EntityRef[]>([]);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-
-  const panelRef = useRef<TaskDetailHandle>(null);
-  const origin = useDetailOrigin();
   const seqRef = useRef(0);
-
-  // Consume initialTaskId if passed (e.g. when returning from a note)
-  useEffect(() => {
-    if (initialTaskId) {
-      setSelectedTaskId(initialTaskId);
-      onInitialTaskConsumed?.();
-    }
-  }, [initialTaskId, onInitialTaskConsumed]);
 
   const loadTagData = useCallback(async (tag: string | null) => {
     const seq = ++seqRef.current;
@@ -124,58 +107,17 @@ export function TagView({
     };
   }, [selectedTag, loadTagData]);
 
-  // Panel management
-  const closePanel = useCallback(async () => {
-    if (panelRef.current && !(await panelRef.current.confirmLeave())) return;
-    setSelectedTaskId(null);
-    origin.restore();
-  }, [origin]);
+  const openTask = onOpenTask;
 
-  const openTask = useCallback(
-    async (id: string) => {
-      if (id === selectedTaskId) return;
-      if (panelRef.current && !(await panelRef.current.confirmLeave())) return;
-      origin.capture();
-      setSelectedTaskId(id);
-    },
-    [selectedTaskId, origin]
-  );
-
-  const refreshAll = useCallback(() => {
-    void loadTagData(selectedTag);
-    onVaultDataChanged();
-  }, [loadTagData, selectedTag, onVaultDataChanged]);
-
-  // Protect unsaved draft in panel before leaving
   useEffect(() => {
-    leaveGuardRef.current = async () => {
-      if (!selectedTaskId) return true;
-      if (!panelRef.current) return true;
-      return panelRef.current.confirmLeave();
-    };
-    return () => {
-      leaveGuardRef.current = null;
-    };
-  }, [selectedTaskId, leaveGuardRef]);
+    if (detailRevision) void loadTagData(selectedTag);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailRevision]);
 
   // Category counts
   const taskCount = useMemo(() => items.filter((it) => it.type === 'task').length, [items]);
   const noteCount = useMemo(() => items.filter((it) => it.type === 'note').length, [items]);
   const activityCount = useMemo(() => items.filter((it) => it.type === 'activity').length, [items]);
-
-  const panel = selectedTaskId ? (
-    <TaskDetailPanel
-      key={selectedTaskId}
-      ref={panelRef}
-      taskId={selectedTaskId}
-      closeLabel="关闭详情"
-      tagNames={tagNames}
-      onClose={closePanel}
-      onChanged={refreshAll}
-      onDeleted={closePanel}
-      onOpenNote={(noteId) => onOpenNote(noteId, selectedTaskId)}
-    />
-  ) : null;
 
   if (loading && items.length === 0) {
     return (
@@ -196,7 +138,7 @@ export function TagView({
   }
 
   return (
-    <DetailSplit panel={panel}>
+    <WorkspacePage>
       <div className="space-y-4">
         {/* Header with Tag Chip & Counts */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-stone-200/80 dark:border-stone-800 pb-3">
@@ -385,6 +327,6 @@ export function TagView({
           </div>
         )}
       </div>
-    </DetailSplit>
+    </WorkspacePage>
   );
 }
