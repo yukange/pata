@@ -11,9 +11,6 @@ import {
   AlertCircle,
   RefreshCw,
   Info,
-  Send,
-  CheckCircle2,
-  Undo2,
 } from 'lucide-react';
 import * as VaultService from '../bindings/pata/vaultservice';
 import { Task, TaskStatus, Activity } from '../bindings/pata/internal/storage/markdown/models';
@@ -22,6 +19,8 @@ import { playLogoSuccess } from './logoAnimation';
 import { dedupeTags, validateTag, hasTag } from './tagUtils';
 import { TagChipEditor } from './TagChipEditor';
 import { NoteRefText, NoteRefTextarea, NoteRefMap, pruneRefs, sameRefs, useNoteRefs } from './noteRefs';
+import { ActivityComposer } from './ActivityComposer';
+import { ActivityItem } from './ActivityItem';
 import {
   buildTaskTimelineItems,
   formatActivityTimestamp,
@@ -146,6 +145,24 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
   const [newActivityRefs, setNewActivityRefs] = useState<NoteRefMap>({});
   const [submittingActivity, setSubmittingActivity] = useState(false);
   const [submitActivityError, setSubmitActivityError] = useState<string | null>(null);
+
+  // Activity Inline Editing
+  const [editingActivityId, setEditingActivityId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState('');
+  const [editRefs, setEditRefs] = useState<NoteRefMap>({});
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const editingActivity = useMemo(
+    () => taskActivities.find((a) => a.id === editingActivityId),
+    [taskActivities, editingActivityId]
+  );
+  const editDirty = Boolean(
+    editingActivityId &&
+      (!editingActivity ||
+        editBody !== editingActivity.body ||
+        !sameRefs(pruneRefs(editBody, editRefs), pruneRefs(editingActivity.body, editingActivity.note_refs ?? {})))
+  );
 
   const noteRefs = useNoteRefs();
 
@@ -356,16 +373,63 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
     return false;
   }, [task, detailTitle, detailStatus, detailDue, detailTags, detailBody, detailRefs]);
 
+  const handleAddActivity = async (e?: React.FormEvent): Promise<boolean> => {
+    if (e) e.preventDefault();
+    const body = newActivityBody.trim();
+    if (!body) return true;
+    setSubmittingActivity(true);
+    setSubmitActivityError(null);
+    try {
+      const input: CreateActivityInput = { body, task_id: taskId, note_refs: pruneRefs(body, newActivityRefs) };
+      await VaultService.CreateActivity(input);
+      playLogoSuccess();
+      setNewActivityBody('');
+      setNewActivityRefs({});
+      await loadActivities();
+      onChanged();
+      return true;
+    } catch (err: any) {
+      console.error('Failed to create activity:', err);
+      setSubmitActivityError(err?.message || String(err));
+      return false;
+    } finally {
+      setSubmittingActivity(false);
+    }
+  };
+
+  const handleSaveActivityEdit = async (id: string, tags: string[]): Promise<boolean> => {
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      await VaultService.UpdateActivity({
+        id,
+        body: editBody,
+        tags,
+        note_refs: pruneRefs(editBody, editRefs),
+      });
+      setEditingActivityId(null);
+      await loadActivities();
+      onChanged();
+      return true;
+    } catch (err: any) {
+      console.error('Failed to update activity:', err);
+      setEditError(err?.message || String(err));
+      return false;
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const confirmLeave = useCallback(async (): Promise<boolean> => {
     if (formDirty) {
       const ok = await saveTask();
       if (!ok) return false;
     }
-    if (newActivityBody.trim() !== '') {
+    if (newActivityBody.trim() !== '' || editDirty) {
       return new Promise<boolean>((resolve) => setLeavePrompt(() => resolve));
     }
     return true;
-  }, [formDirty, saveTask, newActivityBody]);
+  }, [formDirty, saveTask, newActivityBody, editDirty]);
 
   useImperativeHandle(ref, () => ({ confirmLeave, reload }), [confirmLeave, reload]);
 
@@ -373,10 +437,20 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
     const resolve = leavePrompt;
     if (!resolve) return;
     if (choice === 'save') {
-      const ok = await handleAddActivity();
+      const saveEditOk =
+        !editDirty ||
+        (editingActivityId ? await handleSaveActivityEdit(editingActivityId, editingActivity?.tags ?? []) : true);
+      const saveAddOk = !newActivityBody.trim() || (await handleAddActivity());
+      const ok = saveEditOk && saveAddOk;
       setLeavePrompt(null);
       resolve(ok);
       return;
+    }
+    if (choice === 'discard') {
+      setEditingActivityId(null);
+      setEditError(null);
+      setNewActivityBody('');
+      setNewActivityRefs({});
     }
     setLeavePrompt(null);
     resolve(choice === 'discard');
@@ -458,30 +532,6 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
       await saveTask({ body: detailBody });
     }
     setIsEditingBody(false);
-  };
-
-  const handleAddActivity = async (e?: React.FormEvent): Promise<boolean> => {
-    if (e) e.preventDefault();
-    const body = newActivityBody.trim();
-    if (!body) return true;
-    setSubmittingActivity(true);
-    setSubmitActivityError(null);
-    try {
-      const input: CreateActivityInput = { body, task_id: taskId, note_refs: pruneRefs(body, newActivityRefs) };
-      await VaultService.CreateActivity(input);
-      playLogoSuccess();
-      setNewActivityBody('');
-      setNewActivityRefs({});
-      await loadActivities();
-      onChanged();
-      return true;
-    } catch (err: any) {
-      console.error('Failed to create activity:', err);
-      setSubmitActivityError(err?.message || String(err));
-      return false;
-    } finally {
-      setSubmittingActivity(false);
-    }
   };
 
   const handleDeleteTask = async () => {
@@ -875,63 +925,57 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
               暂无活动记录
             </div>
           ) : (
-            <div className="space-y-3.5">
+            <div className="divide-y divide-stone-200/70 dark:divide-stone-800">
               {timelineItems.map((item) => {
                 if (item.kind === 'status_event') {
-                  const isCompleted = item.action === 'completed';
                   return (
-                    <div key={item.key} className="flex items-start gap-2.5 py-0.5 text-xs">
-                      <span
-                        className="text-[11px] font-mono text-stone-400 dark:text-stone-500 shrink-0 pt-0.5 select-none"
-                        title={formatFullLocalTimestamp(item.at)}
-                      >
-                        {formatActivityTimestamp(item.at)}
-                      </span>
-                      <div className="flex items-center gap-1.5 min-w-0 pt-0.5">
-                        {isCompleted ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                        ) : (
-                          <Undo2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-                        )}
-                        <span className="text-stone-600 dark:text-stone-300">
-                          {isCompleted ? '已完成' : '重新打开'}
-                        </span>
-                      </div>
-                    </div>
+                    <ActivityItem
+                      key={item.key}
+                      timeStr={formatActivityTimestamp(item.at)}
+                      fullTimeStr={formatFullLocalTimestamp(item.at)}
+                      statusEvent={{ action: item.action }}
+                      notes={noteRefs}
+                      onOpenNote={(id) => onOpenNote?.(id, taskId)}
+                    />
                   );
                 }
 
                 const act = item.activity;
+                const isEditing = editingActivityId === act.id;
                 return (
-                  <div key={item.key} className="flex items-start gap-2.5 text-xs">
-                    <span
-                      className="text-[11px] font-mono text-stone-400 dark:text-stone-500 shrink-0 pt-0.5 select-none"
-                      title={formatFullLocalTimestamp(act.at)}
-                    >
-                      {formatActivityTimestamp(act.at)}
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <NoteRefText
-                        text={act.body}
-                        refs={act.note_refs ?? undefined}
-                        notes={noteRefs}
-                        onOpenNote={(id) => onOpenNote?.(id, taskId)}
-                        className="text-xs text-stone-800 dark:text-stone-200 leading-relaxed font-sans whitespace-pre-wrap break-words"
-                      />
-                      {act.tags && act.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-0.5">
-                          {act.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="inline-flex items-center text-[10px] text-stone-400 font-mono"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <ActivityItem
+                    key={item.key}
+                    timeStr={formatActivityTimestamp(act.at)}
+                    fullTimeStr={formatFullLocalTimestamp(act.at)}
+                    activity={{
+                      id: act.id,
+                      body: act.body,
+                      tags: act.tags,
+                      note_refs: act.note_refs,
+                    }}
+                    notes={noteRefs}
+                    onOpenNote={(id) => onOpenNote?.(id, taskId)}
+                    isEditing={isEditing}
+                    editBody={editBody}
+                    editRefs={editRefs}
+                    editSaving={editSaving}
+                    editError={isEditing ? editError : null}
+                    onStartEdit={() => {
+                      setEditingActivityId(act.id);
+                      setEditBody(act.body);
+                      setEditRefs(act.note_refs ?? {});
+                      setEditError(null);
+                    }}
+                    onEditBodyChange={setEditBody}
+                    onEditRefsChange={setEditRefs}
+                    onSaveEdit={() => {
+                      void handleSaveActivityEdit(act.id, act.tags ?? []);
+                    }}
+                    onCancelEdit={() => {
+                      setEditingActivityId(null);
+                      setEditError(null);
+                    }}
+                  />
                 );
               })}
             </div>
@@ -940,57 +984,22 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
       </div>
 
       {/* 3. Docked Activity Input Bar */}
+      {/* focus-within:ring-2 focus-within:ring-emerald-500/20 */}
       <div className="shrink-0 p-4 border-t border-stone-200/80 dark:border-stone-800/80 bg-stone-50/70 dark:bg-stone-900/70 backdrop-blur-md">
-        <form onSubmit={handleAddActivity} className="space-y-2">
-          <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-2.5 focus-within:border-emerald-600/80 dark:focus-within:border-emerald-500/80 focus-within:ring-2 focus-within:ring-emerald-500/20 transition shadow-2xs">
-            <NoteRefTextarea
-              value={newActivityBody}
-              onChange={setNewActivityBody}
-              refs={newActivityRefs}
-              onRefsChange={setNewActivityRefs}
-              notes={noteRefs}
-              onKeyDown={(e) => {
-                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !submittingActivity && newActivityBody.trim()) {
-                  e.preventDefault();
-                  void handleAddActivity();
-                }
-              }}
-              placeholder="记录进展… (输入 [[ 引用笔记)"
-              rows={2}
-              disabled={submittingActivity}
-              className="w-full text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 bg-transparent resize-none border-0 outline-none focus:outline-none focus:ring-0 leading-relaxed"
-            />
-            <div className="flex items-center justify-end pt-1.5">
-              <button
-                type="submit"
-                onMouseDown={(e) => e.preventDefault()}
-                disabled={submittingActivity || !newActivityBody.trim()}
-                className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                title="发送 (⌘+Enter)"
-              >
-                {submittingActivity ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
-                ) : (
-                  <Send className="w-3.5 h-3.5 shrink-0" />
-                )}
-                <span>{submittingActivity ? '发送中' : '发送'}</span>
-                {!submittingActivity && (
-                  <span className="text-[11px] font-mono opacity-60 select-none">⌘↵</span>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {submitActivityError && (
-            <div className="p-2 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-rose-50/80 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 text-xs flex items-start space-x-2">
-              <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
-              <div className="space-y-0.5">
-                <div className="font-semibold text-[11px]">添加记录失败</div>
-                <div className="font-mono text-[10px] break-all">{submitActivityError}</div>
-              </div>
-            </div>
-          )}
-        </form>
+        <ActivityComposer
+          value={newActivityBody}
+          onChange={setNewActivityBody}
+          refs={newActivityRefs}
+          onRefsChange={setNewActivityRefs}
+          notes={noteRefs}
+          placeholder="记录进展… (输入 [[ 引用笔记)"
+          minRows={2}
+          submitting={submittingActivity}
+          onSubmit={() => void handleAddActivity()}
+          error={submitActivityError}
+          onClearError={() => setSubmitActivityError(null)}
+          ariaLabel="任务进展记录输入"
+        />
       </div>
 
       {/* Task Info Modal */}
@@ -1087,9 +1096,13 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
         <div className="pata-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
             <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">有未发送的活动记录</h3>
+              <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">有未保存的记录</h3>
               <p className="text-xs text-stone-500 leading-relaxed">
-                活动输入框中有未发送的草稿，是否发送后继续离开？
+                {editDirty && newActivityBody.trim()
+                  ? '有正在编辑的评论与未发送的记录草稿，离开前是否保存？'
+                  : editDirty
+                  ? '有正在编辑的评论草稿，离开前是否保存？'
+                  : '活动输入框中有未发送的草稿，是否发送后继续离开？'}
               </p>
             </div>
             <div className="flex items-center justify-end space-x-2 pt-2 border-t border-stone-100 dark:border-stone-800">
@@ -1097,24 +1110,24 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                 type="button"
                 autoFocus
                 onClick={() => void finishLeavePrompt('cancel')}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
+                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
               >
                 取消
               </button>
               <button
                 type="button"
                 onClick={() => void finishLeavePrompt('discard')}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                className="px-3 py-1.5 rounded-md text-xs font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
               >
                 放弃
               </button>
               <button
                 type="button"
                 onClick={() => void finishLeavePrompt('save')}
-                disabled={submittingActivity}
-                className="px-3 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition disabled:opacity-50"
+                disabled={submittingActivity || editSaving}
+                className="px-3 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition disabled:opacity-50 cursor-pointer"
               >
-                发送
+                {submittingActivity || editSaving ? '保存中...' : '保存并离开'}
               </button>
             </div>
           </div>

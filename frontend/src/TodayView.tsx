@@ -4,16 +4,11 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
-  CheckCircle2,
   Plus,
   Search,
   X,
   AlertCircle,
   FolderOpen,
-  FileText,
-  Send,
-  Undo2,
-  Pencil,
 } from 'lucide-react';
 import * as VaultService from '../bindings/pata/vaultservice';
 import { Task, TaskStatus } from '../bindings/pata/internal/storage/markdown/models';
@@ -22,7 +17,9 @@ import { playLogoSuccess } from './logoAnimation';
 import { QuickCreateInput } from './QuickCreateInput';
 import { TodayPlanList } from './TodayPlanList';
 import { WorkspacePage } from './DetailSplit';
-import { NoteRefText, NoteRefTextarea, NoteRefMap, pruneRefs, sameRefs, useNoteRefs } from './noteRefs';
+import { ActivityComposer } from './ActivityComposer';
+import { ActivityItem } from './ActivityItem';
+import { NoteRefMap, pruneRefs, sameRefs, useNoteRefs } from './noteRefs';
 import { getLocalDateStr, followTodayOnDateChange } from './todayDate';
 
 interface TodayViewProps {
@@ -574,20 +571,6 @@ export function TodayView({
   const isToday = selectedDate === todayStr;
   const planWord = isToday ? '今日' : '当日';
 
-  const taskLink = (taskId: string, title: string) => (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        void openTask(taskId);
-      }}
-      className="text-emerald-700 dark:text-emerald-400 hover:underline font-medium truncate max-w-[16rem] align-bottom"
-      title="在右侧打开任务详情"
-    >
-      {title}
-    </button>
-  );
-
   return (
     <>
       <WorkspacePage>
@@ -742,174 +725,106 @@ export function TodayView({
               <span className="text-xs font-mono text-stone-400">{timelineItems.length}</span>
             </div>
 
-            <div className="space-y-1.5">
-              <div className="flex items-center space-x-2">
-                <div className="relative flex-1 min-w-0">
-                  <NoteRefTextarea
-                    value={quickActivityBody}
-                    onChange={setQuickActivityBody}
-                    refs={quickActivityRefs}
-                    onRefsChange={setQuickActivityRefs}
-                    notes={noteRefs}
-                    aria-label="今日记录"
-                    onKeyDown={(e) => {
-                      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) {
-                        e.preventDefault();
-                        void handleCreateQuickActivity();
-                      }
-                    }}
-                    placeholder="记录一句话（输入 [[ 引用笔记，⌘+Enter 发送）…"
-                    rows={1}
-                    disabled={creatingActivity}
-                    className="block w-full px-3 py-2 text-xs rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder-stone-400 quick-entry shadow-2xs resize-none max-h-32 leading-4"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                  }}
-                  onClick={() => void handleCreateQuickActivity()}
-                  disabled={creatingActivity || !quickActivityBody.trim()}
-                  className="flex items-center space-x-1 px-3 py-2 h-[34px] rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-medium transition disabled:opacity-40 shadow-2xs shrink-0"
-                  title="发送 (⌘+Enter)"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                  <span>{creatingActivity ? '发送中' : '发送'}</span>
-                </button>
-              </div>
-              {!isToday && <div className="text-[11px] text-stone-400 px-1">记录将记入 {selectedDate} 的日计划</div>}
-              {activityError && (
-                <Banner tone="rose" onClose={() => setActivityError(null)}>
-                  记录保存失败: {activityError}
-                </Banner>
-              )}
-            </div>
+            <ActivityComposer
+              value={quickActivityBody}
+              onChange={setQuickActivityBody}
+              refs={quickActivityRefs}
+              onRefsChange={setQuickActivityRefs}
+              notes={noteRefs}
+              ariaLabel="今日记录"
+              placeholder="记录一句话（输入 [[ 引用笔记，⌘+Enter 发送）…"
+              minRows={2}
+              submitting={creatingActivity}
+              onSubmit={() => void handleCreateQuickActivity()}
+              error={activityError}
+              onClearError={() => setActivityError(null)}
+              helperText={!isToday ? `记录将记入 ${selectedDate} 的日计划` : undefined}
+            />
 
             {timelineItems.length === 0 ? (
               <p className="text-xs text-stone-400 py-1">该日期暂无记录。</p>
             ) : (
-              <ul className="divide-y divide-stone-200/70 dark:divide-stone-800">
+              <div className="divide-y divide-stone-200/70 dark:divide-stone-800">
                 {timelineItems.map((item, idx) => {
                   const time = formatTimelineTime(item.time);
                   const exists = !!item.task_id && taskMap.has(item.task_id);
                   const title = item.task_title || item.task_id || '';
-                  const label = (txt: string) => <span className="text-stone-500 dark:text-stone-400">{txt}</span>;
 
                   if (item.kind === 'completion' || item.kind === 'reopen') {
-                    const done = item.kind === 'completion';
                     return (
-                      <li key={`ev-${item.kind}-${item.task_id}-${item.time}-${idx}`} className="flex items-center gap-3 py-2 text-xs">
-                        <span className="w-10 shrink-0 font-mono text-[11px] text-stone-400">{time}</span>
-                        {done ? (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        ) : (
-                          <Undo2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                        )}
-                        <span className="min-w-0 truncate">
-                          {label(done ? '完成了 ' : '重新打开 ')}
-                          {exists ? taskLink(item.task_id!, title) : <span className="font-medium text-stone-700 dark:text-stone-300">{title}</span>}
-                          {!exists && item.task_id && <span className="ml-1 text-[10px] text-rose-500/80">(任务已删除)</span>}
-                        </span>
-                      </li>
+                      <ActivityItem
+                        key={`ev-${item.kind}-${item.task_id}-${item.time}-${idx}`}
+                        timeStr={time}
+                        statusEvent={{ action: item.kind }}
+                        taskContext={
+                          item.task_id
+                            ? {
+                                taskId: item.task_id,
+                                taskTitle: title,
+                                taskExists: exists,
+                                onOpenTask: (tId) => void openTask(tId),
+                              }
+                            : undefined
+                        }
+                        notes={noteRefs}
+                        onOpenNote={onOpenNote}
+                      />
                     );
                   }
 
                   const act = item.activity;
                   const editing = !!act && editingActivityId === act.id;
                   return (
-                    <li key={`activity-${act?.id ?? idx}-${item.time}`} className="group flex items-start gap-3 py-2 text-xs">
-                      <span className="w-10 shrink-0 font-mono text-[11px] text-stone-400 pt-px">{time}</span>
-                      <FileText className="w-3.5 h-3.5 text-stone-400 shrink-0 mt-0.5" />
-                      <div className="min-w-0 flex-1 space-y-1">
-                        {editing && act ? (
-                          <div className="space-y-1.5">
-                            <NoteRefTextarea
-                              value={editBody}
-                              onChange={setEditBody}
-                              refs={editRefs}
-                              onRefsChange={setEditRefs}
-                              notes={noteRefs}
-                              aria-label="编辑记录"
-                              disabled={editSaving}
-                              onKeyDown={(e) => {
-                                if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-                                if (e.key === 'Escape') setEditingActivityId(null);
-                                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && editBody.trim()) {
-                                  e.preventDefault();
-                                  void handleSaveActivityEdit(act.id, act.tags ?? []);
-                                }
-                              }}
-                              autoFocus
-                              rows={3}
-                              className="w-full p-2 text-xs rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-0 focus:border-stone-400 dark:focus:border-stone-600 resize-y leading-relaxed"
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => void handleSaveActivityEdit(act.id, act.tags ?? [])}
-                                disabled={editSaving || !editBody.trim()}
-                                className="px-2.5 py-1 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white font-medium disabled:opacity-40"
-                              >
-                                {editSaving ? '保存中' : '保存'}
-                              </button>
-                              <button
-                                type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => setEditingActivityId(null)}
-                                className="px-2.5 py-1 rounded-md text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800"
-                              >
-                                取消
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <NoteRefText
-                            text={act?.body ?? ''}
-                            refs={act?.note_refs ?? undefined}
-                            notes={noteRefs}
-                            onOpenNote={onOpenNote}
-                            className="text-stone-800 dark:text-stone-200 leading-relaxed"
-                          />
-                        )}
-                        {(item.task_id || (act?.tags ?? []).length > 0) && !editing && (
-                          <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-400">
-                            {item.task_id &&
-                              (exists ? (
-                                <span className="truncate max-w-full">
-                                  任务：{taskLink(item.task_id, title)}
-                                </span>
-                              ) : (
-                                <span className="font-mono truncate">
-                                  {item.task_id}
-                                  <span className="ml-1 text-rose-500/80">(任务已删除)</span>
-                                </span>
-                              ))}
-                            {(act?.tags ?? []).map((tag) => (
-                              <span key={tag}>#{tag}</span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {act && !editing && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingActivityId(act.id);
-                            setEditBody(act.body);
-                            setEditRefs(act.note_refs ?? {});
-                          }}
-                          className={iconBtn + ' opacity-0 group-hover:opacity-100 focus:opacity-100'}
-                          title="编辑记录"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </li>
+                    <ActivityItem
+                      key={`activity-${act?.id ?? idx}-${item.time}`}
+                      timeStr={time}
+                      taskContext={
+                        item.task_id
+                          ? {
+                              taskId: item.task_id,
+                              taskTitle: title,
+                              taskExists: exists,
+                              onOpenTask: (tId) => void openTask(tId),
+                            }
+                          : undefined
+                      }
+                      activity={
+                        act
+                          ? {
+                              id: act.id,
+                              body: act.body,
+                              tags: act.tags,
+                              note_refs: act.note_refs,
+                            }
+                          : undefined
+                      }
+                      notes={noteRefs}
+                      onOpenNote={onOpenNote}
+                      isEditing={editing}
+                      editBody={editBody}
+                      editRefs={editRefs}
+                      editSaving={editSaving}
+                      editError={editing ? activityError : null}
+                      onStartEdit={() => {
+                        if (!act) return;
+                        setEditingActivityId(act.id);
+                        setEditBody(act.body);
+                        setEditRefs(act.note_refs ?? {});
+                        setActivityError(null);
+                      }}
+                      onEditBodyChange={setEditBody}
+                      onEditRefsChange={setEditRefs}
+                      onSaveEdit={() => {
+                        if (act) void handleSaveActivityEdit(act.id, act.tags ?? []);
+                      }}
+                      onCancelEdit={() => {
+                        setEditingActivityId(null);
+                        setActivityError(null);
+                      }}
+                    />
                   );
                 })}
-              </ul>
+              </div>
             )}
           </section>
         </div>
