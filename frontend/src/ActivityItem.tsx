@@ -95,9 +95,7 @@ export function ActivityItem({
             taskContext.taskExists !== false ? (
               <button
                 type="button"
-                // 防止先触发右侧详情编辑框的 blur 自动保存；任务切换统一走 App Shell 的 confirmLeave。
-                onMouseDown={(e) => e.preventDefault()}
-                // 防止先触发右侧详情编辑框的 blur 自动保存；任务切换统一走 App Shell 的 confirmLeave。
+                // 避免点击任务链接时先触发右栏输入框 blur 保存，任务切换统一由 App Shell 确认。
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -142,6 +140,8 @@ export function ActivityItem({
             taskContext.taskExists !== false ? (
               <button
                 type="button"
+                // 避免触发右栏输入框独立的 blur 保存，防止与切换前保存并发。
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.stopPropagation();
                   taskContext.onOpenTask(taskContext.taskId);
