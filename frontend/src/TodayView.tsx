@@ -21,8 +21,7 @@ import { VaultStatus, CreateTaskInput, TimelineItem, CreateActivityInput } from 
 import { playLogoSuccess } from './logoAnimation';
 import { QuickCreateInput } from './QuickCreateInput';
 import { TodayPlanList } from './TodayPlanList';
-import { TaskDetailPanel, TaskDetailHandle } from './TaskDetailPanel';
-import { DetailSplit, useDetailOrigin } from './DetailSplit';
+import { WorkspacePage } from './DetailSplit';
 import { NoteRefText, NoteRefTextarea, NoteRefMap, pruneRefs, sameRefs, useNoteRefs } from './noteRefs';
 import { getLocalDateStr, followTodayOnDateChange } from './todayDate';
 
@@ -31,9 +30,12 @@ interface TodayViewProps {
   onSelectVault: () => void;
   vaultBusy?: boolean;
   onOpenNote?: (noteId: string, fromTaskId?: string) => void;
-  /** 从笔记返回时恢复打开的任务详情。 */
-  initialTaskId?: string | null;
-  onInitialTaskConsumed?: () => void;
+  selectedTaskId: string | null;
+  onOpenTask: (taskId: string, planContext?: { date: string; isToday: boolean }) => void;
+  onGuardTask: (taskId: string) => Promise<boolean>;
+  onTaskWritten: (taskId: string) => Promise<void>;
+  onDateSelected: (date: string) => void;
+  detailRevision: number;
   /** 打开指定日期的日计划 */
   initialDate?: string | null;
   onInitialDateConsumed?: () => void;
@@ -99,8 +101,12 @@ export function TodayView({
   onSelectVault,
   vaultBusy = false,
   onOpenNote,
-  initialTaskId,
-  onInitialTaskConsumed,
+  selectedTaskId,
+  onOpenTask,
+  onGuardTask,
+  onTaskWritten,
+  onDateSelected,
+  detailRevision,
   initialDate,
   onInitialDateConsumed,
   tagNames,
@@ -148,17 +154,7 @@ export function TodayView({
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [addSearch, setAddSearch] = useState('');
 
-  // 原地详情
-  const [openTaskId, setOpenTaskId] = useState<string | null>(initialTaskId ?? null);
-  const [openTaskDate, setOpenTaskDate] = useState<string>(
-    initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : todayStr
-  );
-  useEffect(() => {
-    if (initialTaskId) onInitialTaskConsumed?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const panelRef = useRef<TaskDetailHandle>(null);
-  const origin = useDetailOrigin();
+  useEffect(() => { onDateSelected(selectedDate); }, [selectedDate, onDateSelected]);
 
   const selectedDateRef = useRef(selectedDate);
   selectedDateRef.current = selectedDate;
@@ -266,6 +262,11 @@ export function TodayView({
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (detailRevision) void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailRevision]);
+
   const ignoreVaultChangedUntilRef = useRef<number>(0);
   const pendingVaultChangeTimerRef = useRef<number | null>(null);
 
@@ -326,25 +327,15 @@ export function TodayView({
     });
   }, [tasks, dayPlanTaskIds, addSearch]);
 
-  // ---- 详情面板 ----
-  const guardTask = async (id: string) => id !== openTaskId || ((await panelRef.current?.confirmLeave()) ?? true);
-
-  const openTask = async (id: string) => {
-    if (openTaskId && openTaskId !== id && !((await panelRef.current?.confirmLeave()) ?? true)) return;
-    origin.capture();
-    setOpenTaskId(id);
-    setOpenTaskDate(selectedDate);
-  };
-
-  const closePanel = () => {
-    setOpenTaskId(null);
-    origin.restore();
+  // 当前选中任务由 App Shell 管理；Today 只提供计划上下文。
+  const openTask = (id: string) => {
+    onOpenTask(id, dayPlanTaskIds.includes(id) ? { date: selectedDate, isToday: selectedDate === todayStr } : undefined);
   };
 
   const afterTaskWrite = async (id: string) => {
     await loadData();
     onVaultDataChanged();
-    if (id === openTaskId) await panelRef.current?.reload();
+    await onTaskWritten(id);
   };
 
   // ---- 计划写入 ----
@@ -386,24 +377,6 @@ export function TodayView({
 
   // 保存当前日期计划
   const persistPlan = (newTaskIds: string[]): Promise<boolean> => persistPlanForDate(selectedDate, newTaskIds);
-
-  // 从指定日期的计划中移出任务（任务详情「更多」调用）
-  const handleRemoveFromDate = async (taskId: string, date: string): Promise<boolean> => {
-    try {
-      const plan = await VaultService.GetDayPlan(date);
-      const existing = (plan?.task_ids ?? []).filter((id): id is string => typeof id === 'string');
-      const nextIds = existing.filter((id) => id !== taskId);
-      const ok = await persistPlanForDate(date, nextIds);
-      if (ok) {
-        await loadData();
-        onVaultDataChanged();
-      }
-      return ok;
-    } catch (err: any) {
-      reportSaveError(err);
-      return false;
-    }
-  };
 
   const handlePlanReorder = async (nextIds: string[]): Promise<boolean> => {
     const prevIds = dayPlanTaskIds;
@@ -455,7 +428,7 @@ export function TodayView({
 
   // ---- 行内任务动作 ----
   const handleToggleStatus = async (task: Task) => {
-    if (!(await guardTask(task.id))) return;
+    if (!(await onGuardTask(task.id))) return;
     const nextStatus =
       task.status === TaskStatus.TaskStatusDone
         ? TaskStatus.TaskStatusTodo
@@ -523,7 +496,7 @@ export function TodayView({
     leaveGuardRef.current = async () => {
       if (creatingActivity || editSaving || leavePrompt) return false;
       if ((quickActivityBody.trim() || editDirty) && !(await new Promise<boolean>((resolve) => setLeavePrompt(() => resolve)))) return false;
-      return (await panelRef.current?.confirmLeave()) ?? true;
+      return true;
     };
     return () => { leaveGuardRef.current = null; };
   }, [leaveGuardRef, quickActivityBody, editDirty, creatingActivity, editSaving, leavePrompt]);
@@ -615,35 +588,9 @@ export function TodayView({
     </button>
   );
 
-  const panel = openTaskId ? (
-    <TaskDetailPanel
-      key={openTaskId}
-      ref={panelRef}
-      taskId={openTaskId}
-      closeLabel="关闭详情"
-      tagNames={tagNames}
-      onClose={closePanel}
-      onChanged={() => {
-        void loadData();
-        onVaultDataChanged();
-      }}
-      onDeleted={closePanel}
-      onOpenNote={onOpenNote}
-      planDateContext={
-        openTaskDate === selectedDate && dayPlanTaskIds.includes(openTaskId)
-          ? {
-              date: openTaskDate,
-              isToday: openTaskDate === todayStr,
-              onRemoveFromPlan: (tId, d) => handleRemoveFromDate(tId, d),
-            }
-          : undefined
-      }
-    />
-  ) : null;
-
   return (
     <>
-      <DetailSplit panel={panel}>
+      <WorkspacePage>
         <div className="space-y-5">
           {/* Date bar */}
           <div className="flex items-center justify-between gap-3 h-12">
@@ -774,7 +721,7 @@ export function TodayView({
               isToday={isToday}
               todayStr={todayStr}
               selectedDate={selectedDate}
-              openTaskId={openTaskId}
+              openTaskId={selectedTaskId}
               saving={saving}
               onOpenTask={(tId) => void openTask(tId)}
               onToggleStatus={(task) => void handleToggleStatus(task)}
@@ -966,7 +913,7 @@ export function TodayView({
             )}
           </section>
         </div>
-      </DetailSplit>
+      </WorkspacePage>
 
       {leavePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="未保存的记录">
