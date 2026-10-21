@@ -323,12 +323,10 @@ export default function App() {
       const st = await VaultService.SelectVaultDirectory();
       await refreshVault();
       if (st?.configured && st.path !== prevPath) {
-        setFocusTaskId(null);
+        setDetailSelection(null);
         setFocusNoteId(null);
         setNoteOrigin(null);
-        setTodayTaskId(null);
         setTodayDate(null);
-        setTagTaskId(null);
         setSelectedTag(null);
         setIsEditingNote(false);
       }
