@@ -112,10 +112,11 @@ export default function App() {
 
   // 一个应用级 Inspector，跨工作区页面保持任务选择和草稿。
   const handleOpenTask = async (taskID: string, planContext?: { date: string; isToday: boolean }) => {
-    if (detailSelection?.taskId !== taskID && detailRef.current && !(await detailRef.current.confirmLeave())) return;
+    if (detailSelection?.taskId !== taskID && detailRef.current && !(await detailRef.current.confirmLeave())) return false;
     if (!detailSelection) detailOrigin.capture();
     setIsSettingsOpen(false);
     setDetailSelection({ taskId: taskID, planContext });
+    return true;
   };
 
   const closeInspector = () => {
@@ -156,11 +157,12 @@ export default function App() {
       setFocusNoteId(noteID);
     });
   };
-  const returnToOrigin = () => {
+  const returnToOrigin = async () => {
     if (!noteOrigin) return;
+    // 回到来源时优先沿用仍然打开的同一任务（保留 Today 的计划上下文）。
+    if (detailSelection?.taskId !== noteOrigin.taskId && !(await handleOpenTask(noteOrigin.taskId))) return;
     setIsSettingsOpen(false);
     setActiveNav(noteOrigin.nav);
-    void handleOpenTask(noteOrigin.taskId);
     setNoteOrigin(null);
   };
 
