@@ -437,23 +437,54 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
     const resolve = leavePrompt;
     if (!resolve) return;
     if (choice === 'save') {
-      const saveEditOk =
-        !editDirty ||
-        (editingActivityId ? await handleSaveActivityEdit(editingActivityId, editingActivity?.tags ?? []) : true);
-      const saveAddOk = !newActivityBody.trim() || (await handleAddActivity());
-      const ok = saveEditOk && saveAddOk;
+      if (editDirty && editingActivityId) {
+        const editOk = await handleSaveActivityEdit(editingActivityId, editingActivity?.tags ?? []);
+        if (!editOk) {
+          // 保存已有评论失败：短路，不继续发送新 Activity，避免部分提交
+          setLeavePrompt(null);
+          resolve(false);
+          return;
+        }
+      }
+      if (newActivityBody.trim()) {
+        const addOk = await handleAddActivity();
+        if (!addOk) {
+          setLeavePrompt(null);
+          resolve(false);
+          return;
+        }
+      }
       setLeavePrompt(null);
-      resolve(ok);
+      resolve(true);
       return;
     }
     if (choice === 'discard') {
       setEditingActivityId(null);
+      setEditBody('');
+      setEditRefs({});
       setEditError(null);
       setNewActivityBody('');
       setNewActivityRefs({});
+      setSubmitActivityError(null);
+      setLeavePrompt(null);
+      resolve(true);
+      return;
     }
     setLeavePrompt(null);
-    resolve(choice === 'discard');
+    resolve(false);
+  };
+
+  const handleStartEditActivity = async (act: { id: string; body: string; note_refs?: NoteRefMap | null }) => {
+    if (editSaving || submittingActivity) return;
+    if (editingActivityId === act.id) return;
+    if (editDirty) {
+      const ok = await new Promise<boolean>((resolve) => setLeavePrompt(() => resolve));
+      if (!ok) return;
+    }
+    setEditingActivityId(act.id);
+    setEditBody(act.body);
+    setEditRefs(act.note_refs ?? {});
+    setEditError(null);
   };
 
   const handleCloseClick = async () => {
@@ -961,10 +992,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                     editSaving={editSaving}
                     editError={isEditing ? editError : null}
                     onStartEdit={() => {
-                      setEditingActivityId(act.id);
-                      setEditBody(act.body);
-                      setEditRefs(act.note_refs ?? {});
-                      setEditError(null);
+                      void handleStartEditActivity(act);
                     }}
                     onEditBodyChange={setEditBody}
                     onEditRefsChange={setEditRefs}

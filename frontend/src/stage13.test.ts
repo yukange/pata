@@ -200,3 +200,55 @@ test('013 回归：Today 记录中的任务链接在右栏已打开时仍应切�
   assert.ok(appContent.includes('setDetailSelection({ taskId: taskID, planContext })'));
   assert.ok(appContent.includes('key={detailSelection.taskId}'));
 });
+
+test('013 回归：评论并发编辑保护、日期切换草稿保护与复合保存短路', () => {
+  const taskDetailContent = fs.readFileSync(path.resolve(__dirname, 'TaskDetailPanel.tsx'), 'utf-8');
+  const todayContent = fs.readFileSync(path.resolve(__dirname, 'TodayView.tsx'), 'utf-8');
+
+  // 1. 同任务内切换编辑评论脏数据保护：TaskDetailPanel 与 TodayView 都在 editDirty 时先走 leavePrompt，禁止无条件覆盖
+  assert.ok(
+    taskDetailContent.includes('handleStartEditActivity') &&
+      taskDetailContent.includes('if (editDirty) {'),
+    'TaskDetailPanel 在切换编辑已有评论时应检查 editDirty 并弹窗确认'
+  );
+  assert.ok(
+    todayContent.includes('handleStartEditActivity') &&
+      todayContent.includes('if (editDirty) {'),
+    'TodayView 在切换编辑已有评论时应检查 editDirty 并弹窗确认'
+  );
+
+  // 2. 避免在已有评论正在保存时并发开启其他编辑
+  assert.ok(
+    taskDetailContent.includes('if (editSaving || submittingActivity) return;'),
+    'TaskDetailPanel 保存期间严禁并发开启其他评论编辑'
+  );
+  assert.ok(
+    todayContent.includes('if (editSaving || creatingActivity) return;'),
+    'TodayView 保存期间严禁并发开启其他评论编辑'
+  );
+
+  // 3. Today 日期切换草稿防护：上一天、下一天与回到今天必须经过 confirmDateChange 拦截
+  assert.ok(
+    todayContent.includes('confirmDateChange') &&
+      todayContent.includes('if (quickActivityBody.trim() || editDirty) {'),
+    'TodayView 日期切换前必须保护未发送与编辑中的草稿'
+  );
+  assert.ok(
+    todayContent.includes('confirmDateChange((d) => shiftDateStr(d, -1))') &&
+      todayContent.includes('confirmDateChange((d) => shiftDateStr(d, 1))') &&
+      todayContent.includes('confirmDateChange(todayStr)'),
+    '前一天、后一天与回到今天按钮都必须经过 confirmDateChange 防护'
+  );
+
+  // 4. 复合保存短路保护：保存已有评论失败时短路，绝不继续调用 handleAddActivity / handleCreateQuickActivity 产生部分提交
+  assert.ok(
+    taskDetailContent.includes('if (!editOk) {') &&
+      taskDetailContent.includes('// 保存已有评论失败：短路，不继续发送新 Activity，避免部分提交'),
+    'TaskDetailPanel 在旧评论保存失败时必须短路，不继续提交新评论'
+  );
+  assert.ok(
+    todayContent.includes('if (!editOk) {') &&
+      todayContent.includes('// 保存已有评论失败：短路，不继续发送新 Activity，避免部分提交'),
+    'TodayView 在旧评论保存失败时必须短路，不继续提交新评论'
+  );
+});

@@ -509,19 +509,67 @@ export function TodayView({
         resolve(false);
         return;
       }
-      const ok = (!editDirty || await handleSaveActivityEdit(editingActivityId!, editingActivity?.tags ?? [])) &&
-        (!quickActivityBody.trim() || await handleCreateQuickActivity());
+      if (editDirty && editingActivityId) {
+        const editOk = await handleSaveActivityEdit(editingActivityId, editingActivity?.tags ?? []);
+        if (!editOk) {
+          // 保存已有评论失败：短路，不继续发送新 Activity，避免部分提交
+          setLeavePrompt(null);
+          resolve(false);
+          return;
+        }
+      }
+      if (quickActivityBody.trim()) {
+        const createOk = await handleCreateQuickActivity();
+        if (!createOk) {
+          setLeavePrompt(null);
+          resolve(false);
+          return;
+        }
+      }
       setLeavePrompt(null);
-      resolve(ok);
+      resolve(true);
       return;
     }
     if (choice === 'discard') {
       setQuickActivityBody('');
       setQuickActivityRefs({});
       setEditingActivityId(null);
+      setEditBody('');
+      setEditRefs({});
+      setActivityError(null);
+      setLeavePrompt(null);
+      resolve(true);
+      return;
     }
     setLeavePrompt(null);
-    resolve(choice === 'discard');
+    resolve(false);
+  };
+
+  const handleStartEditActivity = async (act: { id: string; body: string; note_refs?: NoteRefMap | null }) => {
+    if (editSaving || creatingActivity) return;
+    if (editingActivityId === act.id) return;
+    if (editDirty) {
+      const ok = await new Promise<boolean>((resolve) => setLeavePrompt(() => resolve));
+      if (!ok) return;
+    }
+    setEditingActivityId(act.id);
+    setEditBody(act.body);
+    setEditRefs(act.note_refs ?? {});
+    setActivityError(null);
+  };
+
+  const confirmDateChange = async (nextDate: string | ((prev: string) => string)): Promise<boolean> => {
+    if (creatingActivity || editSaving) return false;
+    if (quickActivityBody.trim() || editDirty) {
+      const ok = await new Promise<boolean>((resolve) => setLeavePrompt(() => resolve));
+      if (!ok) return false;
+    } else {
+      setEditingActivityId(null);
+      setEditBody('');
+      setEditRefs({});
+    }
+    setSelectedDate(nextDate);
+    return true;
   };
 
   // Unconfigured Vault state
@@ -580,14 +628,14 @@ export function TodayView({
             <div className="flex items-center gap-2 min-w-0">
               <div className="flex items-center">
                 <button
-                  onClick={() => setSelectedDate((d) => shiftDateStr(d, -1))}
+                  onClick={() => void confirmDateChange((d) => shiftDateStr(d, -1))}
                   className={iconBtn + ' p-1.5'}
                   title="前一天"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <button
-                  onClick={() => setSelectedDate((d) => shiftDateStr(d, 1))}
+                  onClick={() => void confirmDateChange((d) => shiftDateStr(d, 1))}
                   className={iconBtn + ' p-1.5'}
                   title="后一天"
                 >
@@ -600,7 +648,7 @@ export function TodayView({
             </div>
             {!isToday && (
               <button
-                onClick={() => setSelectedDate(todayStr)}
+                onClick={() => void confirmDateChange(todayStr)}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-300 text-xs font-medium transition shrink-0"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -807,10 +855,7 @@ export function TodayView({
                       editError={editing ? activityError : null}
                       onStartEdit={() => {
                         if (!act) return;
-                        setEditingActivityId(act.id);
-                        setEditBody(act.body);
-                        setEditRefs(act.note_refs ?? {});
-                        setActivityError(null);
+                        void handleStartEditActivity(act);
                       }}
                       onEditBodyChange={setEditBody}
                       onEditRefsChange={setEditRefs}
