@@ -1,6 +1,6 @@
 # 阶段 13 · App Shell 与 Activity 体验统一 — Proposal
 
-> 状态：**实施中，未验收**（2026-10-21）。阶段 12 是已完成历史阶段；本阶段解决最初三栏架构的实现偏差及 Activity UI 不一致。本文是 **013 的实施与验收主文档**；App Shell 细节见 [app-shell-inspector.md](app-shell-inspector.md)。
+> 状态：**代码实现与验收已完成**（2026-10-22）。阶段 12 是已完成历史阶段；本阶段解决最初三栏架构的实现偏差及 Activity UI 不一致。本文是 **013 的实施与验收主文档**；App Shell 细节见 [app-shell-inspector.md](app-shell-inspector.md)。
 
 ## 一、边界与基线
 
@@ -78,7 +78,7 @@ Today 和 Task 详情的 Activity 行共用同一组视觉与交互规则，可�
 | 013-003 | Today / Task 统一 Activity 布局 | **实机验收通过** | 时间在上；Today 时间右侧正常字号任务链接；事件单行 |
 | 013-004 | 统一 ActivityComposer | **实机验收通过** | 输入按钮同容器；Today 不缩短；快捷键与笔记引用正确 |
 | 013-005 | 统一编辑交互、补齐 Task 评论编辑 | **实机验收通过** | 可编辑人工评论；系统事件只读；草稿与冲突安全 |
-| 013-006 | 代码与实机回归、文档收尾 | **回归中（PR Review 推进中）** | 构建、测试、macOS bundle 与端到端全链路通过 |
+| 013-006 | 代码与实机回归、文档收尾 | **实机验收通过** | 构建、测试、macOS bundle 与端到端全链路通过 |
 
 **执行说明**：按指令在 `refactor/app-shell-inspector` 分支上连续完成了 013-001 至 013-005 的全部代码，补充前端自动化行为契约测试（`appShellActivity.test.ts`）与实机端到端验收测试（`acceptance_app_bundle_test.go`、`acceptance_task_activity_test.go`），全量回归通过。
 
@@ -100,7 +100,7 @@ Today 和 Task 详情的 Activity 行共用同一组视觉与交互规则，可�
 - [x] Today / Task 使用同一一体式 Composer，Today 宽度不缩短；笔记引用及快捷发送正常。
 - [x] Task 评论可原地编辑，系统状态事件只读；失败与冲突保护草稿。
 - [x] 无 Go Core/Markdown 数据协议改变、无额外业务入口或协作功能。
-- [ ] 前端构建、相关测试及 macOS 实机回归完成；PR 已 Review 并合并，文档状态才标记为已完成。
+- [x] 前端构建、相关测试及 macOS 实机回归完成；PR 已 Review 并合并，文档状态标记为已完成。
 
 ## 八、不做
 

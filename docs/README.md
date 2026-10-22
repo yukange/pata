@@ -1,6 +1,6 @@
 # Pata · 文档与实施路线
 
-**文档按实施阶段组织，而不是按功能模块组织。** 当前路线包含 **13 个顺序阶段**：阶段 1～12 已完成代码与实机验收，**阶段 13 已立项、实施中，尚未完成验收**。阶段 13 纠正原始三栏布局的实现偏差，并统一 Today / Task 的 Activity 展示、输入和编辑体验。只有实际新增一个独立交付阶段时，才新增对应的 `docs/NN-name/` 目录。
+**文档按实施阶段组织，而不是按功能模块组织。** 当前路线包含 **13 个顺序阶段**：阶段 1～13 已完成代码与实机验收。阶段 13 纠正原始三栏布局的实现偏差，并统一 Today / Task 的 Activity 展示、输入和编辑体验。只有实际新增一个独立交付阶段时，才新增对应的 `docs/NN-name/` 目录。
 
 | 顺序 | 目录 / 阶段 | 阶段结束应交付什么 | 核心文档 |
 |---|---|---|---|
@@ -16,7 +16,7 @@
 | 10 | [`10-settings`](10-settings/) · 统一应用设置 | 主窗口单页「外观 / 存储 / 语音转写」，迁移主题与 Vault 管理，Keychain 保存北京地域 API Key | [idea](10-settings/idea.md) · [proposal](10-settings/proposal.md) |
 | 11 | [`11-audio-transcription`](11-audio-transcription/) · 本地音频转写为 Note | MP3 导入后创建只读逐字稿 Note、句级毫秒时间戳、音频双向定位、确认后重新转写 | [idea](11-audio-transcription/idea.md) · [proposal](11-audio-transcription/proposal.md) |
 | 12 | [`12-frontend-foundation`](12-frontend-foundation/) · 前端基础设施与设计系统整理 | 保留 Pata 现有视觉，按需统一 Design Tokens/基础组件/键盘交互与拖拽体验，系统强调色优先（**已验收**） | [idea](12-frontend-foundation/idea.md) · [proposal](12-frontend-foundation/proposal.md) |
-| 13 | [`13-app-shell-activity`](13-app-shell-activity/) · App Shell 与 Activity 体验统一 | 应用级三栏与可调任务详情、Today/Task 统一 Activity 展示/输入/编辑（**实施中**） | [idea](13-app-shell-activity/idea.md) · [proposal](13-app-shell-activity/proposal.md) · [三栏设计](13-app-shell-activity/app-shell-inspector.md) |
+| 13 | [`13-app-shell-activity`](13-app-shell-activity/) · App Shell 与 Activity 体验统一 | 应用级三栏与可调任务详情、Today/Task 统一 Activity 展示/输入/编辑（**已验收**） | [idea](13-app-shell-activity/idea.md) · [proposal](13-app-shell-activity/proposal.md) · [三栏设计](13-app-shell-activity/app-shell-inspector.md) |
 
 阶段 1 的 UI 附加设计： [macOS 27 原生体验与 Magpie 源码参考](01-validate/macos-native.md)，其真实 Wails 验证安排在阶段 2。
 
@@ -59,4 +59,4 @@
 
 **阶段 12：代码与实机验收完成。** 保留既有视觉风格，建立轻量 Design Tokens 并彻底解耦交互 Accent 与品牌绿；引入可复用基础组件（`Button` / `Dialog` / `ConfirmDialog`）收敛确认弹层与弹窗；恢复全局可见的 `:focus-visible` 键盘焦点并局部隔离编辑器；校准 Note 长文本排版（15px / 1.68）；引入 `closestCenter` 算法并优化 Today dnd-kit 拖拽跟手性与占位反馈；完成 Reduce Motion 动效降级走查与零多余依赖控制。详见 [idea](12-frontend-foundation/idea.md)、[proposal](12-frontend-foundation/proposal.md)。
 
-**阶段 13：规划确定、实施中，尚未验收。** 013-001/002 的 App Shell 全局唯一右栏和拖拽调整宽度已提交至 [PR #9](https://github.com/yukange/pata/pull/9)，**尚未合并，完整构建和 macOS 实机走查待完成**；013-003/004/005 的 Today / Task 统一 Activity 展示（Today 时间右侧正常字号的任务上下文链接）、一体式 Composer、Task 人工评论原地编辑仍**待实现**；最后统一做 013-006 回归验收。详见 [idea](13-app-shell-activity/idea.md)、[proposal](13-app-shell-activity/proposal.md)。
+**阶段 13：代码与实机验收完成。** 恢复 App Shell 全局三栏架构，单个可调整宽度的 Task Inspector 跨页共享；Today / Task Activity 统一时间在上布局、任务链接正常字号、一体式悬浮 Composer、人工评论原地编辑与草稿离开防护；macOS 打包签名、端到端全量回归与 BDD 契约测试通过。详见 [idea](13-app-shell-activity/idea.md)、[proposal](13-app-shell-activity/proposal.md)。

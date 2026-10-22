@@ -1,10 +1,10 @@
 # Pata · Agent 项目指引
 
-**项目名称：啪嗒 / Pata。** 阶段 1～12 的代码与 macOS 实机验收已完成；**阶段 13 已立项、正在实施、尚未完成验收**。实际进度以 [docs/README.md](docs/README.md) 为准。
+**项目名称：啪嗒 / Pata。** 阶段 1～13 的代码与 macOS 实机验收已完成。实际进度以 [docs/README.md](docs/README.md) 为准。
 
 ## 开始阅读
 
-1. 阅读 [docs/README.md](docs/README.md)，按 01 → 12 了解已完成阶段；当前实现以 [阶段 13 Proposal](docs/13-app-shell-activity/proposal.md) 为准。
+1. 阅读 [docs/README.md](docs/README.md)，按 01 → 13 了解已完成阶段。
 2. 阅读 [阶段 1 产品提案](docs/01-validate/proposal.md)、[已确认的取舍](docs/01-validate/decisions.md)、[UI 规范](docs/01-validate/ui.md)。
    - macOS 原生窗口细节和 Magpie 源码参考见 [macos-native.md](docs/01-validate/macos-native.md)；浏览器原型不等于真实 Liquid Glass 验证。
 3. 数据 Schema 的**单一来源**为 [阶段 2 schema.md](docs/02-foundation/schema.md)；旧 `docs/02-foundation/examples/` 为历史测试固件，不是生产数据。
