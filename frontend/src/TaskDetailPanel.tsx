@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Events } from '@wailsio/runtime';
 import {
-  ArrowLeft,
+  ArrowRight,
   MoreHorizontal,
   Check,
   Calendar,
@@ -607,7 +607,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
           onClick={onClose}
           className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-md font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60 transition w-fit"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
+          <ArrowRight className="w-3.5 h-3.5" />
           <span>{closeLabel}</span>
         </button>
         {loadError ? (
@@ -631,7 +631,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
           className="p-1.5 -ml-1.5 rounded-md text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-200/60 dark:hover:bg-stone-800/60 transition"
           title={closeLabel}
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowRight className="w-4 h-4" />
         </button>
 
         <div className="flex items-center space-x-1">
