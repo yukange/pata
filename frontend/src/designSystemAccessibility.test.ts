@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-test('Design Tokens in index.css: 核心语义色与变量定义完备', () => {
+test('Design Tokens: 核心语义色、字体栈与变量定义完备', () => {
   const cssPath = path.resolve(__dirname, 'index.css');
   const cssContent = fs.readFileSync(cssPath, 'utf-8');
 
@@ -122,7 +122,7 @@ test('系统 Reduce Motion 遵循: scrollIntoView 避免无条件 smooth', () =>
   );
 });
 
-test('Today dnd-kit 拖拽优化: 引入 closestCenter 与降级动效控制', () => {
+test('Today 拖拽体验: 引入 closestCenter 算法与降级动效控制', () => {
   const todayListPath = path.resolve(__dirname, 'TodayPlanList.tsx');
   const todayListContent = fs.readFileSync(todayListPath, 'utf-8');
 
@@ -144,7 +144,7 @@ test('Today dnd-kit 拖拽优化: 引入 closestCenter 与降级动效控制', (
   );
 });
 
-test('确认弹层收敛: NotesView 复用 ConfirmDialog 基础组件', () => {
+test('模态与确认弹层收敛: NotesView 复用 ConfirmDialog 基础组件', () => {
   const notesPath = path.resolve(__dirname, 'NotesView.tsx');
   const notesContent = fs.readFileSync(notesPath, 'utf-8');
 

@@ -8,7 +8,7 @@ import { formatStatusAction, isActivitySubmitShortcut } from './activityUtils.ts
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-test('013-001: App Shell 提升 Inspector 所有权', () => {
+test('App Shell: 顶层单实例 DetailSplit 与跨页任务详情保持', () => {
   const appPath = path.resolve(__dirname, 'App.tsx');
   const appContent = fs.readFileSync(appPath, 'utf-8');
 
@@ -47,7 +47,7 @@ test('013-001: App Shell 提升 Inspector 所有权', () => {
   );
 });
 
-test('013-002: DetailSplit 拖拽、尺寸持久化与快捷键微调', () => {
+test('DetailSplit: 拖拽调整、尺寸限制与键盘快捷键微调', () => {
   const splitPath = path.resolve(__dirname, 'DetailSplit.tsx');
   const splitContent = fs.readFileSync(splitPath, 'utf-8');
 
@@ -78,7 +78,7 @@ test('013-002: DetailSplit 拖拽、尺寸持久化与快捷键微调', () => {
   );
 });
 
-test('013-003: ActivityItem 状态事件文案与视觉层次规范', () => {
+test('ActivityItem: 状态事件文案与时间戳层次规范', () => {
   // 1. 状态事件动词：无任务上下文（详情面板）显示“已完成/重新打开”；有任务上下文显示“完成了 /重新打开 ”
   assert.equal(formatStatusAction('completed', false), '已完成');
   assert.equal(formatStatusAction('reopened', false), '重新打开');
@@ -109,7 +109,7 @@ test('013-003: ActivityItem 状态事件文案与视觉层次规范', () => {
   );
 });
 
-test('013-004: ActivityComposer 提交快捷键与输入法保护', () => {
+test('ActivityComposer: Cmd/Ctrl+Enter 快捷提交与输入法合成保护', () => {
   // 1. 快捷键逻辑：支持 Cmd+Enter 与 Ctrl+Enter
   assert.equal(isActivitySubmitShortcut({ key: 'Enter', metaKey: true }), true);
   assert.equal(isActivitySubmitShortcut({ key: 'Enter', ctrlKey: true }), true);
@@ -142,7 +142,7 @@ test('013-004: ActivityComposer 提交快捷键与输入法保护', () => {
   );
 });
 
-test('013-005: TaskDetailPanel 与 TodayView 人工评论原地编辑与草稿保护', () => {
+test('TaskDetail & TodayView: 评论原地编辑、状态事件只读与离开草稿保护', () => {
   const taskDetailPath = path.resolve(__dirname, 'TaskDetailPanel.tsx');
   const taskDetailContent = fs.readFileSync(taskDetailPath, 'utf-8');
 
@@ -178,7 +178,7 @@ test('013-005: TaskDetailPanel 与 TodayView 人工评论原地编辑与草稿�
   );
 });
 
-test('013 回归：Today 记录中的任务链接在右栏已打开时仍应切换 Inspector', () => {
+test('Activity 回归: 任务链接在详情栏已打开时仍正确切换目标任务', () => {
   const itemContent = fs.readFileSync(path.resolve(__dirname, 'ActivityItem.tsx'), 'utf-8');
   const todayContent = fs.readFileSync(path.resolve(__dirname, 'TodayView.tsx'), 'utf-8');
   const appContent = fs.readFileSync(path.resolve(__dirname, 'App.tsx'), 'utf-8');
@@ -201,7 +201,7 @@ test('013 回归：Today 记录中的任务链接在右栏已打开时仍应切�
   assert.ok(appContent.includes('key={detailSelection.taskId}'));
 });
 
-test('013 回归：评论并发编辑保护、日期切换草稿保护与复合保存短路', () => {
+test('Activity 回归: 评论并发编辑保护、日期切换草稿保护与复合保存短路', () => {
   const taskDetailContent = fs.readFileSync(path.resolve(__dirname, 'TaskDetailPanel.tsx'), 'utf-8');
   const todayContent = fs.readFileSync(path.resolve(__dirname, 'TodayView.tsx'), 'utf-8');
 

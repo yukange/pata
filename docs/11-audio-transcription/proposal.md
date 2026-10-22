@@ -1,6 +1,6 @@
 # Proposal — 阶段 11：本地 MP3 → Markdown 逐字稿
 
-> **状态：代码实现与验收已完成。** 以前置 [阶段 10](../10-settings/proposal.md) 已完成的 Keychain 凭证为基础，只为现有 Notes 增加只读逐字稿及音频定位能力；阶段 9 的 Files 机制已经具备。全链路测试与验收见 `acceptance_stage_11_test.go`。
+> **状态：代码实现与验收已完成。** 以前置 [阶段 10](../10-settings/proposal.md) 已完成的 Keychain 凭证为基础，只为现有 Notes 增加只读逐字稿及音频定位能力；阶段 9 的 Files 机制已经具备。全链路测试与验收见 `acceptance_audio_transcript_test.go`。
 >
 > **唯一数据协议**：Note/文件资源格式遵循 [阶段 2 Schema](../02-foundation/schema.md)；本文件主要规定交互、服务流程和验收。示例是表现形式，不额外定义 JSON 或第二套 Schema。
 

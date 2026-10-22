@@ -7,9 +7,9 @@ import (
 	"testing"
 )
 
-// TestNoteEditor_MarkdownSyntaxRoundTrip tests real macOS disk persistence and
+// TestAcceptance_NoteEditor_MarkdownSyntaxRoundTrip tests real macOS disk persistence and
 // lossless round-trip reading/writing for all Markdown syntax elements.
-func TestNoteEditor_MarkdownSyntaxRoundTrip(t *testing.T) {
+func TestAcceptance_NoteEditor_MarkdownSyntaxRoundTrip(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pata-note-editor-vault-*")
 	if err != nil {
 		t.Fatal(err)
@@ -215,7 +215,7 @@ const computeExcerpt = (text: string): string => text.slice(0, 50);
 
 // TestNoteEditor_AudioTranscriptNoteProtection tests that audio transcript notes
 // keep their audio metadata and transcript body intact.
-func TestNoteEditor_AudioTranscriptNoteProtection(t *testing.T) {
+func TestAcceptance_NoteEditor_AudioTranscriptNoteProtection(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "pata-audio-note-vault-*")
 	if err != nil {
 		t.Fatal(err)

@@ -80,11 +80,11 @@ Today 和 Task 详情的 Activity 行共用同一组视觉与交互规则，可�
 | 013-005 | 统一编辑交互、补齐 Task 评论编辑 | **实机验收通过** | 可编辑人工评论；系统事件只读；草稿与冲突安全 |
 | 013-006 | 代码与实机回归、文档收尾 | **回归中（PR Review 推进中）** | 构建、测试、macOS bundle 与端到端全链路通过 |
 
-**执行说明**：按指令在 `refactor/app-shell-inspector` 分支上连续完成了 013-001 至 013-005 的全部代码，补充阶段自动化契约测试（`stage13.test.ts`）与实机端到端验收测试（`acceptance_stage_13_test.go`），全量回归通过。
+**执行说明**：按指令在 `refactor/app-shell-inspector` 分支上连续完成了 013-001 至 013-005 的全部代码，补充前端自动化行为契约测试（`appShellActivity.test.ts`）与实机端到端验收测试（`acceptance_app_bundle_test.go`、`acceptance_task_activity_test.go`），全量回归通过。
 
 ### 构建与实机验收
 
-1. `frontend` 执行 `npm run build`、`npm test`（70 个单测全部通过），并通过全量 Go 单测与端到端回归（`TestStage13_AppBundleIntegrity`、`TestStage13_ActivityLifecycleAndInlineEditing`）。
+1. `frontend` 执行 `npm run build`、`npm test`（72 个单测全部通过），并通过全量 Go 单测与端到端回归（`TestAcceptance_AppBundle_CompliesWithMacOSPackagingAndCodeSign`、`TestAcceptance_TaskActivity_LifecycleAndInlineEditing`）。
 2. `bin/pata.app` 打包与 macOS `codesign` 验证通过，已安装至 `/Applications/pata.app`，主窗口与原生系统菜单/托盘运行正常。
 3. 从 Today、Tasks、标签页、搜索及笔记任务入口统一调用 App 顶层 Inspector，跨页切换保持任务实例，编辑评论及未发送草稿不丢。
 4. 拖拽分隔线与 Home/End 键盘快捷键微调正常，面板收起时全局 cursor 与 userSelect 完整清理。
