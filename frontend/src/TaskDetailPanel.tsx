@@ -708,8 +708,9 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
         </div>
       </div>
 
-      {/* 2. Scrollable Middle Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
+      {/* 2. Scrollable Middle Content with Floating Activity Composer */}
+      <div className="relative flex-1 min-h-0">
+        <div className="h-full overflow-y-auto px-6 py-4 pb-36 space-y-4">
         {/* External Modification Warning Banner */}
         {(externalModified || conflictError) && (
           <div className="p-3 rounded-lg border border-amber-300 dark:border-amber-800/80 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 text-xs flex items-center justify-between gap-3 shadow-xs">
@@ -1011,24 +1012,27 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
         </div>
       </div>
 
-      {/* 3. Docked Activity Input Bar */}
+      {/* Floating Activity Composer */}
       {/* focus-within:ring-2 focus-within:ring-emerald-500/20 */}
-      <div className="shrink-0 p-4 border-t border-stone-200/80 dark:border-stone-800/80 bg-stone-50/70 dark:bg-stone-900/70 backdrop-blur-md">
-        <ActivityComposer
-          value={newActivityBody}
-          onChange={setNewActivityBody}
-          refs={newActivityRefs}
-          onRefsChange={setNewActivityRefs}
-          notes={noteRefs}
-          placeholder="记录进展… (输入 [[ 引用笔记)"
-          minRows={2}
-          submitting={submittingActivity}
-          onSubmit={() => void handleAddActivity()}
-          error={submitActivityError}
-          onClearError={() => setSubmitActivityError(null)}
-          ariaLabel="任务进展记录输入"
-        />
+      <div className="pointer-events-none absolute bottom-0 inset-x-0 p-4 pt-8 bg-gradient-to-t from-stone-50/95 via-stone-50/60 to-transparent dark:from-stone-900/95 dark:via-stone-900/60 z-10">
+        <div className="pointer-events-auto shadow-lg shadow-stone-900/10 dark:shadow-stone-950/40 rounded-xl">
+          <ActivityComposer
+            value={newActivityBody}
+            onChange={setNewActivityBody}
+            refs={newActivityRefs}
+            onRefsChange={setNewActivityRefs}
+            notes={noteRefs}
+            placeholder="记录进展… (输入 [[ 引用笔记)"
+            minRows={2}
+            submitting={submittingActivity}
+            onSubmit={() => void handleAddActivity()}
+            error={submitActivityError}
+            onClearError={() => setSubmitActivityError(null)}
+            ariaLabel="任务进展记录输入"
+          />
+        </div>
       </div>
+    </div>
 
       {/* Task Info Modal */}
       {showTaskInfo && (
