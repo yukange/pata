@@ -1,6 +1,10 @@
-# Pata · 文档与实施路线
+# Pata · 设计与实施记录
 
-**文档按实施阶段组织，而不是按功能模块组织。** 当前路线包含 **13 个顺序阶段**：阶段 1～13 已完成代码与实机验收。阶段 13 纠正原始三栏布局的实现偏差，并统一 Today / Task 的 Activity 展示、输入和编辑体验。只有实际新增一个独立交付阶段时，才新增对应的 `docs/NN-name/` 目录。
+这里保存 Pata 的设计决策、实施过程和验收依据；面向日常使用的功能介绍请先看 [项目首页](../README.md)。
+
+**阶段 01～13 已完成代码与 macOS 实机验收。** 下表按历史交付顺序排列，而非当前功能模块。早期文档中的 Memo、旧布局或待实施表述，是当时的设计记录；**当前数据结构以 [Schema](02-foundation/schema.md) 和已实现的后续阶段为准**。
+
+## 阶段索引
 
 | 顺序 | 目录 / 阶段 | 阶段结束应交付什么 | 核心文档 |
 |---|---|---|---|
@@ -18,49 +22,29 @@
 | 12 | [`12-frontend-foundation`](12-frontend-foundation/) · 前端基础设施与设计系统整理 | 保留 Pata 现有视觉，按需统一 Design Tokens/基础组件/键盘交互与拖拽体验，系统强调色优先（**已验收**） | [idea](12-frontend-foundation/idea.md) · [proposal](12-frontend-foundation/proposal.md) |
 | 13 | [`13-app-shell-activity`](13-app-shell-activity/) · App Shell 与 Activity 体验统一 | 应用级三栏与可调任务详情、Today/Task 统一 Activity 展示/输入/编辑（**已验收**） | [idea](13-app-shell-activity/idea.md) · [proposal](13-app-shell-activity/proposal.md) · [三栏设计](13-app-shell-activity/app-shell-inspector.md) |
 
-阶段 1 的 UI 附加设计： [macOS 27 原生体验与 Magpie 源码参考](01-validate/macos-native.md)，其真实 Wails 验证安排在阶段 2。
+## 阅读与维护约定
 
-阶段 6 的品牌资料：[idea](06-branding/idea.md) · [proposal](06-branding/proposal.md) · [实施记录](06-branding/implementation-notes.md) · [V2 静态资源总览](06-branding/resources/pata-branding-refined-v2/previews/overview.png)。V2 静态品牌、构建图标、应用内动画与**静态菜单栏托盘**均已接入并完成实机走查。**阶段 6 代码与实机验收已完成**；菜单栏逐帧动画、额外悬停动效已取消，不再列为待办。
+- `idea.md` 记录该阶段的目标、价值与取舍；`proposal.md` 记录具体实现、交付范围和验收。
+- [阶段 2 Schema](02-foundation/schema.md) 是 Task、Note、DayPlan 和 Activity 格式的单一权威来源；历史阶段中的旧数据示例不代表当前格式。
+- 产品边界以 [阶段 1 决策](01-validate/decisions.md) 为准；开发约束见 [AGENTS.md](../AGENTS.md)。不要在各处复制另一份规范。
+- 有必要新增独立交付目标时，才创建新的 `docs/NN-name/` 阶段；普通修复与小幅优化优先归入已有文档。
+- 原型见 [阶段 1 浏览器原型](01-validate/prototype/index.html)，它是历史交互参考，不代表目前 macOS 应用的全部界面。
 
-## 每阶段的文档约定
+## 当前产品约束
 
-- `idea.md`：本阶段为什么需要做、用户价值、**交付结果**。
-- `proposal.md`：本阶段具体做什么、**实施顺序**、完成标准及相关功能行为设计。
-- 只有对实现有必要时才添加其它文档；放在它**首次需要且负责验收的阶段**，而不是另建 `features/`、`architecture/`、`ui/` 之类横向模块目录。
-- 前一个阶段完成之后再进入下一个阶段；需要跨阶段引用时使用相对 Markdown 链接，**不复制成第二套规范**。
+- 仅 **Today / Tasks / Notes** 三个主导航；Activity 不是第四个入口，也不单独建立 Files 页面。
+- Vault 使用 `notes/`、`tasks/`、`plans/` 和 `files/`。Markdown 是业务数据源；原始附件在 `files/` 中长期保留，不因引用删除自动清理。
+- Task 和 DayPlan 分别拥有自身的 Activity；Today 计划与任务到期日独立，标签跨 Task、Note、Activity 聚合。
+- 音频转写使用自备 API Key 调用阿里云百炼，并将逐字稿保存在普通 Markdown Note 中。
+- 可选的**本机 MCP 已交付**，不是未实现的未来规划；通过 Pata Core 操作当前 Vault。具体工具和安全限制见 [MCP 说明](10-settings/proposal.md#mcp)。
+- 当前不提供独立 CLI、内置通用 Agent 或云同步。
 
-## 重要约束
+## 阶段之后的维护
 
-- 三主导航：Today / Tasks / Notes；Activity 与文件不独立设导航。
-- 专属 Vault：`notes/`、`tasks/`、`plans/` 是业务 Markdown，`files/` 是原始文件资源，`.pata/` 只存内部状态；阶段 9 才实现文件引用与搜索。
-- 标签是 Task、Note、Activity 的全局聚合；Task 内 Activity 动态继承 Task 标签；无 Projects / Inbox。
-- Notes 是**单列卡片浏览 → 单主区域编辑**；原型位于 [`01-validate/prototype/index.html`](01-validate/prototype/index.html)。
-- Markdown 是数据源；Task/DayPlan 的 Activity 各自存于所属文件而不复制；DayPlan 不等于 Due；记录只有一份。
-- **最新目标 Schema 以 [02-foundation/schema.md](02-foundation/schema.md) 为准**；阶段 2/3 的旧 Memo 描述属于历史交付记录，在阶段 8 落地前源码仍可能使用旧格式。
-- **MVP 无 CLI、MCP、内置 AI、云同步**；预留代码分层即可，不作具体实现。
+- Today 任务拖拽排序和移出计划入口优化：[PR #5](https://github.com/yukange/pata/pull/5)。
+- 阶段 12 前端规范与拖拽体验已实施：[PR #7](https://github.com/yukange/pata/pull/7)。
+- 阶段 13 App Shell 级三栏、统一 Activity 展示与编辑已实施：[PR #9](https://github.com/yukange/pata/pull/9)。
+- Notes 列表编号、代码块和撤销体验修复：[PR #8](https://github.com/yukange/pata/pull/8)、[PR #10](https://github.com/yukange/pata/pull/10)。
+- 本机 MCP 服务已合并：[PR #12](https://github.com/yukange/pata/pull/12)。
 
-## 当前状态
-
-阶段 1 设计已基本完成（待真实用户确认）。阶段 2 已完成：桌面 Spike（P2-001）、存储核心（P2-002，`internal/storage/markdown`）、单 Vault 接入与 Tasks 管理闭环、外部修改感知与冲突提示（P2-003/P2-004）；完成标准已勾选，仅剩用户实机手动走查一次。阶段 3 已完成：Memo 闭环（P3-001，任务详情评论+独立 Memo）、DayPlan 与 Today 计划区块（P3-002，多日安排/due 独立/昨日候选不自动顺延）、今日记录时间线与历史回顾（P3-003，本机时区聚合/完成事件/当前状态注脚）；完成标准已勾选，剩用户实机手动走查。阶段 4 已完成：Notes 服务与单列卡片列表（P4-001）、Vditor 全主区域编辑器与 D19 自动保存（P4-002，含离线包裁剪 23MB→7.5MB 与 cdn dist 层修正）、Task–Note 显式关联（P4-003）；完成标准已勾选，剩用户实机手动走查。阶段 5 代码侧全部完成：全局标签聚合与跨类型搜索后端（P5-001）、侧边栏真实标签与单列标签视图（P5-002）、⌘K/⌘P 全局搜索浮层（P5-003）、GetVaultHealth 错误报告暴露与服务层回归补缺（P5-004）、健康状态 UI/基础无障碍/快捷键与首启审计/macOS 打包验证（P5-005，产出 bin/pata.app 与 bin/pata.dmg）；每批均经独立审查（P5-R1~R5，仅 P5-004 一次通过，余含一次返工）。剩用户实机：真实资料走查、macOS 原生体验回归、MVP 验收清单勾选。
-
-**阶段 6：代码与实机验收完成。** 已接入静态品牌、应用内动画、离线预览与静态菜单栏托盘；经 macOS 实机目视与自动化测试（`TestStage6_BrandingAndAssetsRealMachine`），确认图标无红白模板残留、标题栏微光动画与系统浅/深色表现正常、托盘点击唤醒窗口正常。详见 [idea](06-branding/idea.md)、[proposal](06-branding/proposal.md)、[实施记录](06-branding/implementation-notes.md)。
-
-**阶段 7：代码与实机验收完成。** Notes / Task 描述 / 任务评论 / Today 记录的 `[[` 选择、跳转与持久绑定，Note 相对链接及按 Note/Task 身份去重的“被引用”均已实现。已绑定 Note ID 失效时禁止退回同名标题匹配已修复，并在实机自动化测试（`TestStage7_NoteLinksEndToEnd`）与 live GUI 中全链路验证通过。详见 [idea](07-note-links/idea.md)、[proposal](07-note-links/proposal.md)。
-
-**阶段 8：代码与实机验收完成。** 统一内嵌 `a-` Activity；Task Frontmatter 存纯文本描述、Body 存活动；DayPlan 位于根目录 `plans/`（兼读兼容旧 `.pata/plans/`），Body 存独立活动。删除 Task 连同 Activity 一起删除并幂等级联清理 DayPlan 引用；单文件原子写入、解析错误异常文件隔离；Today 时间线、全局标签聚合与跨实体搜索全部适配 Activity，经实机自动化测试（`TestStage8_ActivityStorageRefactorEndToEnd`）与真实 Vault 审计验证通过。详见 [idea](08-activity-storage/idea.md)、[proposal](08-activity-storage/proposal.md)。
-
-**阶段 9：代码与实机验收完成。** Vault 专属且仅管理约定目录；通过 Activity/Note 拖入文件、复制到 `files/` 并插入标准链接，已有 `[[` 同时搜索 Note 和 File；全局搜索支持按文件名直接找回未引用资源并支持 Quick Look 原生预览。经实机自动化测试（`TestStage9_VaultFilesEndToEnd`）与 live GUI 走查验证通过。详见 [idea](09-vault-files/idea.md)、[proposal](09-vault-files/proposal.md)。
-
-**阶段 10：代码与实机验收完成。** 侧边栏底部收敛为单个「设置」齿轮入口（保留异常告警入口）；主窗口单页纵向呈现「外观 / 存储 / 语音转写」；主题三态保存为应用级偏好；Vault 路径查看、更换目录、重新扫描及 Finder 打开正常；阿里云百炼北京地域 API Key 安全存储于 macOS Keychain，明文不入日志不入文件。经实机自动化测试（`TestStage10_SettingsAcceptance`）与 live GUI 走查验证通过。详见 [idea](10-settings/idea.md)、[proposal](10-settings/proposal.md)。
-
-**阶段 11：代码与实机验收完成。** 以普通 Markdown Note 文件承载**只读逐字稿正文**（标题/标签仍可修改，普通 Note 不受影响），复用 `files/`，支持说话人、毫秒时间戳、顶部播放器、时间戳点击播放、进度拖动结束时定位正文及安全重新转写；不做多供应商、JSON 侧车或会议摘要。经实机自动化测试（`TestStage11_AudioTranscriptionAcceptance`）与 live GUI 走查验证通过。详见 [11](11-audio-transcription/proposal.md)。
-
-阶段 3 新增 Today 体验完善方案：末尾 `#标签` 快速创建、类似 ChatGPT 的左导航 / 中间 Today 或 Tasks / 右任务详情三栏、移除任务优先级、明确移出计划语义、紧凑日期及时间线。右栏按需打开，Notes 仍单列浏览与全主区域编辑。文档已整理，新增完成标准尚未验收，见 [idea](03-daily-loop/idea.md) 与 [proposal](03-daily-loop/proposal.md)；不改变原基础能力的已完成记录，也不新增阶段。
-
-**阶段 12：代码与实机验收完成。** 保留既有视觉风格，建立轻量 Design Tokens 并彻底解耦交互 Accent 与品牌绿；引入可复用基础组件（`Button` / `Dialog` / `ConfirmDialog`）收敛确认弹层与弹窗；恢复全局可见的 `:focus-visible` 键盘焦点并局部隔离编辑器；校准 Note 长文本排版（15px / 1.68）；引入 `closestCenter` 算法并优化 Today dnd-kit 拖拽跟手性与占位反馈；完成 Reduce Motion 动效降级走查与零多余依赖控制。详见 [idea](12-frontend-foundation/idea.md)、[proposal](12-frontend-foundation/proposal.md)。
-
-**阶段 13：代码与实机验收完成。** 恢复 App Shell 全局三栏架构，单个可调整宽度的 Task Inspector 跨页共享；Today / Task Activity 统一时间在上布局、任务链接正常字号、一体式悬浮 Composer、人工评论原地编辑与草稿离开防护；macOS 打包签名、端到端全量回归与 BDD 契约测试通过。详见 [idea](13-app-shell-activity/idea.md)、[proposal](13-app-shell-activity/proposal.md)。
-
-阶段 4 修正 Notes 代码块与撤销（2026-10-22）：代码块编辑时隐藏重复预览，离开后恢复高亮；优先复用 Vditor 原生历史机制并配置 `undoDelay: 100` 缩短防抖窗口。临时 Vault 的原生界面验证、深浅色检查、Markdown 保存和重新打开、独立 PR 分支的生产构建及 macOS 打包签名通过；本轮未新增单元测试或持久测试脚本。详见 [阶段 4 方案](04-knowledge-loop/proposal.md#notes-代码块与撤销2026-10-22-修正)。
-
-阶段 10：[本机 MCP](10-settings/proposal.md#mcp)。
+具体实现、测试与验收仍以对应阶段的 `proposal.md`、测试源码和 PR 为准；这里不重复维护逐项完成日志。
