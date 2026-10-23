@@ -2,38 +2,56 @@
 
 **记下一点，完成一件。**
 
-一款极简、本地优先、以 Markdown 为唯一业务数据源的 macOS 个人工作工具。
+Pata 是一款为个人日常工作打造的 macOS 本地优先应用：**Today 管当下，Tasks 管进展，Notes 管沉淀，Activity 负责留痕，标签负责关联。**
 
-**Today 管当下，Tasks 管进展，Notes 管沉淀，Activity 负责留痕，标签负责关联。**
+不追求复杂的项目管理流程，而是把要做的事、已经做过的事和随手记下的内容自然地放在一起。
 
-> **当前状态（2026-10）**：阶段 1～11 的桌面代码与 macOS 实机验收已完成；阶段 12「前端基础设施与设计系统整理」设计已定稿，尚未实施。实际进度以 [docs/README.md](docs/README.md) 为准。
+## 主要功能
 
-## 项目推进方式
+- **Today**：安排当天任务，记录当天发生的事；日计划与任务到期日相互独立。
+- **Tasks**：用「未完成 / 已完成」管理任务，任务下可以持续追加活动记录；不引入复杂状态或优先级。
+- **Notes**：单列浏览笔记，用 Markdown 编辑内容，支持标签与 `[[笔记引用]]`。
+- **Activity**：把任务评论和每日独立记录统一为活动；任务中的记录在任务详情与 Today 时间线中保持一致。
+- **搜索与附件**：跨任务、笔记、活动和附件名称搜索；支持导入、引用文件并使用 macOS 原生预览。
+- **音频逐字稿**：导入 MP3，使用自备 API Key 转写为带说话人和毫秒时间戳的 Markdown 笔记，可在播放器与逐字稿之间定位。
+- **本机 MCP**：让外部 Agent 搜索、读取和新建任务/笔记，以及向任务或每日计划追加 Activity。
 
-`docs/` **按交付顺序划分实施阶段，不按功能模块划分**。每阶段以 `idea.md` 和 `proposal.md` 记录目标、实现与验收。阶段 1～11 已完成；第 12 阶段为 [前端基础设施与设计系统整理](docs/12-frontend-foundation/proposal.md)，保留现有视觉，按需统一组件、Tokens 与交互体验。
+## 设计原则
 
-**完整阶段清单：[docs/README.md](docs/README.md)**
+**Less is More · Record Once · Local First**
 
-> 开发注意：`frontend/bindings/` 由 wails3 CLI 生成，须用与 `go.mod` 一致的 **v3.0.0-beta.28**（`wails3 generate bindings -clean=true -ts -i`），其他版本会触发全量风格迁移。
+- 只保留 **Today / Tasks / Notes** 三个主入口，不设 Projects 或 Inbox。
+- 以本地 **Markdown + YAML Frontmatter** 为业务数据源，不依赖独立的业务数据库。Vault 中的 `notes/`、`tasks/`、`plans/` 保存记录，`files/` 保存原始附件。
+- Activity 归属于 Task 或 DayPlan，避免一条记录在多处重复存储。
+- 不内置通用 AI 聊天工作台；Agent 通过可选的本机 MCP 接入。音频转写按用户操作调用云端 ASR，API Key 保存在 macOS Keychain。
+- 界面和功能优先服务顺畅的个人使用体验，不为扩展性增加不必要的复杂度。
 
-## 体验 UI 原型
+## 运行与开发
 
-直接用浏览器打开 [`docs/01-validate/prototype/index.html`](docs/01-validate/prototype/index.html)，无需安装依赖或构建；刷新即恢复演示数据。
+当前主要通过源码运行或在 macOS 上本地打包。环境准备和完整开发流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；需要 Go、Node.js、Xcode Command Line Tools，以及与项目依赖版本匹配的 Wails v3 CLI。
 
-## MVP 边界
+```bash
+git clone https://github.com/yukange/pata.git
+cd pata
+go mod download
+npm --prefix frontend ci
+wails3 task dev
+```
 
-- 三个一级入口：**Today / Tasks / Notes**；Memo 是记录数据，不是第四个入口。
-- 标签是跨 Task / Note / Memo 的全局聚合；没有 Projects / Inbox。
-- Notes 采用 Flomo 启发的单列卡片列表，打开后占用整块主内容区编辑。
-- 本地 Markdown + YAML Frontmatter；初期无需独立业务数据库。
-- **CLI、内置 AI、插件、云同步均不进入 MVP**；阶段 11 的云端 ASR 仅用于 BYOK 音频转写，不提供内置 AI 整理。
+本地打包使用 `wails3 task package`。修改 Go 服务接口后，请按 [开发说明](CONTRIBUTING.md#code-style) 中的约定处理 Wails bindings，不要直接编辑生成文件。
 
-当前技术基础为 Go + Wails v3 + React/TypeScript + Vditor，既有 Notes、Vault、Files、Activity 功能在阶段 1～9 已陆续实现。
+## 连接 Agent（MCP）
 
-原生体验目标遵循 macOS 27 HIG；[Magpie 源码实现参考与 macOS 验收约束](docs/01-validate/macos-native.md) 已加入阶段 1，真正的标题栏和系统材质在阶段 2 Wails 实机验证。
+在 Pata 的「设置 → MCP」中启用本机服务，复制接入说明供 Agent 使用。服务只监听本机 `127.0.0.1`，需要 Pata 保持运行；首次默认关闭，手动停止后不会在下次启动时自动开启。
 
-## MCP
+目前提供搜索、列表、读取、新建任务、新建笔记和追加 Activity 六项工具。更多行为与限制见 [MCP 功能说明](docs/10-settings/proposal.md#mcp)。
 
-在「设置 → MCP」启动服务，复制接入说明并发送给 Agent。Pata 需保持打开；手动停止服务后，下次打开应用时仍保持关闭。
+## 项目文档
 
-工具列表和服务行为见 [MCP 功能说明](docs/10-settings/proposal.md#mcp)。
+- [设计与实施记录](docs/README.md)：阶段 01～13 的交付记录及文档入口。
+- [数据格式（Schema）](docs/02-foundation/schema.md)：Markdown 数据结构的权威定义。
+- [产品设计取舍](docs/01-validate/decisions.md)：已确认的交互与范围决策。
+- [AGENTS.md](AGENTS.md)：面向开发 Agent 的工程约束。
+- [早期交互原型](docs/01-validate/prototype/index.html)：无需构建即可在浏览器查看，**不代表当前应用的完整界面**。
+
+Pata 的阶段 01～13 已完成代码与 macOS 实机验收；后续改进以实际使用体验为依据，不预设新的大型功能阶段。
