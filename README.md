@@ -38,7 +38,7 @@ npm --prefix frontend ci
 wails3 task dev
 ```
 
-本地打包使用 `wails3 task package`。修改 Go 服务接口后，请按 [开发说明](CONTRIBUTING.md#code-style) 中的约定处理 Wails bindings，不要直接编辑生成文件。
+本地打包使用 `wails3 task package`。修改 Go 服务接口后，请按 [开发说明](CONTRIBUTING.md#create-new-files) 中的约定处理 Wails bindings，不要直接编辑生成文件。
 
 ## 连接 Agent（MCP）
 
