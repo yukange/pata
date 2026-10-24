@@ -165,9 +165,9 @@ export function SettingsView({
   const handleOpenConsole = async (e: React.MouseEvent) => {
     e.preventDefault();
     try {
-      await Browser.OpenURL('https://bailian.console.aliyun.com/?apiKey=1');
+      await Browser.OpenURL('https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key');
     } catch {
-      window.open('https://bailian.console.aliyun.com/?apiKey=1', '_blank');
+      window.open('https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key', '_blank');
     }
   };
 
