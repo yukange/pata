@@ -194,8 +194,9 @@ export function SettingsView({
       </div>
 
       {/* Content Area - Single page vertically stacked */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto w-full space-y-6">
-        {/* Section 1: 外观 */}
+      <div className="flex-1 min-h-0 overflow-y-auto p-6">
+        <div className="max-w-3xl mx-auto space-y-6">
+          {/* Section 1: 外观 */}
         <section
           ref={appearanceRef}
           className="rounded-xl border border-stone-200/80 dark:border-stone-800/80 bg-white/70 dark:bg-stone-900/60 p-5 shadow-2xs space-y-4"
@@ -479,6 +480,7 @@ export function SettingsView({
             )}
           </div>
         </section>
+        </div>
       </div>
     </div>
   );
