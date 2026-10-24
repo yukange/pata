@@ -7,6 +7,7 @@
 export interface Activity {
     "id": string;
     "at": string;
+    "by"?: string;
     "tags"?: string[] | null;
     "note_refs"?: { [_ in string]?: string } | null;
     "body": string;
@@ -126,6 +127,7 @@ export interface Note {
     "audio_file"?: string;
     "audio_transcript"?: boolean;
     "created_at": string;
+    "created_by"?: string;
     "updated_at": string;
     "body": string;
 }
@@ -165,6 +167,7 @@ export interface SearchResultItem {
 export interface StatusEvent {
     "action": StatusEventAction;
     "at": string;
+    "by"?: string;
 }
 
 /**
@@ -214,6 +217,7 @@ export interface Task {
      */
     "note_refs"?: { [_ in string]?: string } | null;
     "created_at": string;
+    "created_by"?: string;
     "updated_at": string;
     "status_events"?: StatusEvent[] | null;
     "body": string;

@@ -18,6 +18,7 @@ const (
 type activityMeta struct {
 	ID       string               `yaml:"id"`
 	At       time.Time            `yaml:"at"`
+	By       string               `yaml:"by,omitempty"`
 	Tags     []string             `yaml:"tags,omitempty"`
 	NoteRefs map[string]string    `yaml:"note_refs,omitempty"`
 	Extra    map[string]yaml.Node `yaml:",inline"`
@@ -92,6 +93,9 @@ func ParseActivities(raw string) ([]Activity, error) {
 				if meta.At.IsZero() {
 					return nil, fmt.Errorf("activity %s missing required valid timestamp 'at'", meta.ID)
 				}
+				if err := validateSource("", "by", meta.By); err != nil {
+					return nil, err
+				}
 				if seenIDs[meta.ID] {
 					return nil, fmt.Errorf("duplicate activity id '%s' in same entity", meta.ID)
 				}
@@ -118,6 +122,7 @@ func ParseActivities(raw string) ([]Activity, error) {
 				activities = append(activities, Activity{
 					ID:       meta.ID,
 					At:       meta.At,
+					By:       meta.By,
 					Tags:     meta.Tags,
 					NoteRefs: meta.NoteRefs,
 					Body:     strings.Join(unescapedBody, "\n"),
@@ -155,6 +160,7 @@ func FormatActivities(activities []Activity) (string, error) {
 		meta := activityMeta{
 			ID:       act.ID,
 			At:       act.At,
+			By:       act.By,
 			Tags:     act.Tags,
 			NoteRefs: act.NoteRefs,
 			Extra:    act.Extra,

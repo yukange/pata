@@ -1,13 +1,13 @@
 # 阶段 14 · Agent 操作来源与任务生命周期记录 — Proposal
 
-> 状态：**方案待实施**（2026-10-23）。本文件是 014 的实施与验收主文档；产品裁决见 [idea.md](idea.md)。本文给出的 YAML 为**拟实施的协议增量**，不是当前版本已经可识别的字段。实际编码时同步更新 [02-foundation/schema.md](../02-foundation/schema.md) 作为唯一生效的 Schema 规范。
+> 状态：**代码与自动化验收已完成，macOS 界面人工验收待完成**（2026-10-23）。本文件是 014 的实施与验收主文档；产品裁决见 [idea.md](idea.md)，正式存储协议以 [02-foundation/schema.md](../02-foundation/schema.md) 为唯一来源。
 
-## 一、现有基线与实施边界
+## 一、实施前基线与实施边界
 
 - 已有 `Task.CreatedAt` / `Note.CreatedAt`，任务完成、重开存于 `Task.StatusEvents`，评论与 Today 独立记录使用内嵌 `Activity`；Task / Today 已共用 `ActivityItem` 的排版原则。
 - Task 详情通过 `buildTaskTimelineItems` 组合普通 Activity 与 `status_events`；Today 通过 `VaultService.GetDayTimeline` 聚合普通 Activity 与任务状态事件。014 应复用这两条链路，不建第二份事件存储。
-- 现有 MCP 仅有 `pata_search`、`pata_list`、`pata_read`、`pata_create_note`、`pata_create_task`、`pata_append_activity` 六个工具；**目前还不能通过 MCP 完成/重开既有 Task**。
-- 014 修改范围：Markdown 对象的来源元数据、Go Core 写入来源、MCP 状态变更入口、Today/Task/Note 展示、相关测试与权威 Schema 更新。仅设计阶段不改业务代码。
+- 实施前 MCP 仅有 `pata_search`、`pata_list`、`pata_read`、`pata_create_note`、`pata_create_task`、`pata_append_activity` 六个工具；014 已补齐第七个工具 `pata_set_task_status`，用于完成/重开既有 Task。
+- 014 修改范围：Markdown 对象的来源元数据、Go Core 写入来源、MCP 状态变更入口、Today/Task/Note 展示、相关测试与权威 Schema 更新。
 
 ## 二、来源语义和数据结构
 
@@ -26,7 +26,7 @@
 - 仅两种明确受信任的入口：Pata GUI 默认不写字段；Pata MCP 的写操作由 Go Core 标记 `agent`。不要接受 MCP 创建参数中的 `created_by` / `by` 作为身份依据。
 - 当前 MCP 属于本机访问通道，UI 的「Agent」是产品层的操作来源说明，不声称能识别具体模型或认证调用方身份。
 
-### 2.2 拟议存储示例
+### 2.2 存储示例
 
 Task Frontmatter：仅增加创建来源，创建事件**不生成额外的 `a-` Activity**。
 
@@ -150,6 +150,23 @@ input: { id: "t-...", status: "done" | "todo" }
 - 不因语音转写由云模型处理就把用户创建的 Note 标记为 Agent。
 - 不因为 014 扩充 MCP 的其他增删改能力、引入 Harness 或个人 Obsidian 迁移工具。
 
-## 七、实现完成后的文档更新
+## 七、实施记录
 
-在实际实现 PR 中同步更新 [权威 Markdown Schema](../02-foundation/schema.md) 的 Task、Note、Activity 与 `status_events` 字段，以及 [MCP 工具说明](../10-settings/proposal.md#mcp) 的新接口；验收通过后再更新 [docs 阶段索引](../README.md) 的 014 状态。014 自身只维护实施记录，不复制一份永远需要同步的正式 Schema。
+- **014-001～004 已实现**：可选来源字段沿现有解析/序列化/Clone/索引/JSON 链路传递；GUI 公共方法默认我，MCP 只调用带 Agent 来源的私有 Core 入口，外部 DTO 不含来源参数。三个状态写入口共用 `applyTaskStatus`，沿用原子保存与 baseline 冲突保护。
+- Task 创建、状态事件及 Activity 使用相同稳定键规则；同时间戳保留状态数组顺序，Task 正序、Today 倒序。`completed_at` 缺少对应完成事件时只读兜底为我，不回写历史。
+- Task / Today 复用 `ActivityItem` 显示来源，Note 仅在编辑页标题附近展示；任务与笔记列表保持原样。没有新增依赖、迁移或事件存储。
+- 审查修复：Task Inspector 收到当前任务变更时停止排队和后续保存，无草稿时自动刷新；有草稿、刷新失败或异步响应已过期时保留草稿与保存保护，避免旧状态覆盖 MCP 操作。搜索仅匹配可见内容，排除 Activity 内部元数据；旧资料库兼容性使用固定 Markdown 临时资料库，不依赖个人目录。
+- **014-005 自动化与文档已完成**：权威 Schema、产品裁决、MCP 工具说明、中英文 README 和 Wails 生成 bindings 已同步。
+
+### 已执行验证
+
+- `go test ./...`：全量通过；新增 Schema 往返/Clone/JSON、非法来源拒绝、真实 MCP 内存传输调用、GUI/MCP 混合生命周期、重复状态不写盘、通知刷新、Vault 切换拒绝、来源保留及跨日/同时间戳排序测试。音频导入回归确认 GUI/ASR 不改变创建来源。
+- `npm --prefix frontend test`：81 项通过，涵盖创建事件、来源文案、旧数据兜底、稳定排序、跨页面来源传递、列表不显示来源，以及 MCP 状态变更后的草稿保护、保存暂停、自动刷新和异步响应顺序。
+- `npm --prefix frontend run build`：TypeScript 和生产前端构建通过。
+- `wails3 task darwin:package BIN_DIR=/tmp/pata-stage14`：macOS 原生生产包构建与 ad-hoc 签名/`codesign --verify --deep --strict` 通过，产物为 `/tmp/pata-stage14/pata.app`。
+
+### 待完成的人工验收
+
+- 使用本次新包逐项操作核心验收用例，确认 Today 任务链接、Inspector、Note 编辑与 MP3 转写的实际显示。
+- macOS 浅/深色、窄窗口、键盘焦点、减少动态效果，以及拖拽、草稿保护、删除恢复和资料库切换的界面回归。
+- 上述人工验收完成前，014 不标记整个阶段已完成。

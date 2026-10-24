@@ -793,17 +793,17 @@ export function TodayView({
               <p className="text-xs text-stone-400 py-1">该日期暂无记录。</p>
             ) : (
               <div className="divide-y divide-stone-200/70 dark:divide-stone-800">
-                {timelineItems.map((item, idx) => {
+                {timelineItems.map((item) => {
                   const time = formatTimelineTime(item.time);
                   const exists = !!item.task_id && taskMap.has(item.task_id);
                   const title = item.task_title || item.task_id || '';
 
-                  if (item.kind === 'completion' || item.kind === 'reopen') {
+                  if (item.kind === 'creation' || item.kind === 'completion' || item.kind === 'reopen') {
                     return (
                       <ActivityItem
-                        key={`ev-${item.kind}-${item.task_id}-${item.time}-${idx}`}
+                        key={item.key}
                         timeStr={time}
-                        statusEvent={{ action: item.kind }}
+                        statusEvent={{ action: item.kind, by: item.by }}
                         taskContext={
                           item.task_id
                             ? {
@@ -824,7 +824,7 @@ export function TodayView({
                   const editing = !!act && editingActivityId === act.id;
                   return (
                     <ActivityItem
-                      key={`activity-${act?.id ?? idx}-${item.time}`}
+                      key={item.key}
                       timeStr={time}
                       taskContext={
                         item.task_id
@@ -840,6 +840,7 @@ export function TodayView({
                         act
                           ? {
                               id: act.id,
+                              by: act.by,
                               body: act.body,
                               tags: act.tags,
                               note_refs: act.note_refs,

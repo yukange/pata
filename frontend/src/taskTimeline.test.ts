@@ -179,6 +179,55 @@ test('buildTaskTimelineItems: 兼容老数据或外部修改仅有 completed_at 
   assert.strictEqual((items[0] as any).action, 'completed');
 });
 
+test('buildTaskTimelineItems: 创建来源与同时间生命周期顺序，不生成普通 Activity', () => {
+  const at = '2026-10-23T09:20:00+08:00';
+  const task = createMockTask({
+    created_at: at,
+    created_by: 'agent',
+    status: 'done',
+    status_events: [
+      { action: 'completed', at: '2026-10-23T01:20:00Z', by: 'agent' },
+      { action: 'reopened', at },
+      { action: 'completed', at, by: 'agent' },
+    ],
+  });
+  const items = buildTaskTimelineItems(task, [{ id: 'a-agent', at, body: '评论', by: 'agent' }]);
+  assert.deepStrictEqual(items.map((item) => item.kind === 'status_event' ? [item.action, item.by] : ['activity', item.activity.by]), [
+    ['creation', 'agent'], ['completed', 'agent'], ['reopened', undefined], ['completed', 'agent'], ['activity', 'agent'],
+  ]);
+  assert.strictEqual(items[0].key, `0-created-${task.id}`);
+  assert.deepStrictEqual(items, buildTaskTimelineItems(task, [{ id: 'a-agent', at, body: '评论', by: 'agent' }]));
+});
+
+test('buildTaskTimelineItems: 旧数据创建与 completed_at 兜底均默认为我', () => {
+  const items = buildTaskTimelineItems(createMockTask({
+    created_at: '2026-10-22T23:50:00+08:00',
+    status: 'done', completed_at: '2026-10-23T00:10:00+08:00',
+  }), []);
+  assert.deepStrictEqual(items.map((item) => item.kind === 'status_event' && [item.action, item.by]), [
+    ['creation', undefined], ['completed', undefined],
+  ]);
+});
+
+test('buildTaskTimelineItems: 同时发生的十次以上状态事件仍保留写入顺序', () => {
+  const task = createMockTask({
+    status_events: Array.from({ length: 12 }, (_, idx) => ({
+      action: idx % 2 === 0 ? 'completed' : 'reopened', at: '2026-10-23T09:00:00Z',
+    })),
+  });
+  const items = buildTaskTimelineItems(task, []);
+  assert.deepStrictEqual(items.map((item) => item.kind === 'status_event' && item.action), task.status_events?.map((event) => event.action));
+});
+
+test('buildTaskTimelineItems: 旧完成事件不能遮蔽缺失对应事件的 completed_at', () => {
+  const items = buildTaskTimelineItems(createMockTask({
+    status: 'done', completed_at: '2026-10-23T00:10:00+08:00',
+    status_events: [{ action: 'completed', at: '2026-10-22T09:00:00+08:00', by: 'agent' }],
+  }), []);
+  assert.strictEqual(items.length, 2);
+  assert.ok(items[1].kind === 'status_event' && items[1].action === 'completed' && items[1].by === undefined);
+});
+
 test('formatActivityTimestamp: 格式化不同日期的展示时间', () => {
   const now = new Date(2026, 9, 20, 15, 30, 0); // 2026-10-20 15:30:00
   const todayIso = new Date(2026, 9, 20, 10, 5, 0).toISOString();

@@ -31,11 +31,11 @@ func setupMockDashScopeServer(t *testing.T, sentences []asr.Sentence) *httptest.
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"data": map[string]interface{}{
-					"upload_host": "http://" + r.Host + "/oss-mock",
-					"upload_dir":  "tmp-dir",
+					"upload_host":       "http://" + r.Host + "/oss-mock",
+					"upload_dir":        "tmp-dir",
 					"oss_access_key_id": "test-key-id",
-					"policy":      "test-policy",
-					"signature":   "test-sig",
+					"policy":            "test-policy",
+					"signature":         "test-sig",
 				},
 			})
 			return
@@ -72,8 +72,8 @@ func setupMockDashScopeServer(t *testing.T, sentences []asr.Sentence) *httptest.
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"output": map[string]interface{}{
-					"task_id":          taskID,
-					"task_status":      "SUCCEEDED",
+					"task_id":           taskID,
+					"task_status":       "SUCCEEDED",
 					"transcription_url": "http://" + r.Host + "/results/" + taskID,
 					"results": []map[string]interface{}{
 						{
@@ -181,6 +181,9 @@ func TestAcceptance_AudioTranscript_FullLifecycleAndNoteProtection(t *testing.T)
 	if audioNote == nil {
 		t.Fatalf("expected audioNote to be created immediately")
 	}
+	if audioNote.CreatedBy != "" {
+		t.Fatalf("GUI audio import must retain user attribution: %q", audioNote.CreatedBy)
+	}
 	if audioNote.Title != "meeting-standup" {
 		t.Errorf("expected default title 'meeting-standup', got %q", audioNote.Title)
 	}
@@ -215,6 +218,9 @@ func TestAcceptance_AudioTranscript_FullLifecycleAndNoteProtection(t *testing.T)
 	savedNote, err := svc.GetNote(audioNote.ID)
 	if err != nil || savedNote == nil {
 		t.Fatalf("Note must be preserved after ASR failure: %v", err)
+	}
+	if savedNote.CreatedBy != "" {
+		t.Fatalf("ASR must not change creation source: %q", savedNote.CreatedBy)
 	}
 	if savedNote.AudioFile != audioNote.AudioFile {
 		t.Errorf("expected audio_file preserved, got %q", savedNote.AudioFile)

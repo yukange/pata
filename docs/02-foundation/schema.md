@@ -1,6 +1,6 @@
-# Markdown Schema — V2 目标规范（阶段 8）
+# Markdown Schema — 当前存储规范
 
-> **状态：已确认的目标协议，尚未实施。** 阶段 8 落地 Activity 归属模型；阶段 9 增补 Vault 边界与文件资源引用。 现有源码和 `docs/02-foundation/examples/` 仍可能使用 V1 Memo/Task Body 布局；示例文件暂作为旧测试固件保留，待 [阶段 8](../08-activity-storage/proposal.md) 编码时同步更换。**本文件是未来存储协议的唯一规范来源**；第 8 阶段 proposal 只说明实施步骤。
+> 本文件是 Task、Note、DayPlan 与内嵌 Activity 的唯一生效 Schema。阶段 8 / 9 已实现归属式存储与 Vault 文件边界，阶段 11 增补逐字稿 Note，阶段 14 增补可选操作来源。`docs/02-foundation/examples/` 是历史测试固件，不代表生产格式。
 
 ## 通用约定
 
@@ -11,6 +11,20 @@
 - Frontmatter 与 Activity 元数据使用 YAML；解析拒绝缺失/非法必填值；合法未知 YAML 字段应保留，避免保存其他字段时破坏原内容。
 - Task 和 DayPlan Markdown 是**内部存储协议**，用户通过 GUI 操作；未来 CLI 如实现也由同一个 App Core 写入。Note 是面向用户编辑的 Markdown。
 - 数据源只有 Markdown 文件，索引可重建；不引入 JSON 侧车、数据库、跨文件事务/WAL。
+
+## 操作来源（阶段 14）
+
+| 位置 | 可选字段 | 含义 |
+|---|---|---|
+| Task / Note Frontmatter | `created_by: agent` | 实体创建来源 |
+| Task `status_events[]` | `by: agent` | 本次完成或重开的来源 |
+| 内嵌 Activity 元数据 | `by: agent` | 本条记录创建来源 |
+
+- 仅允许 `agent` 或省略；省略直接表示「我」，不迁移、不回填既有数据。其他非空来源值解析失败，并沿用单文件隔离保护。
+- GUI 创建或改变任务状态时省略来源；MCP 写操作由 Core 内部入口赋予 `agent`，对外输入不开放来源参数。该标记说明操作通道，不认证调用者或模型身份。
+- 编辑、克隆、索引重建和再次保存保留原创建来源；任务状态变化只为新事件赋来源。来源不参与搜索、标签、引用或实体身份判定。
+- Task 创建事件只由 `created_at` / `created_by` 在时间线中派生，不生成额外 Activity。初始 `done` 的 Task 保留创建和完成两个事件；MCP 创建时两处均为 Agent。
+- 重复设置相同任务状态不追加事件；旧数据只有 `completed_at` 而没有完成事件时，保持只读兜底展示，来源为我，不回写历史。
 
 ## 目录
 
@@ -23,7 +37,7 @@ vault/
   .pata/                         # 内部状态，可重建；不保存唯一业务数据
 ~~~
 
-`memos/YYYY/MM/*.md` 不再是新版本的业务写入路径。因目前仅为测试期，不做自动兼容迁移；现存文件不得被程序静默删除。`plans/` 是真实业务数据，不是可丢弃缓存。当前应用仍可能使用旧 `.pata/plans/`；阶段 8 尚未实施，目标直接采用根 `plans/`，不得静默删掉旧测试资料。阶段 9 实现专属目录扫描与文件资源引用。
+`memos/YYYY/MM/*.md` 不再是业务写入路径，不做自动兼容迁移，不得静默删除旧文件。DayPlan 使用根 `plans/`；该目录与 `files/` 都是用户数据，不能当缓存清理。
 
 ## Task
 
@@ -63,6 +77,8 @@ note_refs:
 - `description` 位于 **Frontmatter**，是纯文本，支持换行及唯一识别的 `[[笔记引用]]`；不渲染其他 Markdown 语法。Task 的 Body **只**包含 Activity 块，不再存储描述。
 - `note_refs` 属于 Task **描述自身**，名称绑定到 Note ID；不得用于代替 Activity 内部的 `note_refs`。
 - `status` 仅 `todo` / `done`，无优先级、多状态流。完成时记录 `completed_at`，重新打开清空当前完成时间；`status_events` 保留完成/重开历史。
+- `created_by` 是可选创建来源；`created_at` 与创建来源共同派生 Task / Today 创建事件，与 DayPlan 是否安排此任务无关。
+- `status_events` 是可选有序事件列表：`action` 仅 `completed` / `reopened`，`at` 必须为带时区时间戳，可选 `by: agent` 表示本次来源。同时间戳按事件在数组中的顺序展示，创建排在状态事件前，普通 Activity 按 ID 稳定排序；Today 沿用倒序、Task 详情沿用正序。
 - `due` 是截止日期，与各个 DayPlan 的 `task_ids` 完全独立。
 - `note_ids` 作为既有显式 Note 关联继续保留，不新增从描述直接关联的重复入口。
 - Task 文件由当前实现的 slug + `t-` ID 命名；文件重命名不影响引用。
@@ -117,6 +133,7 @@ note_refs:
 |---|---|---|
 | `id` | 是 | 全局唯一、稳定的 `a-` + ULID |
 | `at` | 是 | RFC 3339 带时区事件时间 |
+| `by` | 否 | 仅 `agent`；省略表示我。创建时确定，后续编辑保持不变 |
 | `tags` | 否 | 此 Activity 自有标签列表；省略表示无自有标签 |
 | `note_refs` | 否 | **本 Activity 局部**的 `[[名称]] -> Note ID` 绑定；不得和同文件其他 Activity 或 Task 描述合并 |
 
@@ -166,6 +183,10 @@ updated_at: 2026-10-15T09:20:00+08:00
 正常 Markdown 正文，包括相对链接与其他格式。
 ~~~
 
+### Note 创建来源
+
+Frontmatter 可选 `created_by: agent`，省略表示我；正文不存来源。改标题、标签、正文或重新转写均不改变创建来源。GUI 发起 MP3 导入的逐字稿 Note 归我，不因使用云端 ASR 而标记 Agent。
+
 ### 自动生成的只读逐字稿 Note（阶段 11 规范）
 
 - 当且仅当 Note Frontmatter 包含 `audio_transcript: true` 且设置了有效的 `audio_file`（如 `files/sample.mp3`）时，该 Note 被识别为自动生成的逐字稿 Note。
@@ -193,7 +214,7 @@ updated_at: 2026-10-15T09:20:00+08:00
 5. 解析错误、重复 ID 等会危及结构化读写的情况按文件隔离；绝不自动覆盖/删除不可解析的原始 Markdown。
 6. 索引、搜索和页面缓存都可从有效 Markdown 重建，根 `plans/` 以及 Task/Note 文件则必须保存；阶段 9 的原始 `files/` 同样必须保存。
 
-## Vault 与文件资源引用（阶段 9 目标，未实施）
+## Vault 与文件资源引用（阶段 9）
 
 - Vault 的业务扫描范围仅为 `notes/**`（Note）、`tasks/**`（Task）、`plans/`（DayPlan）与 `files/**`（文件资源）；Vault 根目录、`.pata/` 等位置不递归当作 Note 来源。
 - `files/**` 里的 PDF、PPT、Word、图片等是普通原始文件，**没有** `type: file`、File ID、`file_refs`、包装 Note 或 JSON 侧车。一个文件可以被多个来源引用，也可以零引用。
@@ -201,7 +222,6 @@ updated_at: 2026-10-15T09:20:00+08:00
 - Task/Activity 是纯文本，仅额外识别并以可点击项展示有效**文件链接**；不因文件引用而解释其它 Markdown 语法。Note 则按原有 Markdown 编辑/渲染规则工作。
 - 文件的搜索身份为 Vault 内当前路径与文件名；不承诺外部重命名自动修复。路径失效保留原文并提示，不重绑定猜测文件；解析路径必须限制在 Vault 内，禁止 `../`/符号链接逃逸。
 - 删除 Note/Task/Activity/文件链接时**不级联删除** `files/` 资源；不设自动清理。文件导入复制且不覆盖同名文件，首次导入生成新链接、再次从候选选择已有文件只生成链接。
-- 本节仅定义阶段 9 的未来行为，不表示当前 Go Core 已实现。
 
 ## 与 V1 的关系
 

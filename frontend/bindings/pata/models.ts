@@ -76,11 +76,14 @@ export interface MCPStatus {
 }
 
 /**
- * TimelineItem represents an aggregated item in the day timeline (activity or completion).
+ * TimelineItem represents an aggregated activity or task lifecycle event.
  */
 export interface TimelineItem {
+    "key": string;
+    "by"?: string;
+
     /**
-     * "activity" | "completion" | "reopen"
+     * "creation" | "activity" | "completion" | "reopen"
      */
     "kind": string;
     "time": string;

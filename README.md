@@ -16,7 +16,7 @@ Instead of adding layers of project management, Pata brings your tasks, daily re
 - **Activity**: Record comments on tasks or standalone daily entries. Task activity appears consistently in both the task details and the Today timeline.
 - **Search and attachments**: Search tasks, notes, activity, and attachment filenames. Import and reference files, with native macOS preview support.
 - **Audio transcripts**: Turn an imported MP3 into a Markdown transcript with speakers and millisecond timestamps using your own API key. Jump between the transcript and its audio player.
-- **Local MCP**: Let an external agent search, read, and create tasks and notes, or append activity to a task or day plan.
+- **Local MCP**: Let an external agent search, read, and create tasks and notes, append activity to a task or day plan, and complete or reopen tasks. Activity and creation details show whether an action came from you or an agent.
 
 ## Principles
 
@@ -46,7 +46,7 @@ Run `wails3 task package` to build a local app package. When changing Go service
 
 In Pata, open **Settings → MCP**, enable the local service, and copy its connection instructions into your agent. The service listens only on `127.0.0.1` and requires Pata to stay running. It is disabled by default and stays disabled after you manually stop it.
 
-The six tools cover search, list, read, create task, create note, and append activity. See the [MCP reference](docs/10-settings/proposal.md#mcp) for their behavior and limitations.
+The seven tools cover search, list, read, create task, create note, append activity, and set task status. See the [MCP reference](docs/10-settings/proposal.md#mcp) for their behavior and limitations.
 
 ## Documentation
 

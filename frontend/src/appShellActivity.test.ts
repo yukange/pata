@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { formatStatusAction, isActivitySubmitShortcut } from './activityUtils.ts';
+import { formatSource, formatStatusAction, isActivitySubmitShortcut } from './activityUtils.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -79,13 +79,12 @@ test('DetailSplit: 拖拽调整、尺寸限制与键盘快捷键微调', () => {
 });
 
 test('ActivityItem: 状态事件文案与时间戳层次规范', () => {
-  // 1. 状态事件动词：无任务上下文（详情面板）显示“已完成/重新打开”；有任务上下文显示“完成了 /重新打开 ”
-  assert.equal(formatStatusAction('completed', false), '已完成');
-  assert.equal(formatStatusAction('reopened', false), '重新打开');
-  assert.equal(formatStatusAction('completion', true), '完成了 ');
-  assert.equal(formatStatusAction('reopen', true), '重新打开 ');
-  assert.equal(formatStatusAction('completed', true), '完成了 ');
-  assert.equal(formatStatusAction('reopened', true), '重新打开 ');
+  assert.equal(formatSource(), '我');
+  assert.equal(formatSource('agent'), 'Agent');
+  for (const [action, label] of [['creation', '创建'], ['completed', '完成'], ['completion', '完成'], ['reopened', '重新打开'], ['reopen', '重新打开']]) {
+    assert.equal(formatStatusAction(action), `由我${label}`);
+    assert.equal(formatStatusAction(action, 'agent'), `由 Agent ${label}`);
+  }
 
   const itemPath = path.resolve(__dirname, 'ActivityItem.tsx');
   const content = fs.readFileSync(itemPath, 'utf-8');
@@ -96,10 +95,10 @@ test('ActivityItem: 状态事件文案与时间戳层次规范', () => {
     '人工评论应提供编辑入口'
   );
 
-  // 3. 系统事件包含对应状态图标且只读
+  // 3. 来源包含图标和可读文字
   assert.ok(
-    content.includes('CheckCircle2') && content.includes('Undo2'),
-    '系统事件应包含完成与重新打开图标'
+    content.includes('UserRound') && content.includes('Bot') && content.includes('formatSource(activity.by)'),
+    '普通记录和系统事件应显示人/Agent 来源'
   );
 
   // 4. 正文与笔记引用组件集成

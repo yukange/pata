@@ -125,9 +125,11 @@ type UpdateNoteInput struct {
 	Body  string   `json:"body"`
 }
 
-// TimelineItem represents an aggregated item in the day timeline (activity or completion).
+// TimelineItem represents an aggregated activity or task lifecycle event.
 type TimelineItem struct {
-	Kind      string             `json:"kind"` // "activity" | "completion" | "reopen"
+	Key       string             `json:"key"`
+	By        string             `json:"by,omitempty"`
+	Kind      string             `json:"kind"` // "creation" | "activity" | "completion" | "reopen"
 	Time      time.Time          `json:"time"`
 	Activity  *markdown.Activity `json:"activity,omitempty"`
 	TaskID    string             `json:"task_id,omitempty"`
@@ -308,6 +310,10 @@ func (s *VaultService) GetTask(id string) (*markdown.Task, error) {
 
 // CreateTask creates a new Task, writes it safely as Markdown, and updates the index.
 func (s *VaultService) CreateTask(input CreateTaskInput) (*markdown.Task, error) {
+	return s.createTask(input, "")
+}
+
+func (s *VaultService) createTask(input CreateTaskInput, by string) (*markdown.Task, error) {
 	s.mu.Lock()
 	v := s.vault
 	s.mu.Unlock()
@@ -350,24 +356,17 @@ func (s *VaultService) CreateTask(input CreateTaskInput) (*markdown.Task, error)
 		ID:          markdown.GenerateEntityID(markdown.EntityTypeTask),
 		Title:       title,
 		Description: desc,
-		Status:      status,
+		Status:      markdown.TaskStatusTodo,
 		Due:         due,
 		Tags:        cleanTags(input.Tags),
 		NoteIDs:     cleanedNoteIDs,
 		NoteRefs:    cleanNoteRefs(input.NoteRefs),
 		CreatedAt:   now,
+		CreatedBy:   by,
 		UpdatedAt:   now,
 	}
 
-	if status == markdown.TaskStatusDone {
-		task.CompletedAt = &now
-		task.StatusEvents = []markdown.StatusEvent{
-			{
-				Action: markdown.StatusEventActionCompleted,
-				At:     now,
-			},
-		}
-	}
+	applyTaskStatus(task, status, now, by)
 
 	if _, err := v.SaveEntity(task, nil); err != nil {
 		return nil, err
@@ -413,22 +412,7 @@ func (s *VaultService) UpdateTask(input UpdateTaskInput) (*markdown.Task, error)
 	}
 
 	now := time.Now()
-	// Status event semantics: record completion or reopen, maintain completed_at
-	if existing.Status != markdown.TaskStatusDone && status == markdown.TaskStatusDone {
-		existing.CompletedAt = &now
-		existing.StatusEvents = append(existing.StatusEvents, markdown.StatusEvent{
-			Action: markdown.StatusEventActionCompleted,
-			At:     now,
-		})
-	} else if existing.Status == markdown.TaskStatusDone && status == markdown.TaskStatusTodo {
-		existing.CompletedAt = nil
-		existing.StatusEvents = append(existing.StatusEvents, markdown.StatusEvent{
-			Action: markdown.StatusEventActionReopened,
-			At:     now,
-		})
-	} else if status == markdown.TaskStatusDone && existing.CompletedAt == nil {
-		existing.CompletedAt = &now
-	}
+	applyTaskStatus(existing, status, now, "")
 
 	var due *string
 	if input.Due != nil && strings.TrimSpace(*input.Due) != "" {
@@ -553,6 +537,10 @@ func taskBaseline(v *markdown.Vault, task *markdown.Task) *markdown.FileBaseline
 
 // SetTaskStatus toggles or updates the status of a Task with completion/reopen event semantics.
 func (s *VaultService) SetTaskStatus(id string, status markdown.TaskStatus) (*markdown.Task, error) {
+	return s.setTaskStatus(id, status, "")
+}
+
+func (s *VaultService) setTaskStatus(id string, status markdown.TaskStatus, by string) (*markdown.Task, error) {
 	s.mu.Lock()
 	v := s.vault
 	s.mu.Unlock()
@@ -585,21 +573,7 @@ func (s *VaultService) SetTaskStatus(id string, status markdown.TaskStatus) (*ma
 	}
 
 	now := time.Now()
-	if status == markdown.TaskStatusDone {
-		existing.CompletedAt = &now
-		existing.StatusEvents = append(existing.StatusEvents, markdown.StatusEvent{
-			Action: markdown.StatusEventActionCompleted,
-			At:     now,
-		})
-	} else if existing.Status == markdown.TaskStatusDone {
-		existing.CompletedAt = nil
-		existing.StatusEvents = append(existing.StatusEvents, markdown.StatusEvent{
-			Action: markdown.StatusEventActionReopened,
-			At:     now,
-		})
-	}
-
-	existing.Status = status
+	applyTaskStatus(existing, status, now, by)
 	existing.UpdatedAt = now
 
 	baseline := taskBaseline(v, existing)
@@ -608,6 +582,22 @@ func (s *VaultService) SetTaskStatus(id string, status markdown.TaskStatus) (*ma
 	}
 
 	return existing, nil
+}
+
+func applyTaskStatus(task *markdown.Task, status markdown.TaskStatus, at time.Time, by string) {
+	if task.Status != status {
+		action := markdown.StatusEventActionReopened
+		if status == markdown.TaskStatusDone {
+			action = markdown.StatusEventActionCompleted
+			task.CompletedAt = &at
+		} else {
+			task.CompletedAt = nil
+		}
+		task.StatusEvents = append(task.StatusEvents, markdown.StatusEvent{Action: action, At: at, By: by})
+	} else if status == markdown.TaskStatusDone && task.CompletedAt == nil {
+		task.CompletedAt = &at
+	}
+	task.Status = status
 }
 
 // DeleteTask deletes a task from disk and updates the index, cascading deletion to all its embedded activities
@@ -664,6 +654,10 @@ func (s *VaultService) DeleteTask(id string) error {
 
 // CreateActivity creates an activity embedded inside a Task or DayPlan.
 func (s *VaultService) CreateActivity(input CreateActivityInput) (*markdown.Activity, error) {
+	return s.createActivity(input, "")
+}
+
+func (s *VaultService) createActivity(input CreateActivityInput, by string) (*markdown.Activity, error) {
 	s.mu.Lock()
 	v := s.vault
 	s.mu.Unlock()
@@ -693,6 +687,7 @@ func (s *VaultService) CreateActivity(input CreateActivityInput) (*markdown.Acti
 	act := markdown.Activity{
 		ID:       markdown.GenerateActivityID(),
 		At:       at,
+		By:       by,
 		Tags:     cleanTags(input.Tags),
 		NoteRefs: cleanNoteRefs(input.NoteRefs),
 		Body:     input.Body,
@@ -958,6 +953,10 @@ func (s *VaultService) GetNote(id string) (*markdown.Note, error) {
 
 // CreateNote creates a new Note, writes it safely as Markdown, and updates the index.
 func (s *VaultService) CreateNote(input CreateNoteInput) (*markdown.Note, error) {
+	return s.createNote(input, "")
+}
+
+func (s *VaultService) createNote(input CreateNoteInput, by string) (*markdown.Note, error) {
 	s.mu.Lock()
 	v := s.vault
 	s.mu.Unlock()
@@ -977,6 +976,7 @@ func (s *VaultService) CreateNote(input CreateNoteInput) (*markdown.Note, error)
 		Title:     title,
 		Tags:      cleanTags(input.Tags),
 		CreatedAt: now,
+		CreatedBy: by,
 		UpdatedAt: now,
 		Body:      input.Body,
 	}
@@ -1167,7 +1167,7 @@ func dayPlanBaseline(v *markdown.Vault, plan *markdown.DayPlan) *markdown.FileBa
 	return nil
 }
 
-// GetDayTimeline returns daily timeline items (activities and task completion events) for a given date YYYY-MM-DD in local timezone.
+// GetDayTimeline returns activities and task lifecycle events for a YYYY-MM-DD date in local timezone.
 func (s *VaultService) GetDayTimeline(date string) ([]TimelineItem, error) {
 	s.mu.Lock()
 	v := s.vault
@@ -1188,21 +1188,30 @@ func (s *VaultService) GetDayTimeline(date string) ([]TimelineItem, error) {
 		taskMap[t.ID] = t
 	}
 
-	// 1. Task status events (completed / reopened) whose local date matches
+	// Keys break timestamp ties in the same order as frontend/src/taskTimeline.ts.
+	// 1. Task lifecycle events, independent of daily plan membership.
 	for _, t := range tasks {
-		hasCompletionForDate := false
-		for _, ev := range t.StatusEvents {
+		if t.CreatedAt.In(time.Local).Format("2006-01-02") == trimmedDate {
+			items = append(items, TimelineItem{
+				Key: "0-created-" + t.ID, Kind: "creation", Time: t.CreatedAt,
+				By: t.CreatedBy, TaskID: t.ID, TaskTitle: t.Title,
+			})
+		}
+		hasCompletion := false
+		for idx, ev := range t.StatusEvents {
 			kind := "completion"
 			if ev.Action == markdown.StatusEventActionReopened {
 				kind = "reopen"
 			} else if ev.Action != markdown.StatusEventActionCompleted {
 				continue
 			}
+			if kind == "completion" && t.CompletedAt != nil && ev.At.Equal(*t.CompletedAt) {
+				hasCompletion = true
+			}
 			if ev.At.In(time.Local).Format("2006-01-02") == trimmedDate {
-				if kind == "completion" {
-					hasCompletionForDate = true
-				}
 				items = append(items, TimelineItem{
+					Key:       fmt.Sprintf("1-status-%s-%09d", t.ID, idx),
+					By:        ev.By,
 					Kind:      kind,
 					Time:      ev.At,
 					TaskID:    t.ID,
@@ -1211,9 +1220,10 @@ func (s *VaultService) GetDayTimeline(date string) ([]TimelineItem, error) {
 			}
 		}
 		// If task is completed and completed_at falls on this date, but not captured in status_events, include it
-		if !hasCompletionForDate && t.Status == markdown.TaskStatusDone && t.CompletedAt != nil {
+		if !hasCompletion && t.Status == markdown.TaskStatusDone && t.CompletedAt != nil {
 			if t.CompletedAt.In(time.Local).Format("2006-01-02") == trimmedDate {
 				items = append(items, TimelineItem{
+					Key:       fmt.Sprintf("1-status-%s-%09d", t.ID, len(t.StatusEvents)),
 					Kind:      "completion",
 					Time:      *t.CompletedAt,
 					TaskID:    t.ID,
@@ -1230,6 +1240,7 @@ func (s *VaultService) GetDayTimeline(date string) ([]TimelineItem, error) {
 			if localDate == trimmedDate {
 				actClone := act.Clone()
 				items = append(items, TimelineItem{
+					Key:       "2-activity-" + act.ID,
 					Kind:      "activity",
 					Time:      act.At,
 					Activity:  &actClone,
@@ -1245,6 +1256,7 @@ func (s *VaultService) GetDayTimeline(date string) ([]TimelineItem, error) {
 		for _, act := range plan.Activities {
 			actClone := act.Clone()
 			items = append(items, TimelineItem{
+				Key:      "2-activity-" + act.ID,
 				Kind:     "activity",
 				Time:     act.At,
 				Activity: &actClone,
@@ -1255,23 +1267,7 @@ func (s *VaultService) GetDayTimeline(date string) ([]TimelineItem, error) {
 	// Sort descending by Time (newest -> oldest)
 	sort.Slice(items, func(i, j int) bool {
 		if items[i].Time.Equal(items[j].Time) {
-			if items[i].Kind != items[j].Kind {
-				return items[i].Kind < items[j].Kind
-			}
-			idI := ""
-			if items[i].Activity != nil {
-				idI = items[i].Activity.ID
-			} else {
-				idI = items[i].TaskID
-			}
-
-			idJ := ""
-			if items[j].Activity != nil {
-				idJ = items[j].Activity.ID
-			} else {
-				idJ = items[j].TaskID
-			}
-			return idI > idJ
+			return items[i].Key > items[j].Key
 		}
 		return items[i].Time.After(items[j].Time)
 	})

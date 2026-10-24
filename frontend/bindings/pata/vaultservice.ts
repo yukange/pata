@@ -138,7 +138,7 @@ export function GetDayPlan(date: string): $CancellablePromise<markdown$0.DayPlan
 }
 
 /**
- * GetDayTimeline returns daily timeline items (activities and task completion events) for a given date YYYY-MM-DD in local timezone.
+ * GetDayTimeline returns activities and task lifecycle events for a YYYY-MM-DD date in local timezone.
  */
 export function GetDayTimeline(date: string): $CancellablePromise<$models.TimelineItem[] | null> {
     return $Call.ByID(2161441604, date);

@@ -3,16 +3,15 @@
  * 不依赖 React 或 DOM，可在 Node 测试中直接运行。
  */
 
-/**
- * 格式化状态事件的动词短语。
- * - 详情面板（无任务上下文）：展示精简动词“已完成”或“重新打开”；
- * - 今日视图（有任务上下文）：展示及物动词“完成了 ”或“重新打开 ”，后续衔接任务标题链接。
- */
-export function formatStatusAction(action: string, hasTaskContext: boolean): string {
-  const isCompleted = action === 'completed' || action === 'completion';
-  return hasTaskContext
-    ? (isCompleted ? '完成了 ' : '重新打开 ')
-    : (isCompleted ? '已完成' : '重新打开');
+/** 缺省来源为我，来源描述不依赖任务上下文。 */
+export function formatSource(by?: string): string {
+  return by === 'agent' ? 'Agent' : '我';
+}
+
+export function formatStatusAction(action: string, by?: string): string {
+  const verb = action === 'creation' ? '创建'
+    : action === 'completed' || action === 'completion' ? '完成' : '重新打开';
+  return `由${by === 'agent' ? ' Agent ' : '我'}${verb}`;
 }
 
 /**

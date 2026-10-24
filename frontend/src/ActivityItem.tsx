@@ -1,11 +1,11 @@
 import {
-  CheckCircle2,
-  Undo2,
+  UserRound,
+  Bot,
   Pencil,
   AlertCircle,
 } from 'lucide-react';
 import { NoteRefText, NoteRefTextarea, NoteRefMap, NoteRef } from './noteRefs';
-import { formatStatusAction } from './activityUtils';
+import { formatSource, formatStatusAction } from './activityUtils';
 
 export { formatStatusAction };
 
@@ -22,12 +22,14 @@ export interface ActivityItemProps {
   taskContext?: ActivityTaskContext;
   activity?: {
     id: string;
+    by?: string;
     body: string;
     tags?: string[] | null;
     note_refs?: NoteRefMap | null;
   };
   statusEvent?: {
-    action: string; // 'completed' | 'reopened' | 'completion' | 'reopen'
+    action: string; // 'creation' | 'completed' | 'reopened' | 'completion' | 'reopen'
+    by?: string;
   };
   notes: NoteRef[];
   onOpenNote?: (noteId: string) => void;
@@ -51,7 +53,7 @@ export interface ActivityItemProps {
  * 1. 时间位于正文上方；
  * 2. Today 在时间右侧展示同字号任务标题链接；Task 详情不重复任务标题；
  * 3. 悬停出现编辑入口，原地编辑，保存/取消就地呈现；
- * 4. 系统事件（完成/重新打开）保持单行只读。
+ * 4. 系统生命周期事件保持单行只读。
  */
 export function ActivityItem({
   timeStr,
@@ -73,10 +75,10 @@ export function ActivityItem({
   onCancelEdit,
   className = '',
 }: ActivityItemProps) {
-  // 1. 系统状态事件（完成 / 重新打开）
+  const SourceIcon = (statusEvent?.by ?? activity?.by) === 'agent' ? Bot : UserRound;
+
+  // 1. 系统生命周期事件
   if (statusEvent) {
-    const isCompleted =
-      statusEvent.action === 'completed' || statusEvent.action === 'completion';
     return (
       <div
         className={`flex items-center gap-2 py-1.5 text-xs text-stone-600 dark:text-stone-300 ${className}`.trim()}
@@ -87,13 +89,9 @@ export function ActivityItem({
         >
           {timeStr}
         </span>
-        {isCompleted ? (
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-        ) : (
-          <Undo2 className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-        )}
+        <SourceIcon aria-hidden="true" className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 shrink-0" />
         <span className="min-w-0">
-          <span>{formatStatusAction(statusEvent.action, Boolean(taskContext))}</span>
+          <span>{formatStatusAction(statusEvent.action, statusEvent.by)}</span>
           {taskContext && (
             taskContext.taskExists !== false ? (
               <button
@@ -104,7 +102,7 @@ export function ActivityItem({
                   e.stopPropagation();
                   taskContext.onOpenTask(taskContext.taskId);
                 }}
-                className="text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer align-baseline break-words text-left"
+                className="ml-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline cursor-pointer align-baseline break-words text-left"
                 title="在右侧打开任务详情"
               >
                 {taskContext.taskTitle || taskContext.taskId}
@@ -134,6 +132,10 @@ export function ActivityItem({
             title={fullTimeStr}
           >
             {timeStr}
+          </span>
+          <span className="inline-flex items-center gap-1 text-[11px] text-stone-400 dark:text-stone-500 shrink-0">
+            <SourceIcon aria-hidden="true" className="w-3 h-3" />
+            {formatSource(activity.by)}
           </span>
 
           {taskContext && (

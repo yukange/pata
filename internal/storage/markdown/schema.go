@@ -44,6 +44,9 @@ func ValidateEntity(filePath string, entity Entity) error {
 }
 
 func validateTask(path string, t *Task) error {
+	if err := validateSource(path, "created_by", t.CreatedBy); err != nil {
+		return err
+	}
 	if strings.TrimSpace(t.ID) == "" {
 		return &ValidationError{Path: path, Field: "id", Reason: "is required"}
 	}
@@ -98,6 +101,9 @@ func validateTask(path string, t *Task) error {
 	}
 
 	for i, ev := range t.StatusEvents {
+		if err := validateSource(path, fmt.Sprintf("status_events[%d].by", i), ev.By); err != nil {
+			return err
+		}
 		switch ev.Action {
 		case StatusEventActionCompleted, StatusEventActionReopened:
 			// valid
@@ -125,6 +131,9 @@ func validateTask(path string, t *Task) error {
 }
 
 func validateNote(path string, n *Note) error {
+	if err := validateSource(path, "created_by", n.CreatedBy); err != nil {
+		return err
+	}
 	if strings.TrimSpace(n.ID) == "" {
 		return &ValidationError{Path: path, Field: "id", Reason: "is required"}
 	}
@@ -205,6 +214,9 @@ func validateDayPlan(path string, p *DayPlan) error {
 func validateActivities(path string, activities []Activity) error {
 	seen := make(map[string]bool, len(activities))
 	for i, act := range activities {
+		if err := validateSource(path, fmt.Sprintf("activities[%d].by", i), act.By); err != nil {
+			return err
+		}
 		id := strings.TrimSpace(act.ID)
 		if id == "" {
 			return &ValidationError{Path: path, Field: fmt.Sprintf("activities[%d].id", i), Reason: "is required"}
@@ -224,6 +236,13 @@ func validateActivities(path string, activities []Activity) error {
 				return &ValidationError{Path: path, Field: fmt.Sprintf("activities[%d].tags[%d]", i, j), Reason: fmt.Sprintf("must not contain '#'; got '%s'", tag)}
 			}
 		}
+	}
+	return nil
+}
+
+func validateSource(path, field, source string) error {
+	if source != "" && source != SourceAgent {
+		return &ValidationError{Path: path, Field: field, Reason: "must be 'agent' or omitted"}
 	}
 	return nil
 }

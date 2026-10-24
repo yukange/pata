@@ -1,6 +1,7 @@
 export interface TaskActivity {
   id: string;
   at: string;
+  by?: string;
   tags?: string[] | null;
   note_refs?: { [_ in string]?: string } | null;
   body: string;
@@ -10,12 +11,15 @@ export interface TaskActivity {
 export interface TaskStatusEvent {
   action: string;
   at: string;
+  by?: string;
 }
 
 export interface TaskLike {
   id: string;
   title?: string;
   status: string;
+  created_at?: string;
+  created_by?: string;
   completed_at?: string | null;
   status_events?: TaskStatusEvent[] | null;
 }
@@ -32,6 +36,7 @@ export interface StatusEventTimelineItem {
   key: string;
   at: string;
   action: string;
+  by?: string;
 }
 
 export type TaskTimelineItem = ActivityTimelineItem | StatusEventTimelineItem;
@@ -80,7 +85,7 @@ export function formatActivityTimestamp(isoString: string, now: Date = new Date(
 }
 
 /**
- * 混排任务的手动 Activity 与状态事件（完成/重新打开）。
+ * 混排任务的创建、完成/重开事件与普通 Activity。
  * 按时间正向排序（由早到晚，最早的在最前，最新的在末尾），同时间戳保持稳定排序。
  */
 export function buildTaskTimelineItems(
@@ -89,11 +94,18 @@ export function buildTaskTimelineItems(
 ): TaskTimelineItem[] {
   const items: TaskTimelineItem[] = [];
 
+  if (task?.created_at) {
+    items.push({
+      kind: 'status_event', key: `0-created-${task.id}`,
+      at: task.created_at, action: 'creation', by: task.created_by,
+    });
+  }
+
   for (const act of activities) {
     if (act && act.at) {
       items.push({
         kind: 'activity',
-        key: `activity-${act.id}`,
+        key: `2-activity-${act.id}`,
         at: act.at,
         activity: act,
       });
@@ -103,15 +115,16 @@ export function buildTaskTimelineItems(
   const rawEvents: TaskStatusEvent[] = task?.status_events ?? [];
   const statusEvents: TaskStatusEvent[] = [...rawEvents];
 
-  // 兼容老数据或外部编辑仅有 completed_at 而无 status_events 的情况
+  // completed_at 没有对应历史事件时只读兜底，不补写历史。
+  const completedAt = task?.completed_at;
   if (
     task?.status === 'done' &&
-    task.completed_at &&
-    !statusEvents.some((e) => e.action === 'completed')
+    completedAt &&
+    !statusEvents.some((e) => e.action === 'completed' && new Date(e.at).getTime() === new Date(completedAt).getTime())
   ) {
     statusEvents.push({
       action: 'completed',
-      at: task.completed_at,
+      at: completedAt,
     });
   }
 
@@ -119,9 +132,10 @@ export function buildTaskTimelineItems(
     if (ev?.at) {
       items.push({
         kind: 'status_event',
-        key: `status-${ev.action}-${ev.at}-${idx}`,
+        key: `1-status-${task?.id}-${String(idx).padStart(9, '0')}`,
         at: ev.at,
         action: ev.action,
+        by: ev.by,
       });
     }
   });
@@ -136,9 +150,9 @@ export function buildTaskTimelineItems(
     }
     if (validA && !validB) return -1;
     if (!validA && validB) return 1;
-    if (a.at !== b.at) {
+    if (!validA && !validB && a.at !== b.at) {
       return a.at.localeCompare(b.at);
     }
-    return a.key.localeCompare(b.key);
+    return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
   });
 }

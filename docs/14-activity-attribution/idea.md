@@ -1,6 +1,6 @@
 # 阶段 14 · Agent 操作来源与任务生命周期记录 — Idea
 
-> 状态：**设计已确认，尚未实施**（2026-10-23）。阶段 01～13 已完成；014 是新的独立交付阶段。这里只记录产品裁决，不代表当前版本已支持来源标记或 MCP 修改任务状态。
+> 状态：**设计已确认，代码与自动化验收已完成，macOS 界面人工验收待完成**（2026-10-23）。这里只记录产品裁决，实施现状与验证记录见 [proposal.md](proposal.md)。
 
 ## 为什么做
 
@@ -39,4 +39,4 @@ Pata 已提供本机 MCP，Agent 可以创建 Task、Note 并追加 Activity。�
 - MCP 增加受控的任务完成/重新打开操作，使 Agent 不仅能创建任务，也能真正改变任务状态并留下来源。
 - 不改变 Markdown 本地优先、单 Core 写入与不复制 Activity 的基础约束。
 
-实施细节、存储字段草案和验收标准见 [proposal.md](proposal.md)。正式落地时须同步更新 [权威 Schema](../02-foundation/schema.md)，避免维护两份生效中的数据规范。
+实施细节与验收标准见 [proposal.md](proposal.md)，正式存储字段以 [权威 Schema](../02-foundation/schema.md) 为准。

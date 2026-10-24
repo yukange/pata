@@ -28,6 +28,11 @@ type mcpReadInput struct {
 	ID   string `json:"id" jsonschema:"Entity ID, or YYYY-MM-DD for a day_plan"`
 }
 
+type mcpSetTaskStatusInput struct {
+	ID     string              `json:"id" jsonschema:"Task ID"`
+	Status markdown.TaskStatus `json:"status" jsonschema:"Target status: todo or done"`
+}
+
 type mcpListItem struct {
 	ID    string   `json:"id"`
 	Title string   `json:"title"`
@@ -62,6 +67,9 @@ func addPataTool[In any](server *mcp.Server, service *VaultService, rt *mcpRunti
 				event := VaultChangeEvent{Op: "create"}
 				if entity, ok := value.(markdown.Entity); ok {
 					event.EntityID, event.Type = entity.GetID(), string(entity.GetType())
+				}
+				if _, ok := any(input).(mcpSetTaskStatusInput); ok {
+					event.Op = "update"
 				}
 				if activity, ok := any(input).(CreateActivityInput); ok {
 					event.Op = "update"
@@ -140,8 +148,14 @@ func newPataMCPServer(service *VaultService, rt *mcpRuntime) *mcp.Server {
 			return nil, fmt.Errorf("kind 必须为 task、note 或 day_plan")
 		}
 	})
-	addPataTool(server, service, rt, "pata_create_note", "Create a Markdown note with a title, body, and optional tags.", false, func(in CreateNoteInput) (any, error) { return service.CreateNote(in) })
-	addPataTool(server, service, rt, "pata_create_task", "Create a task. status is todo or done; omit it for todo. due is an optional YYYY-MM-DD date, independent of the daily plan.", false, func(in CreateTaskInput) (any, error) { return service.CreateTask(in) })
-	addPataTool(server, service, rt, "pata_append_activity", "Append a record to a task using task_id, or to a day using date (YYYY-MM-DD, defaults to today). Existing records are preserved.", false, func(in CreateActivityInput) (any, error) { return service.CreateActivity(in) })
+	addPataTool(server, service, rt, "pata_create_note", "Create a Markdown note with a title, body, and optional tags.", false, func(in CreateNoteInput) (any, error) { return service.createNote(in, markdown.SourceAgent) })
+	addPataTool(server, service, rt, "pata_create_task", "Create a task. status is todo or done; omit it for todo. due is an optional YYYY-MM-DD date, independent of the daily plan.", false, func(in CreateTaskInput) (any, error) { return service.createTask(in, markdown.SourceAgent) })
+	addPataTool(server, service, rt, "pata_append_activity", "Append a record to a task using task_id, or to a day using date (YYYY-MM-DD, defaults to today). Existing records are preserved.", false, func(in CreateActivityInput) (any, error) { return service.createActivity(in, markdown.SourceAgent) })
+	addPataTool(server, service, rt, "pata_set_task_status", "Complete or reopen an existing task. Repeating the current status leaves its history unchanged and returns the current task.", false, func(in mcpSetTaskStatusInput) (any, error) {
+		if in.Status != markdown.TaskStatusTodo && in.Status != markdown.TaskStatusDone {
+			return nil, fmt.Errorf("无效的任务状态: %s (必须为 todo 或 done)", in.Status)
+		}
+		return service.setTaskStatus(in.ID, in.Status, markdown.SourceAgent)
+	})
 	return server
 }

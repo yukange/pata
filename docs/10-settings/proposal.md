@@ -108,6 +108,9 @@
 | `pata_create_note` | 创建笔记，设置标题、正文和标签 |
 | `pata_create_task` | 创建任务，设置标题、状态、到期日和标签 |
 | `pata_append_activity` | 向任务或指定日期追加记录 |
+| `pata_set_task_status` | 输入 `{id, status: "done" 或 "todo"}`，完成或重新打开既有任务，返回当前 Task |
+
+MCP 创建 Task / Note、追加 Activity 和变更 Task 状态均由 Core 标记 Agent 来源，调用参数不能指定 `created_by` / `by`。来源格式以 [Schema](../02-foundation/schema.md#操作来源阶段-14) 为准。`pata_set_task_status` 重复设置相同状态不写盘、不新增事件；非法状态、缺失任务及未打开或已切换的资料库均返回错误，成功后通知 GUI 刷新。
 
 列表和搜索默认每页 50 条，最多 200 条；`next_offset` 为 `-1` 表示结束。创建与追加不支持幂等重试，连接中断后应先查询结果。
 

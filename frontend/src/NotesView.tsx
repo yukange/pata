@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { Events } from '@wailsio/runtime';
 import {
   FileText,
+  UserRound,
+  Bot,
   Plus,
   AlertCircle,
   RefreshCw,
@@ -25,6 +27,7 @@ import { Button } from './components/ui/button';
 import { ConfirmDialog } from './components/ui/confirm-dialog';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from './components/ui/dialog';
 import { AudioPlayer } from './AudioPlayer';
+import { formatStatusAction } from './activityUtils';
 import { TranscriptViewer, TranscriptViewerRef } from './TranscriptViewer';
 import { TagChipEditor } from './TagChipEditor';
 import { validateTag, hasTag, dedupeTags, formatDraftText } from './tagUtils';
@@ -1356,6 +1359,15 @@ function NoteEditor({
         {titleError && (
           <div className="text-[11px] text-rose-600 dark:text-rose-400 font-medium">
             {titleError}
+          </div>
+        )}
+
+        {initialNote && (
+          <div className="flex items-center gap-1 text-[11px] text-stone-400 dark:text-stone-500">
+            {initialNote.created_by === 'agent'
+              ? <Bot aria-hidden="true" className="w-3 h-3" />
+              : <UserRound aria-hidden="true" className="w-3 h-3" />}
+            {formatStatusAction('creation', initialNote.created_by)}
           </div>
         )}
 

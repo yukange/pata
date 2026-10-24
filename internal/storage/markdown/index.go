@@ -51,10 +51,10 @@ type MemoryIndex struct {
 	vaultRoot    string
 	tasks        map[string]*Task
 	notes        map[string]*Note
-	dayPlans     map[string]*DayPlan // key: date YYYY-MM-DD
-	files        map[string]FileResource // key: relative slash path, e.g. "files/doc.pdf"
-	fileToID     map[string]string   // absPath -> entity ID
-	idToFile     map[string]string   // entity ID -> absPath
+	dayPlans     map[string]*DayPlan         // key: date YYYY-MM-DD
+	files        map[string]FileResource     // key: relative slash path, e.g. "files/doc.pdf"
+	fileToID     map[string]string           // absPath -> entity ID
+	idToFile     map[string]string           // entity ID -> absPath
 	activityLocs map[string]ActivityLocation // activityID -> location
 	baselines    map[string]FileBaseline
 	danglingRefs []DanglingRef
@@ -665,12 +665,20 @@ func (idx *MemoryIndex) SearchAll(query string) []SearchResultItem {
 	var noteResults []SearchResultItem
 	var actResults []SearchResultItem
 
-	// 1. Tasks: match title, description, body, or tags
+	// 1. Tasks: search visible content, excluding embedded activity metadata.
 	for id, t := range idx.tasks {
-		if matchCaseInsensitive(t.Title, lowerQ) || matchCaseInsensitive(t.Description, lowerQ) || matchCaseInsensitive(t.Body, lowerQ) || matchTagsCaseInsensitive(t.Tags, lowerQ) {
+		var bodyParts []string
+		if !strings.Contains(t.Body, activityStartTag) {
+			bodyParts = append(bodyParts, t.Body)
+		}
+		for _, act := range t.Activities {
+			bodyParts = append(bodyParts, act.Body, strings.Join(act.Tags, " "))
+		}
+		body := strings.Join(bodyParts, "\n")
+		if matchCaseInsensitive(t.Title, lowerQ) || matchCaseInsensitive(t.Description, lowerQ) || matchCaseInsensitive(body, lowerQ) || matchTagsCaseInsensitive(t.Tags, lowerQ) {
 			snippet := extractSnippet(t.Description, lowerQ)
 			if snippet == "" {
-				snippet = extractSnippet(t.Body, lowerQ)
+				snippet = extractSnippet(body, lowerQ)
 			}
 			taskResults = append(taskResults, SearchResultItem{
 				Type:    EntityTypeTask,

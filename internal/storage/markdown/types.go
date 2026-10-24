@@ -26,10 +26,13 @@ type FileResource struct {
 	ModTime time.Time `json:"mod_time"` // Last modification time
 }
 
+const SourceAgent = "agent"
+
 // Activity represents an embedded activity inside a Task or DayPlan.
 type Activity struct {
 	ID       string               `yaml:"id" json:"id"`
 	At       time.Time            `yaml:"at" json:"at"`
+	By       string               `yaml:"by,omitempty" json:"by,omitempty"`
 	Tags     []string             `yaml:"tags,omitempty" json:"tags,omitempty"`
 	NoteRefs map[string]string    `yaml:"note_refs,omitempty" json:"note_refs,omitempty"`
 	Body     string               `yaml:"-" json:"body"`
@@ -73,6 +76,7 @@ const (
 type StatusEvent struct {
 	Action StatusEventAction `yaml:"action" json:"action"`
 	At     time.Time         `yaml:"at" json:"at"`
+	By     string            `yaml:"by,omitempty" json:"by,omitempty"`
 }
 
 // Entity is the common interface implemented by all Pata Markdown entities.
@@ -98,6 +102,7 @@ type Task struct {
 	NoteIDs      []string             `yaml:"note_ids,omitempty" json:"note_ids,omitempty"`
 	NoteRefs     map[string]string    `yaml:"note_refs,omitempty" json:"note_refs,omitempty"` // 描述 [[名称]] -> Note ID
 	CreatedAt    time.Time            `yaml:"created_at" json:"created_at"`
+	CreatedBy    string               `yaml:"created_by,omitempty" json:"created_by,omitempty"`
 	UpdatedAt    time.Time            `yaml:"updated_at" json:"updated_at"`
 	StatusEvents []StatusEvent        `yaml:"status_events,omitempty" json:"status_events,omitempty"`
 	Extra        map[string]yaml.Node `yaml:",inline" json:"-"`
@@ -154,6 +159,7 @@ type Note struct {
 	AudioFile       string               `yaml:"audio_file,omitempty" json:"audio_file,omitempty"`
 	AudioTranscript bool                 `yaml:"audio_transcript,omitempty" json:"audio_transcript,omitempty"`
 	CreatedAt       time.Time            `yaml:"created_at" json:"created_at"`
+	CreatedBy       string               `yaml:"created_by,omitempty" json:"created_by,omitempty"`
 	UpdatedAt       time.Time            `yaml:"updated_at" json:"updated_at"`
 	Extra           map[string]yaml.Node `yaml:",inline" json:"-"`
 	Body            string               `yaml:"-" json:"body"`

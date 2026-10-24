@@ -52,6 +52,7 @@
 | D46 | UI 交互强调色优先跟随 macOS 系统设置，Pata 品牌绿主要用于品牌识别；成功/警告/错误使用独立语义色 | 在 Wails/WKWebView 实机验证 Accent 来源与更新；无法可靠读取时明确降级，不把固定绿/蓝冒充系统色，不为此增加新用户配置项。详见 [阶段 12](../12-frontend-foundation/proposal.md) |
 
 | D47 | 通过运行中的 Pata 提供本机 MCP 服务 | 功能与使用方式见 [阶段 10](../10-settings/proposal.md#mcp) |
+| D48 | 来源仅区分 GUI 的「我」与 MCP 的「Agent」，缺省即我；仅追踪实体/记录创建及每次任务状态变化 | 创建事件由 Task 元数据派生；来源在 Activity 时间线及 Note 编辑页展示，列表不加徽标。来源由 Core 受信任入口确定，不认证具体调用方；协议见 [Schema](../02-foundation/schema.md#操作来源阶段-14)，实施与验收见 [阶段 14](../14-activity-attribution/proposal.md) |
 
 ## 不轻易改变的设计约束
 

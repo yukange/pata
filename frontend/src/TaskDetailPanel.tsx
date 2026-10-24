@@ -168,6 +168,9 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
 
   const titleTextareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const externalModifiedRef = useRef(false);
+  const externalChangeVersionRef = useRef(0);
+  const hasDraftRef = useRef(false);
 
   // Popover refs for outside click detection
   const menuRef = useRef<HTMLDivElement>(null);
@@ -210,6 +213,12 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
   }, [detailTitle]);
 
   const applyTask = useCallback((t: Task) => {
+    latestTaskRef.current = t;
+    latestTitleRef.current = t.title;
+    latestStatusRef.current = t.status;
+    latestDueRef.current = t.due ?? '';
+    latestTagsRef.current = t.tags ?? [];
+    latestBodyRef.current = t.description ?? t.body ?? '';
     setTask(t);
     setDetailTitle(t.title);
     setDetailStatus(t.status);
@@ -231,14 +240,21 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
     }
   }, [taskId]);
 
-  const reload = useCallback(async () => {
-    setDetailError(null);
-    setConflictError(null);
-    setExternalModified(false);
+  const reload = useCallback(async (preserveDraft = false) => {
+    const version = externalChangeVersionRef.current;
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
     try {
       const t = await VaultService.GetTask(taskId);
       if (!t) throw new Error('任务不存在');
+      if (version !== externalChangeVersionRef.current || (preserveDraft && hasDraftRef.current)) return;
       applyTask(t);
+      externalModifiedRef.current = false;
+      setDetailError(null);
+      setConflictError(null);
+      setExternalModified(false);
       setLoadError(null);
       await loadActivities();
     } catch (err: any) {
@@ -282,13 +298,22 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
   useEffect(() => {
     const unsubscribe = Events.On('vault:changed', (ev) => {
       const data = ev.data as { entity_id?: string } | undefined;
-      if (data?.entity_id === taskId) setExternalModified(true);
+      if (data?.entity_id === taskId) {
+        externalChangeVersionRef.current += 1;
+        externalModifiedRef.current = true;
+        setExternalModified(true);
+        if (debounceTimerRef.current) {
+          clearTimeout(debounceTimerRef.current);
+          debounceTimerRef.current = null;
+        }
+        if (!hasDraftRef.current) void reload(true);
+      }
       void loadActivities();
     });
     return () => {
       unsubscribe();
     };
-  }, [taskId, loadActivities]);
+  }, [taskId, loadActivities, reload]);
 
   // Clear debounce timer on unmount
   useEffect(() => {
@@ -307,7 +332,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
       refs?: NoteRefMap;
     }): Promise<boolean> => {
       const currentTask = latestTaskRef.current;
-      if (!currentTask) return false;
+      if (!currentTask || externalModifiedRef.current) return false;
 
       const titleToSave = (patch?.title !== undefined ? patch.title : latestTitleRef.current).trim();
       if (!titleToSave) {
@@ -319,6 +344,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
       const bodyToSave = patch?.body !== undefined ? patch.body : latestBodyRef.current;
       const refsToSave = patch?.refs !== undefined ? patch.refs : latestRefsRef.current;
 
+      hasDraftRef.current = true;
       setSaving(true);
       setDetailError(null);
       setConflictError(null);
@@ -337,6 +363,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
         };
 
         const updated = await VaultService.UpdateTask(input);
+        if (externalModifiedRef.current) return false;
         if (updated) {
           applyTask(updated);
           setExternalModified(false);
@@ -345,6 +372,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
         return true;
       } catch (err: any) {
         if (isConflictErr(err)) {
+          externalModifiedRef.current = true;
           setConflictError(err?.message || '文件已被外部修改（写入冲突）');
           setExternalModified(true);
         } else {
@@ -361,7 +389,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
   const formDirty = useMemo(() => {
     if (!task) return false;
     const currentTitle = detailTitle.trim();
-    if (currentTitle && currentTitle !== task.title) return true;
+    if (currentTitle !== task.title) return true;
     if (detailStatus !== task.status) return true;
     if ((detailDue || '') !== (task.due ?? '')) return true;
     const curTags = dedupeTags(detailTags).sort().join(',');
@@ -372,6 +400,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
     if (!sameRefs(pruneRefs(detailBody, detailRefs), pruneRefs(taskDesc, task.note_refs ?? {}))) return true;
     return false;
   }, [task, detailTitle, detailStatus, detailDue, detailTags, detailBody, detailRefs]);
+  hasDraftRef.current = formDirty || editDirty || Boolean(newActivityBody.trim()) || saving;
 
   const handleAddActivity = async (e?: React.FormEvent): Promise<boolean> => {
     if (e) e.preventDefault();
@@ -542,9 +571,11 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
   };
 
   const handleBodyChange = (val: string) => {
+    hasDraftRef.current = true;
     setDetailBody(val);
 
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    if (externalModifiedRef.current) return;
     debounceTimerRef.current = setTimeout(() => {
       const taskDesc = latestTaskRef.current ? (latestTaskRef.current.description ?? latestTaskRef.current.body ?? '') : '';
       if (val !== taskDesc) {
@@ -719,12 +750,12 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
               <span className="font-medium">
                 {conflictError
                   ? '文件已被外部修改（保存冲突）'
-                  : '文件已被外部修改'}
+                  : '文件已被外部修改，自动保存已暂停；草稿已保留，重新加载将替换任务内容'}
               </span>
             </div>
             <button
               type="button"
-              onClick={reload}
+              onClick={() => void reload()}
               className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-medium transition shrink-0"
             >
               <RefreshCw className="w-3 h-3" />
@@ -750,6 +781,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
             ref={titleTextareaRef}
             value={detailTitle}
             onChange={(e) => {
+              hasDraftRef.current = true;
               setDetailTitle(e.target.value);
               adjustTextareaHeight(e.target, 28);
             }}
@@ -965,7 +997,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                       key={item.key}
                       timeStr={formatActivityTimestamp(item.at)}
                       fullTimeStr={formatFullLocalTimestamp(item.at)}
-                      statusEvent={{ action: item.action }}
+                      statusEvent={{ action: item.action, by: item.by }}
                       notes={noteRefs}
                       onOpenNote={(id) => onOpenNote?.(id, taskId)}
                     />
@@ -981,6 +1013,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                     fullTimeStr={formatFullLocalTimestamp(act.at)}
                     activity={{
                       id: act.id,
+                      by: act.by,
                       body: act.body,
                       tags: act.tags,
                       note_refs: act.note_refs,

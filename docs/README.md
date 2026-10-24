@@ -2,7 +2,7 @@
 
 这里保存 Pata 的设计决策、实施过程和验收依据；面向日常使用的功能介绍请先看 [中文项目介绍](../README.zh-CN.md)（[English](../README.md)）。
 
-**阶段 01～13 已完成代码与 macOS 实机验收；阶段 14 已规划，尚未实施。** 下表按交付顺序排列，而非当前功能模块。早期文档中的 Memo、旧布局或待实施表述，是当时的设计记录；**当前数据结构以 [Schema](02-foundation/schema.md) 和已实现的后续阶段为准**。
+**阶段 01～13 已完成代码与 macOS 实机验收；阶段 14 代码与自动化验收已完成，macOS 界面人工验收待完成。** 下表按交付顺序排列，而非当前功能模块。早期文档中的 Memo、旧布局或待实施表述，是当时的设计记录；**当前数据结构以 [Schema](02-foundation/schema.md) 和已实现的后续阶段为准**。
 
 ## 阶段索引
 
@@ -21,7 +21,7 @@
 | 11 | [`11-audio-transcription`](11-audio-transcription/) · 本地音频转写为 Note | MP3 导入后创建只读逐字稿 Note、句级毫秒时间戳、音频双向定位、确认后重新转写 | [idea](11-audio-transcription/idea.md) · [proposal](11-audio-transcription/proposal.md) |
 | 12 | [`12-frontend-foundation`](12-frontend-foundation/) · 前端基础设施与设计系统整理 | 保留 Pata 现有视觉，按需统一 Design Tokens/基础组件/键盘交互与拖拽体验，系统强调色优先（**已验收**） | [idea](12-frontend-foundation/idea.md) · [proposal](12-frontend-foundation/proposal.md) |
 | 13 | [`13-app-shell-activity`](13-app-shell-activity/) · App Shell 与 Activity 体验统一 | 应用级三栏与可调任务详情、Today/Task 统一 Activity 展示/输入/编辑（**已验收**） | [idea](13-app-shell-activity/idea.md) · [proposal](13-app-shell-activity/proposal.md) · [三栏设计](13-app-shell-activity/app-shell-inspector.md) |
-| 14 | [`14-activity-attribution`](14-activity-attribution/) · Agent 操作来源与任务生命周期记录 | Task 创建/完成/重开、普通 Activity、Note 的人/Agent 来源；MCP 任务状态操作（**已规划，未实施**） | [idea](14-activity-attribution/idea.md) · [proposal](14-activity-attribution/proposal.md) |
+| 14 | [`14-activity-attribution`](14-activity-attribution/) · Agent 操作来源与任务生命周期记录 | Task 创建/完成/重开、普通 Activity、Note 的人/Agent 来源；MCP 任务状态操作（**代码与自动化已完成，界面人工验收待完成**） | [idea](14-activity-attribution/idea.md) · [proposal](14-activity-attribution/proposal.md) |
 
 ## 阅读与维护约定
 
