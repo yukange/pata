@@ -6,6 +6,7 @@ import {
   Monitor,
   FolderOpen,
   RefreshCw,
+  MoreHorizontal,
   ExternalLink,
   Key,
   ShieldCheck,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { MCPSettings } from './MCPSettings';
 import { Browser } from '@wailsio/runtime';
+import { Menu } from '@base-ui/react/menu';
 import * as VaultService from '../bindings/pata/vaultservice';
 import { VaultStatus, VaultHealth, ASRConfigStatus } from '../bindings/pata/models';
 
@@ -256,23 +258,9 @@ export function SettingsView({
 
           {/* Current Path */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-medium text-stone-700 dark:text-stone-300">
-                当前 Vault 目录
-              </label>
-              {vaultStatus?.configured && (
-                <span className="flex items-center space-x-1 text-[11px]">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      vaultStatus.open ? 'bg-emerald-500' : 'bg-rose-500'
-                    }`}
-                  />
-                  <span className={vaultStatus.open ? 'text-stone-500 dark:text-stone-400' : 'text-rose-600 dark:text-rose-400 font-medium'}>
-                    {vaultStatus.open ? '已连接' : '无法打开'}
-                  </span>
-                </span>
-              )}
-            </div>
+            <label className="block text-xs font-medium text-stone-700 dark:text-stone-300">
+              当前 Vault 目录
+            </label>
 
             <div className="flex items-center space-x-2">
               <div className="flex-1 px-3 py-2 rounded-lg bg-stone-100 dark:bg-stone-950/60 border border-stone-200 dark:border-stone-800 font-mono text-xs text-stone-700 dark:text-stone-300 break-all select-text">
@@ -344,16 +332,7 @@ export function SettingsView({
               <span>{vaultStatus?.configured ? '更换目录' : '选择目录'}</span>
             </button>
 
-            <button
-              type="button"
-              onClick={onRescanVault}
-              disabled={vaultBusy || !vaultStatus?.open}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50 text-xs font-medium text-stone-800 dark:text-stone-200 transition cursor-pointer"
-              title="从磁盘重新加载所有 Markdown 文件索引"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${vaultBusy ? 'animate-spin' : ''}`} />
-              <span>重新扫描</span>
-            </button>
+
 
             <button
               type="button"
@@ -365,6 +344,30 @@ export function SettingsView({
               <ExternalLink className="w-3.5 h-3.5" />
               <span>在 Finder 中打开</span>
             </button>
+            <Menu.Root>
+              <Menu.Trigger
+                type="button"
+                disabled={vaultBusy || !vaultStatus?.open}
+                aria-label="更多存储操作"
+                title="更多存储操作"
+                className="flex items-center justify-center px-2 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 disabled:opacity-50 text-stone-600 dark:text-stone-300 transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--pata-focus-ring)]"
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Positioner side="bottom" align="start" sideOffset={6} className="z-50">
+                  <Menu.Popup className="min-w-36 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 p-1 shadow-lg focus:outline-none">
+                    <Menu.Item
+                      onClick={onRescanVault}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs text-stone-700 dark:text-stone-300 cursor-pointer outline-none data-[highlighted]:bg-stone-100 dark:data-[highlighted]:bg-stone-800"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      重新扫描
+                    </Menu.Item>
+                  </Menu.Popup>
+                </Menu.Positioner>
+              </Menu.Portal>
+            </Menu.Root>
           </div>
         </section>
 
@@ -377,11 +380,9 @@ export function SettingsView({
         >
           <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">语音转写</h2>
 
-          {/* Fixed provider / model / region, one line */}
-          <p className="text-[11px] font-mono text-stone-400 dark:text-stone-500 truncate">
-            {asrStatus?.provider || '阿里云百炼'} ·{' '}
-            {asrStatus?.model || 'qwen-audio-3.1-asr-flash-filetrans'} ·{' '}
-            {asrStatus?.region || '华北2（北京）'}
+          {/* Provider and region are fixed; keep internal model IDs out of the settings UI. */}
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            {asrStatus?.provider || '阿里云百炼'} · {asrStatus?.region || '华北 2（北京）'}
           </p>
 
           {/* API Key Configuration Block */}
@@ -404,14 +405,13 @@ export function SettingsView({
               <div className="text-xs text-stone-400 py-2">加载 Keychain 配置状态...</div>
             ) : asrStatus?.configured && !isReplacingKey ? (
               /* Configured State */
-              <div className="flex items-center justify-between p-3 rounded-lg border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30">
-                <div className="flex items-center space-x-2">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span className="text-xs font-medium text-emerald-950 dark:text-emerald-200">
-                    已配置 · 存于 macOS Keychain
+              <div className="flex items-center justify-between gap-3 py-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 shrink-0 text-stone-500 dark:text-stone-400" />
+                  <span className="text-xs text-stone-600 dark:text-stone-300">
+                    已配置 · 存储于 macOS Keychain
                   </span>
                 </div>
-
                 <button
                   type="button"
                   onClick={() => {
@@ -419,7 +419,7 @@ export function SettingsView({
                     setApiKeyInput('');
                     setAsrError(null);
                   }}
-                  className="px-3 py-1.5 rounded-lg border border-emerald-300 dark:border-emerald-800/80 bg-white/80 dark:bg-stone-900/80 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/50 text-xs font-medium text-emerald-900 dark:text-emerald-200 transition cursor-pointer"
+                  className="shrink-0 px-3 py-1.5 rounded-lg border border-stone-300 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-xs font-medium text-stone-700 dark:text-stone-300 transition cursor-pointer"
                 >
                   更换 API Key
                 </button>
