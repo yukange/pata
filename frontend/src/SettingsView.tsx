@@ -380,11 +380,6 @@ export function SettingsView({
         >
           <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">语音转写</h2>
 
-          {/* Provider and region are fixed; keep internal model IDs out of the settings UI. */}
-          <p className="text-xs text-stone-500 dark:text-stone-400">
-            {asrStatus?.provider || '阿里云百炼'} · {asrStatus?.region || '华北 2（北京）'}
-          </p>
-
           {/* API Key Configuration Block */}
           <div className="space-y-3 pt-1">
             <div className="flex items-center justify-between">
