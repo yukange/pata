@@ -10,7 +10,7 @@ import {
   X,
   ExternalLink,
 } from 'lucide-react';
-import * as VaultService from '../bindings/pata/vaultservice';
+import * as VaultService from '../bindings/pata/internal/app/vaultservice';
 import { SearchResultItem } from '../bindings/pata/internal/storage/markdown/models';
 
 interface SearchOverlayProps {

@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"testing"
@@ -72,4 +72,42 @@ func TestTodayActivityNoteLinksPersistAndEdit(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("只保留文字", map[string]string{})
+}
+
+func TestTaskActivityBacklinkDoesNotRebindDeletedNote(t *testing.T) {
+	v, err := markdown.NewVault(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &VaultService{vault: v}
+	old, err := s.CreateNote(CreateNoteInput{Title: "同名笔记"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := s.CreateTask(CreateTaskInput{Title: "任务"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.CreateActivity(CreateActivityInput{
+		TaskID: task.ID, Body: "[[同名笔记]]",
+		NoteRefs: map[string]string{"同名笔记": old.ID},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.GetNoteBacklinks(old.ID); err != nil || len(got) != 1 {
+		t.Fatalf("original backlink: %+v, %v", got, err)
+	}
+	if err := s.DeleteNote(old.ID); err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := s.CreateNote(CreateNoteInput{Title: "同名笔记"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RescanVault(); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.GetNoteBacklinks(replacement.ID); err != nil || len(got) != 0 {
+		t.Fatalf("replacement inherited deleted note's backlinks: %+v, %v", got, err)
+	}
 }

@@ -10,13 +10,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 export function GetStatus(): $CancellablePromise<$models.MCPStatus> {
-    return $Call.ByID(669758325);
+    return $Call.ByID(450773684);
 }
 
 export function Start(): $CancellablePromise<$models.MCPStatus> {
-    return $Call.ByID(3937533443);
+    return $Call.ByID(1367157486);
 }
 
 export function Stop(): $CancellablePromise<$models.MCPStatus> {
-    return $Call.ByID(3558220945);
+    return $Call.ByID(4147356470);
 }

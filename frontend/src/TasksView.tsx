@@ -7,9 +7,9 @@ import {
   Calendar,
   FolderOpen,
 } from 'lucide-react';
-import * as VaultService from '../bindings/pata/vaultservice';
+import * as VaultService from '../bindings/pata/internal/app/vaultservice';
 import { Task, TaskStatus } from '../bindings/pata/internal/storage/markdown/models';
-import { VaultStatus, CreateTaskInput } from '../bindings/pata/models';
+import { VaultStatus, CreateTaskInput } from '../bindings/pata/internal/app/models';
 import { QuickCreateInput } from './QuickCreateInput';
 import { WorkspacePage } from './DetailSplit';
 

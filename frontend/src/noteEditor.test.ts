@@ -1,31 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// Helper reproduction matching NotesView logic
-function isAudioTranscriptNote(note?: { audio_transcript?: boolean; audio_file?: string } | null): boolean {
-  return Boolean(note && note.audio_transcript && note.audio_file && note.audio_file.trim().length > 0);
-}
+import { componentCallbacks } from '../scripts/componentCallbacks.ts';
 
-function getNoteExcerpt(title: string, body?: string): string {
-  if (!body) return '';
-  const lines = body.split('\n');
-  let startIdx = 0;
-  if (lines.length > 0) {
-    const firstLine = lines[0].trim();
-    if (firstLine.startsWith('#')) {
-      const headingText = firstLine.replace(/^#+\s*/, '').trim();
-      if (headingText.toLowerCase() === title.trim().toLowerCase()) {
-        startIdx = 1;
-      }
-    }
-  }
-  const remaining = lines.slice(startIdx).join(' ');
-  const cleaned = remaining
-    .replace(/[#*`>_~\[\]]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return cleaned;
-}
+const callback = componentCallbacks(new URL('./NotesView.tsx', import.meta.url));
+const isAudioTranscriptNote = callback('isAudioTranscriptNote');
+const getNoteExcerpt = callback('getNoteExcerpt');
 
 test('isAudioTranscriptNote: correctly identifies transcript notes vs regular notes', () => {
   assert.equal(isAudioTranscriptNote(null), false);

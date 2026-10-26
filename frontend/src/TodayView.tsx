@@ -10,9 +10,9 @@ import {
   AlertCircle,
   FolderOpen,
 } from 'lucide-react';
-import * as VaultService from '../bindings/pata/vaultservice';
+import * as VaultService from '../bindings/pata/internal/app/vaultservice';
 import { Task, TaskStatus } from '../bindings/pata/internal/storage/markdown/models';
-import { VaultStatus, CreateTaskInput, TimelineItem, CreateActivityInput } from '../bindings/pata/models';
+import { VaultStatus, CreateTaskInput, TimelineItem, CreateActivityInput } from '../bindings/pata/internal/app/models';
 import { playLogoSuccess } from './logoAnimation';
 import { QuickCreateInput } from './QuickCreateInput';
 import { TodayPlanList } from './TodayPlanList';

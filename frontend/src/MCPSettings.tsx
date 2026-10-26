@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Plug } from 'lucide-react';
 import { Clipboard } from '@wailsio/runtime';
-import * as MCPService from '../bindings/pata/mcpservice';
-import type { MCPStatus } from '../bindings/pata/models';
+import * as MCPService from '../bindings/pata/internal/app/mcpservice';
+import type { MCPStatus } from '../bindings/pata/internal/app/models';
 import { Button } from './components/ui/button';
 
 export function MCPSettings() {

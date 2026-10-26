@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -11,16 +11,6 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/github"
-)
-
-var (
-	// Version is the current application version (SemVer, e.g. "0.1.1").
-	// Can be injected at build time via -ldflags "-X main.Version=x.y.z".
-	Version = "0.1.1"
-
-	// OfficialBuild indicates whether this binary is an official release distribution.
-	// Can be injected at build time via -ldflags "-X main.OfficialBuild=true".
-	OfficialBuild = "false"
 )
 
 // UpdateState represents the discrete UI states for updater.
@@ -299,8 +289,8 @@ func (s *UpdaterService) CheckForUpdate(manual bool) (*UpdateCheckResult, error)
 		return res, nil
 	}
 
-	// Do not interrupt active check / download / staging / restart
-	if s.status.State == UpdateStateChecking || s.status.State == UpdateStateDownloading || s.status.State == UpdateStateStaging || s.status.State == UpdateStateRestarting {
+	// Do not interrupt active checks, downloads, staged updates, or restarts.
+	if s.status.State == UpdateStateChecking || s.status.State == UpdateStateDownloading || s.status.State == UpdateStateStaging || s.status.State == UpdateStateWaitingInstall || s.status.State == UpdateStateRestarting {
 		state := s.status.State
 		availVer := s.status.AvailableVersion
 		s.mu.Unlock()
@@ -459,18 +449,28 @@ func (s *UpdaterService) ApplyUpdateAndRestart() error {
 		s.mu.Unlock()
 		return fmt.Errorf("没有可安装的更新或尚未就绪")
 	}
-	s.status.State = UpdateStateRestarting
-	current := s.status
 	backend := s.backend
+	if backend == nil {
+		s.mu.Unlock()
+		return fmt.Errorf("更新服务未就绪")
+	}
+	s.status.State = UpdateStateRestarting
+	s.status.ErrorMessage = ""
+	current := s.status
 	s.mu.Unlock()
 
 	s.emitState(current)
 
-	if backend == nil {
-		return fmt.Errorf("更新服务未就绪")
+	if err := backend.Restart(context.Background()); err != nil {
+		s.mu.Lock()
+		s.status.State = UpdateStateWaitingInstall
+		s.status.ErrorMessage = err.Error()
+		current = s.status
+		s.mu.Unlock()
+		s.emitState(current)
+		return err
 	}
-
-	return backend.Restart(context.Background())
+	return nil
 }
 
 // triggerManualCheckFromMenu is called when user clicks Pata -> 检查更新… in native menu.

@@ -1,31 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import vm from 'node:vm';
-import ts from 'typescript';
+import { componentCallbacks } from '../scripts/componentCallbacks.ts';
 import { dedupeTags } from './tagUtils.ts';
 
-// Execute the component's real callbacks without a browser or a second React renderer.
-const source = ts.createSourceFile('TaskDetailPanel.tsx', fs.readFileSync(new URL('./TaskDetailPanel.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const callbacks = new Map<string, ts.Expression>();
-function visit(node: ts.Node) {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
-    const init = node.initializer;
-    callbacks.set(node.name.text, ts.isCallExpression(init) && init.expression.getText(source) === 'useCallback' ? init.arguments[0] : init);
-  }
-  if (ts.isCallExpression(node) && node.expression.getText(source) === 'Events.On' && node.arguments[0].getText(source) === "'vault:changed'") {
-    callbacks.set('onVaultChanged', node.arguments[1]);
-  }
-  ts.forEachChild(node, visit);
-}
-visit(source);
-
-function callback(name: string, context: Record<string, any>): (...args: any[]) => any {
-  const expression = callbacks.get(name);
-  assert.ok(expression, `missing ${name} callback`);
-  const code = ts.transpileModule(`(${expression.getText(source)})`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-  return vm.runInNewContext(code, context);
-}
+const callback = componentCallbacks(new URL('./TaskDetailPanel.tsx', import.meta.url));
 
 function inspector() {
   const original = { id: 't-test', title: '任务', status: 'todo', description: '', tags: [], note_refs: {} };
@@ -41,6 +19,7 @@ function inspector() {
     latestTagsRef: { current: [] }, latestBodyRef: { current: '' }, latestRefsRef: { current: {} },
     externalModifiedRef: { current: false }, externalChangeVersionRef: { current: 0 },
     hasDraftRef: { current: false }, debounceTimerRef: { current: null },
+    taskSaveRef: { current: Promise.resolve(true) },
     dedupeTags, pruneRefs: (_body: string, refs: object) => refs,
     isConflictErr: (err: Error) => err.message.includes('conflict'),
     loadActivities: async () => {}, onChanged: () => {},
@@ -66,7 +45,7 @@ function inspector() {
     return pending;
   };
   context.saveTask = callback('saveTask', context);
-  return { context, state, writes, reloads, timers, remote, changed: callback('onVaultChanged', context) };
+  return { context, state, writes, reloads, timers, remote, changed: callback('event:vault:changed', context) };
 }
 
 test('MCP completion pauses queued, blur, and keyboard saves while preserving a task draft', async () => {
@@ -142,10 +121,44 @@ test('A save response cannot clear an external-change guard raised during that s
   let finish!: (task: any) => void;
   h.context.VaultService.UpdateTask = () => new Promise((resolve) => { finish = resolve; });
   const pending = h.context.saveTask({ title: '新标题' });
+  await Promise.resolve();
   h.changed({ data: { entity_id: 't-test' } });
   finish(h.remote);
   assert.equal(await pending, false);
   assert.equal(h.context.externalModifiedRef.current, true);
   assert.equal(h.state.ExternalModified, true);
   assert.equal(h.state.Task.title, '任务');
+});
+
+test('Task saves preserve newer input and submit overlapping saves in order', async () => {
+  const h = inspector();
+  const replies: (() => void)[] = [];
+  h.context.VaultService.UpdateTask = (input: any) => {
+    h.writes.push(input);
+    return new Promise((resolve) => replies.push(() => resolve({ ...h.remote, ...input })));
+  };
+  callback('handleBodyChange', h.context)('第一次输入');
+  const first = h.context.saveTask();
+  await Promise.resolve();
+  assert.equal(h.writes.length, 1);
+  callback('handleBodyChange', h.context)('保存期间继续输入');
+  h.context.latestTitleRef.current = '保存期间修改标题';
+  h.context.setDetailTitle('保存期间修改标题');
+  const second = h.context.saveTask({ status: 'done' });
+  await Promise.resolve();
+  assert.equal(h.writes.length, 1, 'overlapping saves must wait for the previous response');
+
+  replies[0]();
+  assert.equal(await first, true);
+  assert.equal(h.state.DetailBody, '保存期间继续输入');
+  assert.equal(h.state.DetailTitle, '保存期间修改标题');
+  assert.equal(h.context.latestTaskRef.current.description, '第一次输入');
+  assert.equal(h.writes.length, 2);
+  assert.equal(h.writes[1].description, '保存期间继续输入');
+  assert.equal(h.writes[1].title, '保存期间修改标题');
+  assert.equal(h.writes[1].status, 'done');
+  replies[1]();
+  assert.equal(await second, true);
+  assert.equal(h.state.Task.description, '保存期间继续输入');
+  assert.equal(h.state.DetailBody, '保存期间继续输入');
 });

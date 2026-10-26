@@ -886,28 +886,20 @@ func TestManager_CompletionCallback(t *testing.T) {
 	p := filepath.Join(tmpDir, "sample.mp3")
 	_ = os.WriteFile(p, []byte("audio"), 0644)
 
-	var completedState ASRTaskState
-	var called bool
+	completed := make(chan ASRTaskState, 1)
 
 	// Task with empty API key fails immediately in runPipeline
 	mgr.StartTask("n-cleanup", p, false, "", nil, func(state ASRTaskState) {
-		called = true
-		completedState = state
+		completed <- state
 	})
 
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if called {
-			break
+	select {
+	case state := <-completed:
+		if state != StateFailed {
+			t.Fatalf("expected StateFailed, got %v", state)
 		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	if !called {
-		t.Fatalf("expected completion callback to be called")
-	}
-	if completedState != StateFailed {
-		t.Fatalf("expected StateFailed, got %v", completedState)
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected completion callback to be called")
 	}
 }
 

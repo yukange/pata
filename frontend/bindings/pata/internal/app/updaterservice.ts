@@ -18,47 +18,47 @@ import * as $models from "./models.js";
  * ApplyUpdateAndRestart initiates the final restart and atomic swap into the new version.
  */
 export function ApplyUpdateAndRestart(): $CancellablePromise<void> {
-    return $Call.ByID(1142542297);
+    return $Call.ByID(1988669564);
 }
 
 /**
  * CheckForUpdate initiates a check against the release provider.
  */
 export function CheckForUpdate(manual: boolean): $CancellablePromise<$models.UpdateCheckResult | null> {
-    return $Call.ByID(596274054, manual);
+    return $Call.ByID(4259489, manual);
 }
 
 /**
  * GetAutoCheckUpdates returns whether auto update checks are currently enabled.
  */
 export function GetAutoCheckUpdates(): $CancellablePromise<boolean> {
-    return $Call.ByID(1470530941);
+    return $Call.ByID(2564488684);
 }
 
 /**
  * GetUpdateStatus returns a copy of current update status.
  */
 export function GetUpdateStatus(): $CancellablePromise<$models.UpdateStatus> {
-    return $Call.ByID(1240925527);
+    return $Call.ByID(2882543574);
 }
 
 /**
  * SetAutoCheckUpdates toggles the auto update check preference.
  */
 export function SetAutoCheckUpdates(enabled: boolean): $CancellablePromise<void> {
-    return $Call.ByID(666115937, enabled);
+    return $Call.ByID(4280337776, enabled);
 }
 
 /**
  * SetWaitingInstall transitions updater to waiting_install when unsaved drafts are detected.
  */
 export function SetWaitingInstall(): $CancellablePromise<void> {
-    return $Call.ByID(1224635046);
+    return $Call.ByID(4146848327);
 }
 
 /**
  * StartDownload initiates downloading and staging of the pending release.
  */
 export function StartDownload(): $CancellablePromise<void> {
-    return $Call.ByID(894937460);
+    return $Call.ByID(1215147725);
 }

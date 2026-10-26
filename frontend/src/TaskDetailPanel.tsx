@@ -12,9 +12,9 @@ import {
   RefreshCw,
   Info,
 } from 'lucide-react';
-import * as VaultService from '../bindings/pata/vaultservice';
+import * as VaultService from '../bindings/pata/internal/app/vaultservice';
 import { Task, TaskStatus, Activity } from '../bindings/pata/internal/storage/markdown/models';
-import { UpdateTaskInput, CreateActivityInput } from '../bindings/pata/models';
+import { UpdateTaskInput, CreateActivityInput } from '../bindings/pata/internal/app/models';
 import { playLogoSuccess } from './logoAnimation';
 import { dedupeTags, validateTag, hasTag } from './tagUtils';
 import { TagChipEditor } from './TagChipEditor';
@@ -173,6 +173,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
   const externalModifiedRef = useRef(false);
   const externalChangeVersionRef = useRef(0);
   const hasDraftRef = useRef(false);
+  const taskSaveRef = useRef<Promise<boolean>>(Promise.resolve(true));
 
   // Popover refs for outside click detection
   const menuRef = useRef<HTMLDivElement>(null);
@@ -325,7 +326,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
   }, []);
 
   const saveTask = useCallback(
-    async (patch?: {
+    (patch?: {
       title?: string;
       status?: TaskStatus;
       due?: string | null;
@@ -333,59 +334,64 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
       body?: string;
       refs?: NoteRefMap;
     }): Promise<boolean> => {
-      const currentTask = latestTaskRef.current;
-      if (!currentTask || externalModifiedRef.current) return false;
+      const pending = taskSaveRef.current.then(async () => {
+        try {
+          const currentTask = latestTaskRef.current;
+          if (!currentTask || externalModifiedRef.current) return false;
 
-      const titleToSave = (patch?.title !== undefined ? patch.title : latestTitleRef.current).trim();
-      if (!titleToSave) {
-        return false;
-      }
-      const statusToSave = patch?.status !== undefined ? patch.status : latestStatusRef.current;
-      const dueToSave = patch?.due !== undefined ? (patch.due || null) : (latestDueRef.current || null);
-      const tagsToSave = patch?.tags !== undefined ? patch.tags : latestTagsRef.current;
-      const bodyToSave = patch?.body !== undefined ? patch.body : latestBodyRef.current;
-      const refsToSave = patch?.refs !== undefined ? patch.refs : latestRefsRef.current;
+          const titleToSave = (patch?.title !== undefined ? patch.title : (latestTitleRef.current || '')).trim();
+          if (!titleToSave) {
+            return false;
+          }
+          const statusToSave = patch?.status !== undefined ? patch.status : latestStatusRef.current;
+          const dueToSave = patch?.due !== undefined ? (patch.due || null) : (latestDueRef.current || null);
+          const tagsToSave = patch?.tags !== undefined ? patch.tags : latestTagsRef.current;
+          const bodyToSave = patch?.body !== undefined ? patch.body : latestBodyRef.current;
+          const refsToSave = patch?.refs !== undefined ? patch.refs : latestRefsRef.current;
 
-      hasDraftRef.current = true;
-      setSaving(true);
-      setDetailError(null);
-      setConflictError(null);
+          hasDraftRef.current = true;
+          setSaving(true);
+          setDetailError(null);
+          setConflictError(null);
 
-      try {
-        const input: UpdateTaskInput = {
-          id: taskId,
-          title: titleToSave,
-          description: bodyToSave,
-          status: statusToSave,
-          due: dueToSave,
-          tags: dedupeTags(tagsToSave),
-          body: bodyToSave,
-          note_ids: currentTask.note_ids ?? [],
-          note_refs: pruneRefs(bodyToSave, refsToSave),
-        };
+          const input: UpdateTaskInput = {
+            id: taskId,
+            title: titleToSave,
+            description: bodyToSave,
+            status: statusToSave,
+            due: dueToSave,
+            tags: dedupeTags(tagsToSave),
+            body: bodyToSave,
+            note_ids: currentTask.note_ids ?? [],
+            note_refs: pruneRefs(bodyToSave, refsToSave),
+          };
 
-        const updated = await VaultService.UpdateTask(input);
-        if (externalModifiedRef.current) return false;
-        if (updated) {
-          applyTask(updated);
-          setExternalModified(false);
+          const updated = await VaultService.UpdateTask(input);
+          if (externalModifiedRef.current) return false;
+          if (updated) {
+            latestTaskRef.current = updated;
+            setTask(updated);
+            setExternalModified(false);
+          }
+          onChanged();
+          return true;
+        } catch (err: any) {
+          if (isConflictErr(err)) {
+            externalModifiedRef.current = true;
+            setConflictError(err?.message || '文件已被外部修改（写入冲突）');
+            setExternalModified(true);
+          } else {
+            setDetailError(err?.message || String(err));
+          }
+          return false;
+        } finally {
+          setSaving(false);
         }
-        onChanged();
-        return true;
-      } catch (err: any) {
-        if (isConflictErr(err)) {
-          externalModifiedRef.current = true;
-          setConflictError(err?.message || '文件已被外部修改（写入冲突）');
-          setExternalModified(true);
-        } else {
-          setDetailError(err?.message || String(err));
-        }
-        return false;
-      } finally {
-        setSaving(false);
-      }
+      });
+      taskSaveRef.current = pending;
+      return pending;
     },
-    [taskId, applyTask, onChanged]
+    [taskId, onChanged]
   );
 
   const formDirty = useMemo(() => {
@@ -578,6 +584,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
 
   const handleBodyChange = (val: string) => {
     hasDraftRef.current = true;
+    latestBodyRef.current = val;
     setDetailBody(val);
 
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
@@ -788,6 +795,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
             value={detailTitle}
             onChange={(e) => {
               hasDraftRef.current = true;
+              latestTitleRef.current = e.target.value;
               setDetailTitle(e.target.value);
               adjustTextareaHeight(e.target, 28);
             }}

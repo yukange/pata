@@ -10,7 +10,7 @@ import {
   Loader2,
   ExternalLink,
 } from 'lucide-react';
-import * as VaultService from '../bindings/pata/vaultservice';
+import * as VaultService from '../bindings/pata/internal/app/vaultservice';
 import { EntityRef } from '../bindings/pata/internal/storage/markdown/models';
 import { WorkspacePage } from './DetailSplit';
 import {

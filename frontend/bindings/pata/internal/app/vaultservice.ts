@@ -12,10 +12,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as asr$0 from "./internal/asr/models.js";
+import * as asr$0 from "../asr/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as markdown$0 from "./internal/storage/markdown/models.js";
+import * as markdown$0 from "../storage/markdown/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -25,14 +25,14 @@ import * as $models from "./models.js";
  * ConfirmReplaceTranscript applies the candidate re-transcription result to the Note body.
  */
 export function ConfirmReplaceTranscript(noteID: string): $CancellablePromise<markdown$0.Note | null> {
-    return $Call.ByID(3534408019, noteID);
+    return $Call.ByID(1356134004, noteID);
 }
 
 /**
  * CreateActivity creates an activity embedded inside a Task or DayPlan.
  */
 export function CreateActivity(input: $models.CreateActivityInput): $CancellablePromise<markdown$0.Activity | null> {
-    return $Call.ByID(3984259696, input);
+    return $Call.ByID(3000593651, input);
 }
 
 /**
@@ -40,7 +40,7 @@ export function CreateActivity(input: $models.CreateActivityInput): $Cancellable
  * and starts the asynchronous transcription pipeline in the background.
  */
 export function CreateAudioNote(sourcePath: string): $CancellablePromise<markdown$0.Note | null> {
-    return $Call.ByID(3851384397, sourcePath);
+    return $Call.ByID(803855700, sourcePath);
 }
 
 /**
@@ -48,35 +48,35 @@ export function CreateAudioNote(sourcePath: string): $CancellablePromise<markdow
  * and starts the asynchronous transcription pipeline in the background.
  */
 export function CreateAudioNoteData(name: string, base64Data: string): $CancellablePromise<markdown$0.Note | null> {
-    return $Call.ByID(737116173, name, base64Data);
+    return $Call.ByID(4002086492, name, base64Data);
 }
 
 /**
  * CreateNote creates a new Note, writes it safely as Markdown, and updates the index.
  */
 export function CreateNote(input: $models.CreateNoteInput): $CancellablePromise<markdown$0.Note | null> {
-    return $Call.ByID(2924369193, input);
+    return $Call.ByID(4207369578, input);
 }
 
 /**
  * CreateTask creates a new Task, writes it safely as Markdown, and updates the index.
  */
 export function CreateTask(input: $models.CreateTaskInput): $CancellablePromise<markdown$0.Task | null> {
-    return $Call.ByID(3901450400, input);
+    return $Call.ByID(411440563, input);
 }
 
 /**
  * DeleteActivity deletes an Activity from its host Task or DayPlan.
  */
 export function DeleteActivity(id: string): $CancellablePromise<void> {
-    return $Call.ByID(359049003, id);
+    return $Call.ByID(4176204428, id);
 }
 
 /**
  * DeleteNote deletes a note from disk and cleans up its index entry.
  */
 export function DeleteNote(id: string): $CancellablePromise<void> {
-    return $Call.ByID(2663015250, id);
+    return $Call.ByID(1190664157, id);
 }
 
 /**
@@ -84,14 +84,14 @@ export function DeleteNote(id: string): $CancellablePromise<void> {
  * and removing references to this task from all day plans.
  */
 export function DeleteTask(id: string): $CancellablePromise<void> {
-    return $Call.ByID(3037921099, id);
+    return $Call.ByID(2846266380, id);
 }
 
 /**
  * DiscardCandidateTranscript discards candidate re-transcription results.
  */
 export function DiscardCandidateTranscript(noteID: string): $CancellablePromise<void> {
-    return $Call.ByID(11144408, noteID);
+    return $Call.ByID(2337748135, noteID);
 }
 
 /**
@@ -99,35 +99,35 @@ export function DiscardCandidateTranscript(noteID: string): $CancellablePromise<
  * React/Wails frontend only receives the configured status; plain key is never returned.
  */
 export function GetASRConfigStatus(): $CancellablePromise<$models.ASRConfigStatus> {
-    return $Call.ByID(4178192511);
+    return $Call.ByID(2022149616);
 }
 
 /**
  * GetASRTaskStatus returns the current in-memory transcription status for a note.
  */
 export function GetASRTaskStatus(noteID: string): $CancellablePromise<asr$0.ASRTaskStatus> {
-    return $Call.ByID(3348271808, noteID);
+    return $Call.ByID(94737887, noteID);
 }
 
 /**
  * GetActivity returns an activity by its ID.
  */
 export function GetActivity(id: string): $CancellablePromise<markdown$0.Activity | null> {
-    return $Call.ByID(2823849866, id);
+    return $Call.ByID(1380587179, id);
 }
 
 /**
  * GetAudioData returns the base64 data URI of a vault audio file (fallback/testing).
  */
 export function GetAudioData(filePath: string): $CancellablePromise<string> {
-    return $Call.ByID(1035815303, filePath);
+    return $Call.ByID(2729298136, filePath);
 }
 
 /**
  * GetAudioURL returns the internal asset URL to stream/play a vault audio file.
  */
 export function GetAudioURL(filePath: string): $CancellablePromise<string> {
-    return $Call.ByID(1174217976, filePath);
+    return $Call.ByID(2597129441, filePath);
 }
 
 /**
@@ -135,105 +135,105 @@ export function GetAudioURL(filePath: string): $CancellablePromise<string> {
  * If not explicitly set in config, it returns the provided defaultVal.
  */
 export function GetAutoCheckUpdatesPreference(defaultVal: boolean): $CancellablePromise<boolean> {
-    return $Call.ByID(2860974391, defaultVal);
+    return $Call.ByID(2644765214, defaultVal);
 }
 
 /**
  * GetDayPlan returns the DayPlan for a date. If no plan exists, an empty DayPlan is returned without error.
  */
 export function GetDayPlan(date: string): $CancellablePromise<markdown$0.DayPlan | null> {
-    return $Call.ByID(2499050296, date);
+    return $Call.ByID(1902505815, date);
 }
 
 /**
  * GetDayTimeline returns activities and task lifecycle events for a YYYY-MM-DD date in local timezone.
  */
 export function GetDayTimeline(date: string): $CancellablePromise<$models.TimelineItem[] | null> {
-    return $Call.ByID(2161441604, date);
+    return $Call.ByID(607324551, date);
 }
 
 /**
  * GetNote returns a note by its ID.
  */
 export function GetNote(id: string): $CancellablePromise<markdown$0.Note | null> {
-    return $Call.ByID(3086395091, id);
+    return $Call.ByID(1929239250, id);
 }
 
 /**
  * GetNoteBacklinks returns the notes/tasks referencing noteID, deduped by source identity.
  */
 export function GetNoteBacklinks(noteID: string): $CancellablePromise<markdown$0.LinkSource[] | null> {
-    return $Call.ByID(3336179693, noteID);
+    return $Call.ByID(526100514, noteID);
 }
 
 /**
  * GetTagOverview returns aggregated counts of all unique tags across tasks, notes, and activities.
  */
 export function GetTagOverview(): $CancellablePromise<markdown$0.TagOverviewItem[] | null> {
-    return $Call.ByID(3863596086);
+    return $Call.ByID(1053889861);
 }
 
 /**
  * GetTask returns a task by its ID.
  */
 export function GetTask(id: string): $CancellablePromise<markdown$0.Task | null> {
-    return $Call.ByID(1057197746, id);
+    return $Call.ByID(2304145099, id);
 }
 
 /**
  * GetThemePreference returns the persisted theme preference ("system", "light", or "dark").
  */
 export function GetThemePreference(): $CancellablePromise<string> {
-    return $Call.ByID(3656260713);
+    return $Call.ByID(2756828034);
 }
 
 /**
  * GetVaultHealth returns the current health status of the vault, including parse errors and dangling references.
  */
 export function GetVaultHealth(): $CancellablePromise<$models.VaultHealth | null> {
-    return $Call.ByID(1563926335);
+    return $Call.ByID(506645600);
 }
 
 /**
  * GetVaultStatus is cheap and callable before any vault is opened.
  */
 export function GetVaultStatus(): $CancellablePromise<$models.VaultStatus> {
-    return $Call.ByID(540011935);
+    return $Call.ByID(3570581044);
 }
 
 /**
  * GetWindowStatePreference returns the persisted window dimensions and state.
  */
 export function GetWindowStatePreference(): $CancellablePromise<$models.WindowStateConfig | null> {
-    return $Call.ByID(3466423529);
+    return $Call.ByID(2498472210);
 }
 
 /**
  * ImportFile safely copies an external file into the vault's files/ directory without overwriting.
  */
 export function ImportFile(sourcePath: string): $CancellablePromise<markdown$0.FileResource | null> {
-    return $Call.ByID(3021514830, sourcePath);
+    return $Call.ByID(3117674009, sourcePath);
 }
 
 /**
  * ImportFileData saves base64-encoded binary data into the vault's files/ directory.
  */
 export function ImportFileData(name: string, base64Data: string): $CancellablePromise<markdown$0.FileResource | null> {
-    return $Call.ByID(3430794990, name, base64Data);
+    return $Call.ByID(1229032937, name, base64Data);
 }
 
 /**
  * ListActivitiesByTask returns all activities of a task sorted chronologically by At.
  */
 export function ListActivitiesByTask(taskID: string): $CancellablePromise<markdown$0.Activity[] | null> {
-    return $Call.ByID(3610475444, taskID);
+    return $Call.ByID(3064011691, taskID);
 }
 
 /**
  * ListAllEntities returns all entities matching no tag filter, sorted chronologically descending.
  */
 export function ListAllEntities(): $CancellablePromise<markdown$0.EntityRef[] | null> {
-    return $Call.ByID(916008927);
+    return $Call.ByID(1250601626);
 }
 
 /**
@@ -241,77 +241,77 @@ export function ListAllEntities(): $CancellablePromise<markdown$0.EntityRef[] | 
  * For Activities, tag matching checks act.Tags ∪ parentTask.Tags (for task activities).
  */
 export function ListByTag(tag: string): $CancellablePromise<markdown$0.EntityRef[] | null> {
-    return $Call.ByID(1184398980, tag);
+    return $Call.ByID(2054319669, tag);
 }
 
 /**
  * ListFiles returns all files in the files/ directory of the vault.
  */
 export function ListFiles(): $CancellablePromise<markdown$0.FileResource[] | null> {
-    return $Call.ByID(1556008584);
+    return $Call.ByID(2800067961);
 }
 
 /**
  * ListNoteRefs returns all notes (ID, title, vault-relative path) for [[ candidates and link resolution.
  */
 export function ListNoteRefs(): $CancellablePromise<markdown$0.NoteRef[] | null> {
-    return $Call.ByID(1984130979);
+    return $Call.ByID(3058840920);
 }
 
 /**
  * ListNotes returns all notes from the vault index, newest updated first.
  */
 export function ListNotes(): $CancellablePromise<(markdown$0.Note | null)[] | null> {
-    return $Call.ByID(957394914);
+    return $Call.ByID(58766227);
 }
 
 /**
  * ListTasks returns all tasks from the vault index, newest first.
  */
 export function ListTasks(): $CancellablePromise<(markdown$0.Task | null)[] | null> {
-    return $Call.ByID(1611157941);
+    return $Call.ByID(1632313544);
 }
 
 /**
  * OpenFile opens a file in the vault with the system default application.
  */
 export function OpenFile(filePath: string): $CancellablePromise<void> {
-    return $Call.ByID(848523435, filePath);
+    return $Call.ByID(4230653604, filePath);
 }
 
 /**
  * OpenVaultInFinder opens the current vault root directory in Finder (or native file explorer).
  */
 export function OpenVaultInFinder(): $CancellablePromise<void> {
-    return $Call.ByID(637426180);
+    return $Call.ByID(3607170633);
 }
 
 /**
  * PreviewFile invokes the macOS Quick Look preview or system preview for a file in the vault.
  */
 export function PreviewFile(filePath: string): $CancellablePromise<void> {
-    return $Call.ByID(201750005, filePath);
+    return $Call.ByID(101161328, filePath);
 }
 
 /**
  * RescanVault rebuilds the index from disk (manual refresh; watcher handles external changes).
  */
 export function RescanVault(): $CancellablePromise<void> {
-    return $Call.ByID(1981298399);
+    return $Call.ByID(111919602);
 }
 
 /**
  * RevealInFinder reveals a file inside Finder (or Explorer on Windows).
  */
 export function RevealInFinder(filePath: string): $CancellablePromise<void> {
-    return $Call.ByID(2039505063, filePath);
+    return $Call.ByID(2212397164, filePath);
 }
 
 /**
  * SaveDayPlan creates or updates a DayPlan for a date with an ordered list of task IDs.
  */
 export function SaveDayPlan(date: string, taskIDs: string[] | null): $CancellablePromise<markdown$0.DayPlan | null> {
-    return $Call.ByID(1580712949, date, taskIDs);
+    return $Call.ByID(1065396092, date, taskIDs);
 }
 
 /**
@@ -319,14 +319,14 @@ export function SaveDayPlan(date: string, taskIDs: string[] | null): $Cancellabl
  * Empty or whitespace-only queries return an empty list without error.
  */
 export function SearchAll(query: string): $CancellablePromise<markdown$0.SearchResultItem[] | null> {
-    return $Call.ByID(2447503468, query);
+    return $Call.ByID(150684201, query);
 }
 
 /**
  * SelectAudioFile opens a native dialog for selecting an audio file (MP3 / M4A).
  */
 export function SelectAudioFile(): $CancellablePromise<string> {
-    return $Call.ByID(3686725867);
+    return $Call.ByID(2552600122);
 }
 
 /**
@@ -334,7 +334,7 @@ export function SelectAudioFile(): $CancellablePromise<string> {
  * and opens it. Cancel returns the unchanged status.
  */
 export function SelectVaultDirectory(): $CancellablePromise<$models.VaultStatus> {
-    return $Call.ByID(2534227418);
+    return $Call.ByID(1815653909);
 }
 
 /**
@@ -342,63 +342,63 @@ export function SelectVaultDirectory(): $CancellablePromise<$models.VaultStatus>
  * Notice: Key is never logged and never returned to the frontend.
  */
 export function SetASRKey(key: string): $CancellablePromise<void> {
-    return $Call.ByID(296420522, key);
+    return $Call.ByID(3910619163, key);
 }
 
 /**
  * SetAutoCheckUpdatesPreference persists the auto update check preference.
  */
 export function SetAutoCheckUpdatesPreference(enabled: boolean): $CancellablePromise<void> {
-    return $Call.ByID(462881675, enabled);
+    return $Call.ByID(1402327522, enabled);
 }
 
 /**
  * SetTaskStatus toggles or updates the status of a Task with completion/reopen event semantics.
  */
 export function SetTaskStatus(id: string, status: markdown$0.TaskStatus): $CancellablePromise<markdown$0.Task | null> {
-    return $Call.ByID(1569318832, id, status);
+    return $Call.ByID(838627745, id, status);
 }
 
 /**
  * SetThemePreference persists the theme preference ("system", "light", or "dark").
  */
 export function SetThemePreference(theme: string): $CancellablePromise<void> {
-    return $Call.ByID(3060376613, theme);
+    return $Call.ByID(3804395854, theme);
 }
 
 /**
  * SetWindowStatePreference sets the window state preference directly.
  */
 export function SetWindowStatePreference(state: $models.WindowStateConfig): $CancellablePromise<void> {
-    return $Call.ByID(735557877, state);
+    return $Call.ByID(3135367678, state);
 }
 
 /**
  * StartAudioTranscription triggers or retries transcription on an existing Note.
  */
 export function StartAudioTranscription(noteID: string): $CancellablePromise<void> {
-    return $Call.ByID(1769676217, noteID);
+    return $Call.ByID(1126572456, noteID);
 }
 
 /**
  * UpdateActivity updates an existing Activity's body, tags, and note refs in its host Task or DayPlan.
  */
 export function UpdateActivity(input: $models.UpdateActivityInput): $CancellablePromise<markdown$0.Activity | null> {
-    return $Call.ByID(1816010589, input);
+    return $Call.ByID(2841661226, input);
 }
 
 /**
  * UpdateNote updates an existing Note, safely writes changes to Markdown, and preserves unknown frontmatter.
  */
 export function UpdateNote(input: $models.UpdateNoteInput): $CancellablePromise<markdown$0.Note | null> {
-    return $Call.ByID(3482000924, input);
+    return $Call.ByID(110861171, input);
 }
 
 /**
  * UpdateTask updates an existing Task, safely writes changes to Markdown, and preserves unknown frontmatter and embedded activities.
  */
 export function UpdateTask(input: $models.UpdateTaskInput): $CancellablePromise<markdown$0.Task | null> {
-    return $Call.ByID(12384053, input);
+    return $Call.ByID(1952173650, input);
 }
 
 /**
@@ -406,5 +406,5 @@ export function UpdateTask(input: $models.UpdateTaskInput): $CancellablePromise<
  * applying debounce jitter filtering and preserving unmaximised bounds.
  */
 export function UpdateWindowState(w: number, h: number, isMaximised: boolean): $CancellablePromise<void> {
-    return $Call.ByID(4037094657, w, h, isMaximised);
+    return $Call.ByID(825308844, w, h, isMaximised);
 }

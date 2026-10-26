@@ -3,7 +3,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as markdown$0 from "./internal/storage/markdown/models.js";
+import * as markdown$0 from "../storage/markdown/models.js";
 
 /**
  * ASRConfigStatus reports transcription configuration status to frontend.

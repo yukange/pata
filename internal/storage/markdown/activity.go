@@ -24,6 +24,11 @@ type activityMeta struct {
 	Extra    map[string]yaml.Node `yaml:",inline"`
 }
 
+func isActivityMarkerLine(line string) bool {
+	marker := strings.TrimSpace(strings.TrimLeft(line, " \t\\"))
+	return marker == activityStartTag || marker == activityEndTag
+}
+
 // ParseActivities parses activity blocks from markdown body content.
 // Task/DayPlan body must only contain activity blocks and whitespace.
 func ParseActivities(raw string) ([]Activity, error) {
@@ -110,10 +115,8 @@ func ParseActivities(raw string) ([]Activity, error) {
 				// Unescape body lines
 				unescapedBody := make([]string, len(bodyLines))
 				for i, bl := range bodyLines {
-					if strings.HasPrefix(bl, `\`+activityStartTag) {
-						unescapedBody[i] = strings.TrimPrefix(bl, `\`)
-					} else if strings.HasPrefix(bl, `\`+activityEndTag) {
-						unescapedBody[i] = strings.TrimPrefix(bl, `\`)
+					if strings.HasPrefix(bl, `\`) && isActivityMarkerLine(bl[1:]) {
+						unescapedBody[i] = bl[1:]
 					} else {
 						unescapedBody[i] = bl
 					}
@@ -179,9 +182,7 @@ func FormatActivities(activities []Activity) (string, error) {
 			normalized := strings.ReplaceAll(act.Body, "\r\n", "\n")
 			lines := strings.Split(normalized, "\n")
 			for _, line := range lines {
-				trimmed := strings.TrimSpace(line)
-				if trimmed == activityStartTag || trimmed == activityEndTag ||
-					trimmed == `\`+activityStartTag || trimmed == `\`+activityEndTag {
+				if isActivityMarkerLine(line) {
 					buf.WriteString(`\` + line + "\n")
 				} else {
 					buf.WriteString(line + "\n")

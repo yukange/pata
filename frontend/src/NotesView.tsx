@@ -19,8 +19,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import Vditor from 'vditor';
-import * as VaultService from '../bindings/pata/vaultservice';
-import { VaultStatus, CreateNoteInput, UpdateNoteInput } from '../bindings/pata/models';
+import * as VaultService from '../bindings/pata/internal/app/vaultservice';
+import { VaultStatus, CreateNoteInput, UpdateNoteInput } from '../bindings/pata/internal/app/models';
 import { Note, LinkSource, EntityType } from '../bindings/pata/internal/storage/markdown/models';
 import { ASRTaskStatus, ASRTaskState } from '../bindings/pata/internal/asr/models';
 import { Button } from './components/ui/button';

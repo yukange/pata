@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"encoding/base64"
@@ -256,5 +256,3 @@ func TestVaultService_ConcurrentImportFileData(t *testing.T) {
 		_ = i
 	}
 }
-
-

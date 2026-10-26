@@ -9,7 +9,7 @@ import {
   Loader2,
   Volume2,
 } from 'lucide-react';
-import * as VaultService from '../bindings/pata/vaultservice';
+import * as VaultService from '../bindings/pata/internal/app/vaultservice';
 import { ASRTaskStatus, ASRTaskState } from '../bindings/pata/internal/asr/models';
 import { formatTime } from './audioTranscript';
 

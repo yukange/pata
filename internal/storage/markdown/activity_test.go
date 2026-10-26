@@ -58,6 +58,28 @@ func TestActivityParseAndFormat_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestActivityMarkerRoundTrip(t *testing.T) {
+	for _, marker := range []string{activityStartTag, activityEndTag} {
+		for _, prefix := range []string{"", "  ", "\t", `\`, `\\`, "\\  ", "  \\  "} {
+			body := prefix + marker + "  "
+			for pass := 0; pass < 2; pass++ {
+				formatted, err := FormatActivities([]Activity{{ID: "a-marker", At: time.Now(), Body: body}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				parsed, err := ParseActivities(formatted)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(parsed) != 1 || parsed[0].Body != body {
+					t.Fatalf("pass %d: %q did not round-trip: %+v", pass, body, parsed)
+				}
+				body = parsed[0].Body
+			}
+		}
+	}
+}
+
 func TestActivityParse_ErrorCases(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -491,4 +513,3 @@ func TestActivity_DeleteFinalActivityClearsFileBody(t *testing.T) {
 		t.Fatalf("expected 0 activities after deletion, got %d", len(reparsed.(*Task).Activities))
 	}
 }
-

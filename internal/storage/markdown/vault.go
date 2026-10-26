@@ -36,6 +36,9 @@ type Vault struct {
 	Index    *MemoryIndex
 	Tracker  *WriteTracker
 
+	// MutationMu guards complete read-modify-save operations, watcher updates, and rescans.
+	MutationMu sync.Mutex
+
 	mu      sync.Mutex
 	watcher *fsnotify.Watcher
 	events  chan VaultEvent
@@ -79,6 +82,9 @@ func (v *Vault) Events() <-chan VaultEvent {
 
 // Scan rescans the vault from disk and replaces the memory index atomically.
 func (v *Vault) Scan() error {
+	v.MutationMu.Lock()
+	defer v.MutationMu.Unlock()
+
 	newIndex, err := ScanVault(v.RootPath)
 	if err != nil {
 		return err
@@ -128,6 +134,7 @@ func (v *Vault) ResolveEntityPath(entity Entity) string {
 }
 
 // SaveEntity safely writes an entity to disk and updates the index.
+// Callers must hold MutationMu from reading the entity and its baseline through saving.
 func (v *Vault) SaveEntity(entity Entity, baseline *FileBaseline) (*FileBaseline, error) {
 	if entity == nil {
 		return nil, fmt.Errorf("entity cannot be nil")
@@ -157,7 +164,7 @@ func (v *Vault) SaveEntity(entity Entity, baseline *FileBaseline) (*FileBaseline
 }
 
 // DeleteEntity removes an entity file from disk and cleans up its index entry.
-// It preserves associated entities.
+// It preserves associated entities. Callers must hold MutationMu.
 func (v *Vault) DeleteEntity(id string) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("entity ID cannot be empty")
@@ -250,6 +257,9 @@ func (v *Vault) watchLoop() {
 }
 
 func (v *Vault) handleFSEvent(event fsnotify.Event) {
+	v.MutationMu.Lock()
+	defer v.MutationMu.Unlock()
+
 	path := event.Name
 	base := filepath.Base(path)
 

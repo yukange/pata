@@ -189,9 +189,6 @@ func (idx *MemoryIndex) Backlinks(targetID, root string) []LinkSource {
 		if idx.textRefsHitLocked(t.Description, t.NoteRefs, targetID) {
 			add(EntityTypeTask, id, t.Title)
 		}
-		if idx.textRefsHitLocked(t.Body, t.NoteRefs, targetID) {
-			add(EntityTypeTask, id, t.Title)
-		}
 		for _, act := range t.Activities {
 			if idx.textRefsHitLocked(act.Body, act.NoteRefs, targetID) {
 				add(EntityTypeTask, id, t.Title)

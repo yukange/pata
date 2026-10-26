@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"os"
@@ -636,7 +636,6 @@ updated_at: 2026-10-11T12:00:00+08:00
 		// Expected: no event received
 	}
 }
-
 
 func TestVaultService_DayPlanCRUDAndValidation(t *testing.T) {
 	sClosed := &VaultService{}
@@ -2120,15 +2119,11 @@ Fixed body
 
 func TestVaultService_UpdateTask_BaselineConflictAndRescanResolution(t *testing.T) {
 	vaultDir := t.TempDir()
-	s := &VaultService{}
-	if _, err := s.openVault(vaultDir); err != nil {
-		t.Fatalf("openVault failed: %v", err)
+	v, err := markdown.NewVault(vaultDir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	defer func() {
-		if s.stopWatcher != nil {
-			s.stopWatcher()
-		}
-	}()
+	s := &VaultService{vault: v}
 
 	task, err := s.CreateTask(CreateTaskInput{
 		Title: "冲突测试任务",
@@ -2144,7 +2139,7 @@ func TestVaultService_UpdateTask_BaselineConflictAndRescanResolution(t *testing.
 		t.Fatalf("ReadFile failed: %v", err)
 	}
 
-	// Simulate external editor modifying the file on disk behind vault's back
+	// Keep the stale baseline deliberately; watcher refresh is covered separately.
 	tampered := strings.Replace(string(data), "初始描述", "外部编辑器修改后的描述", 1)
 	if err := os.WriteFile(taskFile, []byte(tampered), 0644); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
@@ -2183,10 +2178,11 @@ func TestVaultService_UpdateTask_BaselineConflictAndRescanResolution(t *testing.
 
 func TestVaultService_Stage4FollowupTagUnification(t *testing.T) {
 	vaultDir := t.TempDir()
-	s := NewVaultService()
-	if _, err := s.openVault(vaultDir); err != nil {
-		t.Fatalf("openVault failed: %v", err)
+	v, err := markdown.NewVault(vaultDir)
+	if err != nil {
+		t.Fatal(err)
 	}
+	s := &VaultService{vault: v}
 
 	// 1. Task tag deduplication: "#Pata", "pata", and "##Pata" deduplicate to "Pata"
 	// Comma in tag: "研发,平台" stays a single tag
@@ -2251,7 +2247,7 @@ func TestVaultService_Stage4FollowupTagUnification(t *testing.T) {
 		t.Fatalf("disk note tags corrupted: %v", diskNote.Tags)
 	}
 
-	// 4. External write conflict protection on Note
+	// 4. External write conflict protection on Note, before any index refresh.
 	noteFilePath := s.vault.ResolveEntityPath(diskNote)
 	if err := os.WriteFile(noteFilePath, []byte("---\ntype: note\nid: "+note.ID+"\ntitle: 外部改写标题\ntags: [外部]\ncreated_at: 2026-10-20T10:00:00Z\nupdated_at: 2026-10-20T10:05:00Z\n---\n外部正文"), 0644); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)

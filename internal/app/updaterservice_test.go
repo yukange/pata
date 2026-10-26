@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 type mockUpdaterBackend struct {
 	checkFunc     func(ctx context.Context) (*updater.Release, error)
 	downloadFunc  func(ctx context.Context) error
+	restartFunc   func(ctx context.Context) error
 	restarted     bool
 	restartCalled chan struct{}
 }
@@ -35,6 +36,9 @@ func (m *mockUpdaterBackend) DownloadAndInstall(ctx context.Context) error {
 }
 
 func (m *mockUpdaterBackend) Restart(ctx context.Context) error {
+	if m.restartFunc != nil {
+		return m.restartFunc(ctx)
+	}
 	m.restarted = true
 	if m.restartCalled != nil {
 		close(m.restartCalled)
@@ -375,6 +379,70 @@ func TestUpdaterService_ReadyAndDraftGate(t *testing.T) {
 	}
 	if !mock.restarted {
 		t.Fatalf("expected backend.Restart to be called")
+	}
+}
+
+func TestUpdaterServiceChecksPreserveStagedUpdate(t *testing.T) {
+	for _, state := range []UpdateState{UpdateStateStaging, UpdateStateWaitingInstall} {
+		for _, manual := range []bool{false, true} {
+			svc := NewUpdaterService(nil, "0.1.0", true)
+			svc.status.State = state
+			svc.status.AvailableVersion = "0.2.0"
+			svc.setBackend(&mockUpdaterBackend{checkFunc: func(context.Context) (*updater.Release, error) {
+				t.Fatal("must not check while a staged update awaits installation")
+				return nil, nil
+			}})
+			res, err := svc.CheckForUpdate(manual)
+			if err != nil || !res.UpdateAvailable || res.Version != "0.2.0" {
+				t.Fatalf("check: %+v, %v", res, err)
+			}
+			if got := svc.GetUpdateStatus(); got.State != state || got.AvailableVersion != "0.2.0" {
+				t.Fatalf("staged update was changed: %+v", got)
+			}
+		}
+	}
+}
+
+func TestUpdaterServiceRestartFailureCanRetryStagedUpdate(t *testing.T) {
+	svc := NewUpdaterService(nil, "0.1.0", true)
+	svc.status.State = UpdateStateWaitingInstall
+	svc.status.AvailableVersion = "0.2.0"
+	mock := &mockUpdaterBackend{restartFunc: func(context.Context) error { return errors.New("helper failed") }}
+	svc.setBackend(mock)
+	if err := svc.ApplyUpdateAndRestart(); err == nil {
+		t.Fatal("expected restart error")
+	}
+	if st := svc.GetUpdateStatus(); st.State != UpdateStateWaitingInstall || st.ErrorMessage != "helper failed" || st.AvailableVersion != "0.2.0" {
+		t.Fatalf("failed restart must stay retryable: %+v", st)
+	}
+	mock.restartFunc = nil
+	if err := svc.ApplyUpdateAndRestart(); err != nil {
+		t.Fatal(err)
+	}
+	if st := svc.GetUpdateStatus(); st.State != UpdateStateRestarting || st.ErrorMessage != "" || !mock.restarted {
+		t.Fatalf("retry failed: %+v", st)
+	}
+
+	missing := NewUpdaterService(nil, "0.1.0", true)
+	missing.status.State = UpdateStateWaitingInstall
+	if err := missing.ApplyUpdateAndRestart(); err == nil || missing.GetUpdateStatus().State != UpdateStateWaitingInstall {
+		t.Fatal("missing backend must not leave the updater restarting")
+	}
+}
+
+func TestUpdaterServiceDownloadProgressBounds(t *testing.T) {
+	svc := NewUpdaterService(nil, "0.1.0", true)
+	for _, tc := range []struct {
+		written, total int64
+		want           int
+	}{
+		{0, 1000, 0}, {555, 1000, 55}, {999, 1000, 99}, {1000, 1000, 100},
+		{1200, 1000, 100}, {-5, 1000, 0}, {500, 0, -1}, {500, -1, -1},
+	} {
+		svc.handleDownloadProgress(updater.Progress{Written: tc.written, Total: tc.total})
+		if got := svc.GetUpdateStatus().ProgressPercent; got != tc.want {
+			t.Fatalf("progress(%d, %d) = %d, want %d", tc.written, tc.total, got, tc.want)
+		}
 	}
 }
 

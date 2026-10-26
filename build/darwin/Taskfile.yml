@@ -187,7 +187,14 @@ tasks:
           cp build/darwin/Assets.car "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Resources"
         fi
       - cp "{{.BIN_DIR}}/{{.APP_NAME}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/MacOS"
-      - cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
+      - |
+        if [ -n "{{.VERSION}}" ]; then
+          sed -e '/<key>CFBundleVersion<\/key>/{n;s|<string>[^<]*</string>|<string>{{.VERSION}}</string>|;}' \
+              -e '/<key>CFBundleShortVersionString<\/key>/{n;s|<string>[^<]*</string>|<string>{{.VERSION}}</string>|;}' \
+              build/darwin/Info.plist > "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents/Info.plist"
+        else
+          cp build/darwin/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/Contents"
+        fi
       - task: '{{if eq OS "darwin"}}codesign:adhoc{{else}}codesign:skip{{end}}'
 
   codesign:adhoc:

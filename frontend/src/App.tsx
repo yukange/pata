@@ -13,9 +13,9 @@ import {
   Clock,
   RefreshCw,
 } from 'lucide-react';
-import * as VaultService from '../bindings/pata/vaultservice';
-import * as UpdaterService from '../bindings/pata/updaterservice';
-import { VaultStatus, VaultHealth, UpdateStatus } from '../bindings/pata/models';
+import * as VaultService from '../bindings/pata/internal/app/vaultservice';
+import * as UpdaterService from '../bindings/pata/internal/app/updaterservice';
+import { VaultStatus, VaultHealth, UpdateStatus } from '../bindings/pata/internal/app/models';
 import { TagOverviewItem } from '../bindings/pata/internal/storage/markdown/models';
 import { Dialog, DialogContent, DialogTitle } from './components/ui/dialog';
 import { Button } from './components/ui/button';

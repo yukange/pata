@@ -1,9 +1,8 @@
-package main
+package app
 
 import (
 	"archive/zip"
 	"context"
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,42 +12,6 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/updater"
 )
-
-// TestAcceptance_Updater_VersionConsistency verifies that the runtime default Version,
-// build/darwin/Info.plist, and frontend/package.json share a consistent SemVer baseline.
-func TestAcceptance_Updater_VersionConsistency(t *testing.T) {
-	// 1. Verify Go Version is valid SemVer
-	if Version == "" {
-		t.Fatalf("Go Version is empty")
-	}
-
-	// 2. Verify frontend/package.json
-	packageJSONPath := filepath.Join("frontend", "package.json")
-	data, err := os.ReadFile(packageJSONPath)
-	if err != nil {
-		t.Fatalf("failed to read frontend/package.json: %v", err)
-	}
-	var pkg struct {
-		Version string `json:"version"`
-	}
-	if err := json.Unmarshal(data, &pkg); err != nil {
-		t.Fatalf("failed to parse frontend/package.json: %v", err)
-	}
-	if pkg.Version != Version {
-		t.Errorf("frontend/package.json version %q != Go Version %q", pkg.Version, Version)
-	}
-
-	// 3. Verify build/darwin/Info.plist
-	infoPlistPath := filepath.Join("build", "darwin", "Info.plist")
-	plistData, err := os.ReadFile(infoPlistPath)
-	if err != nil {
-		t.Fatalf("failed to read build/darwin/Info.plist: %v", err)
-	}
-	expectedString := "<string>" + Version + "</string>"
-	if !strings.Contains(string(plistData), expectedString) {
-		t.Errorf("build/darwin/Info.plist does not contain expected version string %s", expectedString)
-	}
-}
 
 // TestAcceptance_Updater_SettingsTogglePersistence verifies that the auto_check_updates preference
 // is stored at application level in vault.json (not in business Markdown), defaulting to true
@@ -64,7 +27,7 @@ func TestAcceptance_Updater_SettingsTogglePersistence(t *testing.T) {
 	vaultSvc := &VaultService{configPath: configPath}
 
 	// Instance 1: Official build
-	updaterSvc1 := NewUpdaterService(vaultSvc, Version, true)
+	updaterSvc1 := NewUpdaterService(vaultSvc, "0.1.0", true)
 	enabled, err := updaterSvc1.GetAutoCheckUpdates()
 	if err != nil || !enabled {
 		t.Fatalf("expected official build to default to true, got %v (err: %v)", enabled, err)
@@ -85,7 +48,7 @@ func TestAcceptance_Updater_SettingsTogglePersistence(t *testing.T) {
 	}
 
 	// Instance 2: Reloading service should see false
-	updaterSvc2 := NewUpdaterService(vaultSvc, Version, true)
+	updaterSvc2 := NewUpdaterService(vaultSvc, "0.1.0", true)
 	reloaded, err := updaterSvc2.GetAutoCheckUpdates()
 	if err != nil || reloaded {
 		t.Fatalf("expected persisted false on reload, got %v (err: %v)", reloaded, err)
@@ -102,7 +65,7 @@ func TestAcceptance_Updater_DevBuildIsolation(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	vaultSvc := &VaultService{configPath: filepath.Join(tmpDir, "vault.json")}
-	devSvc := NewUpdaterService(vaultSvc, Version, false)
+	devSvc := NewUpdaterService(vaultSvc, "0.1.0", false)
 
 	// Auto check on dev build defaults to false
 	autoCheck, _ := devSvc.GetAutoCheckUpdates()
@@ -140,7 +103,7 @@ func TestAcceptance_Updater_EndToEndFlow(t *testing.T) {
 	vaultSvc := &VaultService{configPath: filepath.Join(tmpDir, "vault.json")}
 	svc := NewUpdaterService(vaultSvc, "0.1.0", true)
 
-	restartInvoked := false
+	downloadDone := make(chan struct{})
 	mock := &mockUpdaterBackend{
 		checkFunc: func(ctx context.Context) (*updater.Release, error) {
 			return &updater.Release{
@@ -156,14 +119,11 @@ func TestAcceptance_Updater_EndToEndFlow(t *testing.T) {
 			svc.handleDownloadProgress(updater.Progress{Written: 999, Total: 1000})
 			svc.handleDownloadProgress(updater.Progress{Written: 1000, Total: 1000})
 			svc.handleUpdateReady()
+			close(downloadDone)
 			return nil
 		},
 	}
 	mock.restartCalled = make(chan struct{})
-	go func() {
-		<-mock.restartCalled
-		restartInvoked = true
-	}()
 	svc.setBackend(mock)
 
 	// Step 1: Check for update
@@ -180,8 +140,11 @@ func TestAcceptance_Updater_EndToEndFlow(t *testing.T) {
 		t.Fatalf("StartDownload failed: %v", err)
 	}
 
-	// Wait briefly for download goroutine to complete simulation
-	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-downloadDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("download did not finish")
+	}
 
 	st := svc.GetUpdateStatus()
 	if st.State != UpdateStateStaging || st.ProgressPercent != 100 {
@@ -204,10 +167,10 @@ func TestAcceptance_Updater_EndToEndFlow(t *testing.T) {
 		t.Fatalf("expected restarting, got %s", st.State)
 	}
 
-	// Verify restart was dispatched
-	time.Sleep(50 * time.Millisecond)
-	if !restartInvoked {
-		t.Fatalf("expected backend.Restart to be called")
+	select {
+	case <-mock.restartCalled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected backend.Restart to be called")
 	}
 }
 

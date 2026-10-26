@@ -86,7 +86,9 @@ Keep comments focused on behavior and non-obvious constraints. Review the projec
 
 ## Create new files
 
-Place new files in the module that owns the behavior. Keep implementation documents in the relevant stage under `docs/`, following [docs/README.md](docs/README.md).
+Place new files in the module that owns the behavior. Desktop setup, application services, and their unit and business acceptance tests live in `internal/app/`. The root `main.go` embeds resources and passes build metadata to the application; packaging and version consistency tests stay beside it. Run `go test ./...` to include the internal packages.
+
+Keep implementation documents in the relevant stage under `docs/`, following [docs/README.md](docs/README.md).
 
 Do not edit generated files in `frontend/bindings/` by hand. When Go service bindings change, regenerate them with the matching Wails CLI:
 

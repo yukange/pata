@@ -122,7 +122,7 @@ Notes 自动保存、Task/Memo 手动保存、未知 Frontmatter 字段保留、
 - [x] 共用候选只查询已有 Note：标题匹配、同名显示路径、上下方向键/Enter/Tab/Esc 与鼠标选择均有代码实现；没有候选时显示“没有找到笔记”，不自动新建。（`noteRefs.tsx`）
 - [x] Task/Memo 中删除 `[[名称]]` 后，对应失效的 `note_refs` 在保存前由 `pruneRefs` 剔除；已实现多行文本/转义引用规则，Task 的旧 `note_ids` 继续读取并参与计算。（`noteRefs.tsx`、`links.go`）
 - [x] Note 底部“被引用”区域默认折叠、无来源时隐藏；Go 索引按 Note/Task 稳定 ID 去重，Task 描述、评论与旧 `note_ids` 对同一目标合并计为 Task 来源。（`NotesView.tsx`、`links.go`、`links_test.go`）
-- [x] 被引用信息不是反写目标 Note，而是从有效 Markdown 和内存索引计算；保存/外部文件事件后触发刷新；Go 测试涵盖代码块、图片、URL、自引用不计数以及删除目标后不错误计数到新 ID。（`links.go`、`links_test.go`）
+- [x] 被引用信息不是反写目标 Note，而是从有效 Markdown 和内存索引计算；保存/外部文件事件后触发刷新；Go 测试涵盖代码块、图片、URL、自引用不计数以及删除目标后不错误计数到新 ID。内嵌 Activity 只使用自身绑定参与查询，不用 Task 描述绑定扫描序列化 Body；覆盖删除目标、创建同名笔记并重扫后不得继承旧反向链接。（`links.go`、`links_test.go`、`internal/app/vaultservice_note_links_test.go`）
 - [x] 点击 Note 引用前经 `leaveThen` 尝试 flush 当前笔记自动保存；冲突/失败或未命名草稿有确认与阻止误离开的逻辑；任务详情/Today 的草稿也有既有离开保护。（`NotesView.tsx`、`TaskDetailPanel.tsx`、`TodayView.tsx`）
 - [x] **修复已绑定但目标 Note 不存在的前端解析**：`noteRefsCore.ts:resolveRef` 确保已绑定目标只认绑定 ID，目标不存在时立即保留失效提示并禁止退回标题匹配，彻底杜绝新建同名 Note 接管旧绑定；补充了前端独立测试覆盖绑定存在、失效、同名防接管与未绑定唯一解析。（`noteRefsCore.ts`、`noteRefs.tsx`、`noteRefs.test.ts`、`links.go`）
 

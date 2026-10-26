@@ -99,6 +99,7 @@ Today 和 Task 详情的 Activity 行共用同一组视觉与交互规则，可�
 - [x] Today / Task 使用统一 Activity 展示和编辑语义；Today 任务链接位于时间右侧且保持正常字号。
 - [x] Today / Task 使用同一一体式 Composer，Today 宽度不缩短；笔记引用及快捷发送正常。
 - [x] Task 评论可原地编辑，系统状态事件只读；失败与冲突保护草稿。
+- [x] Task 属性保存请求按顺序执行；保存返回只更新已保存基线，保留请求期间继续输入的标题、描述等字段，后续保存使用最新草稿。`taskDetailSync.test.ts` 执行真实组件回调验证重叠保存与外部修改保护。
 - [x] 无 Go Core/Markdown 数据协议改变、无额外业务入口或协作功能。
 - [x] 前端构建、相关测试及 macOS 实机回归完成；PR 已 Review 并合并，文档状态标记为已完成。
 
