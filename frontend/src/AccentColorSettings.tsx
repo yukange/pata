@@ -20,13 +20,11 @@ const PRESET_COLORS = [
 ];
 
 const buttonClass =
-  'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent cursor-pointer transition-colors hover:bg-stone-100 dark:hover:bg-stone-800';
+  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full cursor-pointer transition-colors hover:bg-stone-100/60 dark:hover:bg-stone-800/60';
 
-function selectedClass(selected: boolean): string {
-  return selected
-    ? 'ring-2 ring-stone-400 dark:ring-stone-500 ring-offset-1 ring-offset-white dark:ring-offset-stone-900'
-    : '';
-}
+// Only outline the selected color itself, not the entire 36px click target.
+const selectedSwatchClass =
+  'ring-1 ring-stone-500 dark:ring-stone-400 ring-offset-2 ring-offset-white dark:ring-offset-stone-900';
 
 export function AccentColorSettings({ color, ready, status, error, onChange, onRetry }: Props) {
   const isCustom = !!color && !PRESET_COLORS.some((preset) => preset.value === color.toLowerCase());
@@ -46,7 +44,7 @@ export function AccentColorSettings({ color, ready, status, error, onChange, onR
             aria-label="跟随系统强调色"
             aria-pressed={!color}
             onClick={() => onChange('')}
-            className={[buttonClass, !color ? 'bg-stone-100 dark:bg-stone-800' : '', selectedClass(!color)].join(' ')}
+            className={[buttonClass, !color ? 'bg-stone-100 dark:bg-stone-800' : ''].join(' ')}
           >
             <Monitor className="h-4 w-4 text-stone-600 dark:text-stone-300" aria-hidden="true" />
           </button>
@@ -58,10 +56,13 @@ export function AccentColorSettings({ color, ready, status, error, onChange, onR
               aria-label={preset.name}
               aria-pressed={color.toLowerCase() === preset.value}
               onClick={() => onChange(preset.value)}
-              className={[buttonClass, selectedClass(color.toLowerCase() === preset.value)].join(' ')}
+              className={buttonClass}
             >
               <span
-                className="h-6 w-6 rounded-full border border-black/10 dark:border-white/15"
+                className={[
+                  'h-6 w-6 rounded-full border border-black/10 dark:border-white/15',
+                  color.toLowerCase() === preset.value ? selectedSwatchClass : '',
+                ].join(' ')}
                 style={{ backgroundColor: preset.value }}
                 aria-hidden="true"
               />
@@ -71,13 +72,12 @@ export function AccentColorSettings({ color, ready, status, error, onChange, onR
             title={isCustom ? '自定义颜色：' + color.toUpperCase() : '自定义颜色'}
             className={[
               buttonClass,
-              'relative focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-stone-500',
-              selectedClass(isCustom),
+              'relative has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-1 has-[input:focus-visible]:outline-stone-500',
             ].join(' ')}
           >
             {isCustom ? (
               <span
-                className="h-6 w-6 rounded-full border border-black/10 dark:border-white/15"
+                className={['h-6 w-6 rounded-full border border-black/10 dark:border-white/15', selectedSwatchClass].join(' ')}
                 style={{ backgroundColor: color }}
                 aria-hidden="true"
               />
