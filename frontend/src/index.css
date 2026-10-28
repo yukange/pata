@@ -2,17 +2,17 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --color-interaction-50: color-mix(in srgb, var(--pata-accent) 4%, white);
-  --color-interaction-100: color-mix(in srgb, var(--pata-accent) 10%, white);
-  --color-interaction-200: color-mix(in srgb, var(--pata-accent) 20%, white);
-  --color-interaction-300: color-mix(in srgb, var(--pata-accent) 35%, white);
-  --color-interaction-400: color-mix(in srgb, var(--pata-accent) 55%, white);
-  --color-interaction-500: color-mix(in srgb, var(--pata-accent) 80%, white);
-  --color-interaction-600: color-mix(in srgb, var(--pata-accent) 90%, white);
-  --color-interaction-700: var(--pata-accent);
-  --color-interaction-800: color-mix(in srgb, var(--pata-accent) 80%, black);
-  --color-interaction-900: color-mix(in srgb, var(--pata-accent) 50%, black);
-  --color-interaction-950: color-mix(in srgb, var(--pata-accent) 30%, black);
+  --color-interaction-50: var(--pata-interaction-50, color-mix(in srgb, var(--pata-accent) 4%, white));
+  --color-interaction-100: var(--pata-interaction-100, color-mix(in srgb, var(--pata-accent) 10%, white));
+  --color-interaction-200: var(--pata-interaction-200, color-mix(in srgb, var(--pata-accent) 20%, white));
+  --color-interaction-300: var(--pata-interaction-300, color-mix(in srgb, var(--pata-accent) 35%, white));
+  --color-interaction-400: var(--pata-interaction-400, color-mix(in srgb, var(--pata-accent) 55%, white));
+  --color-interaction-500: var(--pata-interaction-500, color-mix(in srgb, var(--pata-accent) 80%, white));
+  --color-interaction-600: var(--pata-interaction-600, color-mix(in srgb, var(--pata-accent) 90%, white));
+  --color-interaction-700: var(--pata-interaction-700, var(--pata-accent));
+  --color-interaction-800: var(--pata-interaction-800, color-mix(in srgb, var(--pata-accent) 80%, black));
+  --color-interaction-900: var(--pata-interaction-900, color-mix(in srgb, var(--pata-accent) 50%, black));
+  --color-interaction-950: var(--pata-interaction-950, color-mix(in srgb, var(--pata-accent) 30%, black));
 }
 
 :root {
@@ -83,6 +83,14 @@
   --pata-success: #22c55e;
   --pata-warning: #f59e0b;
   --pata-destructive: #ef4444;
+}
+
+/* 自定义 RGB 覆盖交互色阶；状态绿和品牌色独立于强调色。 */
+:root[data-pata-custom-accent],
+:root[data-pata-custom-accent] :where(.dark, .dark *) {
+  --pata-accent: var(--pata-custom-accent);
+  --pata-accent-hover: var(--pata-custom-accent-hover);
+  --pata-focus-ring: var(--pata-custom-accent);
 }
 
 .drag-region {
@@ -460,13 +468,13 @@ textarea.bg-transparent:focus-visible,
 .vditor-reset a,
 .vditor-ir__link,
 .vditor-editor-wrapper .vditor-ir__link {
-  color: var(--pata-accent) !important;
+  color: var(--pata-interaction-700, var(--pata-accent)) !important;
 }
 
 :where(.dark, .dark *) .vditor-reset a,
 :where(.dark, .dark *) .vditor-ir__link,
 :where(.dark, .dark *) .vditor-editor-wrapper .vditor-ir__link {
-  color: color-mix(in srgb, var(--pata-accent) 55%, white) !important;
+  color: var(--pata-interaction-400, color-mix(in srgb, var(--pata-accent) 55%, white)) !important;
 }
 
 /* ---- Nav Morphing View Transitions (Magpie style) ---- */

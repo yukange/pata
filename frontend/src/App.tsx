@@ -31,6 +31,7 @@ import { registerTitlebarLogo, playLogoLaunch, playLogoClick, playLogoHover } fr
 import { isVirtualAllTag } from './tagAll';
 import { DetailSplit, useDetailOrigin } from './DetailSplit';
 import { TaskDetailPanel, TaskDetailHandle } from './TaskDetailPanel';
+import { useAccentColor } from './useAccentColor';
 
 function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
   return (
@@ -74,6 +75,7 @@ export default function App() {
   }, [sidebarCollapsed]);
 
   // Settings & Theme state
+  const accent = useAccentColor();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<'appearance' | 'storage' | 'transcription' | 'updater' | null>(null);
   const [themeMode, setThemeMode] = useState<'system' | 'light' | 'dark'>(() => {
@@ -1253,6 +1255,7 @@ export default function App() {
             <SettingsView
               themeMode={themeMode}
               onThemeChange={handleThemeChange}
+              accent={accent}
               vaultStatus={vaultStatus}
               onSelectVault={handleSelectVault}
               onRescanVault={handleRescan}

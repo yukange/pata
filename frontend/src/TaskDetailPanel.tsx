@@ -178,7 +178,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
 
   const titleTextareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const copyFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const copyFeedbackTimerRef = useRef<number | null>(null);
   const externalModifiedRef = useRef(false);
   const externalChangeVersionRef = useRef(0);
   const hasDraftRef = useRef(false);

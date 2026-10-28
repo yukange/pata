@@ -21,6 +21,7 @@ type WindowStateConfig struct {
 
 // VaultConfig is the persisted single-vault choice (D18: 单 Vault) and app preferences.
 type VaultConfig struct {
+	AccentColor      string             `json:"accent_color,omitempty"`
 	AutoCheckUpdates *bool              `json:"auto_check_updates,omitempty"`
 	MCPEnabled       bool               `json:"mcp_enabled,omitempty"`
 	VaultPath        string             `json:"vault_path"`

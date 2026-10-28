@@ -47,11 +47,11 @@ test('Design Tokens: 核心语义色、字体栈与变量定义完备', () => {
 
   // 4. 交互色阶完备且各色阶不重复，确保悬停态与分割线层级明确
   assert.ok(
-    cssContent.includes('--color-interaction-600: color-mix(in srgb, var(--pata-accent) 90%, white);'),
+    cssContent.includes('--color-interaction-600: var(--pata-interaction-600, color-mix(in srgb, var(--pata-accent) 90%, white));'),
     '600 色阶应比 700 纯强调色更浅以提供明确的悬停与分割线对比'
   );
   assert.ok(
-    cssContent.includes('--color-interaction-700: var(--pata-accent);'),
+    cssContent.includes('--color-interaction-700: var(--pata-interaction-700, var(--pata-accent));'),
     '700 色阶作为主交互强调色'
   );
 });
