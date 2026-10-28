@@ -25,6 +25,16 @@ test('custom accent roles preserve user RGB and meet light/dark contrast targets
   }
 });
 
+test('muted green preset stays green with legible white controls in both themes', () => {
+  const chosen = '#27836b';
+  for (const dark of [false, true]) {
+    const roles = deriveAccentRoles(chosen, dark);
+    assert.equal(roles.source, chosen);
+    assert.equal(roles.onSolid, '#ffffff');
+    assert.ok(accentContrast(accentRGB(roles.solid), accentRGB(roles.onSolid)) >= 4.5);
+  }
+});
+
 test('white and black accents adapt to theme rather than always being grey or black', () => {
   assert.equal(deriveAccentRoles('#ffffff', true).solid, '#ffffff');
   assert.notEqual(deriveAccentRoles('#ffffff', false).solid, '#ffffff');
