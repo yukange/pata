@@ -82,7 +82,7 @@ export function ActivityComposer({
             onMouseDown={(e) => e.preventDefault()}
             onClick={onSubmit}
             disabled={submitting || !value.trim()}
-            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-interaction-700 hover:bg-interaction-800 text-white text-xs font-medium transition shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] text-xs font-medium transition shadow-2xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             title="发送 (⌘+Enter)"
           >
             {submitting ? (
