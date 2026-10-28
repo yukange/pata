@@ -68,12 +68,12 @@ export function deriveAccentRoles(color: string, dark: boolean): AccentRoles {
   const againstSurface = dark ? WHITE : BLACK;
   let solid = ensureContrast(rgb, surface, 3, againstSurface);
 
-  // A slightly darker system-blue-like solid keeps white labels. Bright yellows
-  // and greens instead keep their character and use dark labels.
-  if (!dark && accentContrast(solid, WHITE) < 4.5 && accentContrast(solid, WHITE) >= 3.6) {
+  // Slightly darken system-blue-like fills to keep white labels; bright yellow
+  // and green fills instead retain their hue and use dark labels.
+  if (accentContrast(solid, WHITE) < 4.5 && accentContrast(solid, WHITE) >= 3.6) {
     const candidate = ensureContrast(solid, WHITE, 4.5, BLACK);
     const adjustment = Math.max(...solid.map((channel, index) => Math.abs(channel - candidate[index])));
-    if (adjustment <= 32) solid = candidate;
+    if (adjustment <= 32 && accentContrast(candidate, surface) >= 3) solid = candidate;
   }
   const onSolid = accentContrast(solid, WHITE) >= 4.5 ? WHITE : BLACK;
   const text = ensureContrast(rgb, surface, 4.5, againstSurface);
