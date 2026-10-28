@@ -700,7 +700,7 @@ export function TodayView({
             </div>
 
             <QuickCreateInput
-              placeholder={isToday ? '添加今天要做的事…  末尾可加 #标签' : '添加当日要做的事…  末尾可加 #标签'}
+              placeholder={isToday ? '添加今天的任务或搜索已有任务…' : '添加当日任务或搜索已有任务…'}
               submitLabel="添加"
               tagNames={tagNames}
               onSubmit={handleQuickCreate}
@@ -876,7 +876,6 @@ export function TodayView({
           </div>
         </div>
       )}
-
     </>
   );
 }
