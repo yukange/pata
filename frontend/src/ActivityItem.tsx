@@ -102,7 +102,7 @@ export function ActivityItem({
                   e.stopPropagation();
                   taskContext.onOpenTask(taskContext.taskId);
                 }}
-                className="ml-2 text-xs font-medium text-[var(--pata-activity-link)] hover:text-[var(--pata-accent-text)] hover:underline cursor-pointer align-baseline break-words text-left"
+                className="ml-2 text-xs font-medium text-interaction-700 dark:text-interaction-400 hover:underline cursor-pointer align-baseline break-words text-left"
                 title="在右侧打开任务详情"
               >
                 {taskContext.taskTitle || taskContext.taskId}
@@ -148,7 +148,7 @@ export function ActivityItem({
                   e.stopPropagation();
                   taskContext.onOpenTask(taskContext.taskId);
                 }}
-                className="text-xs font-medium text-[var(--pata-activity-link)] hover:text-[var(--pata-accent-text)] hover:underline cursor-pointer text-left break-words"
+                className="text-xs font-medium text-interaction-700 dark:text-interaction-400 hover:underline cursor-pointer text-left break-words"
                 title="在右侧打开任务详情"
               >
                 {taskContext.taskTitle || taskContext.taskId}

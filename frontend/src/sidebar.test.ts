@@ -78,10 +78,12 @@ test('侧栏收起交互规范：避让交通灯、Logo 右侧按钮一致性、
     '顶栏应合理包含 drag-region 与 no-drag-region'
   );
 
-  // 导航项使用 var(--pata-accent) 语义高亮
+  // 导航项在 active 时采用中性高对比文字与底色
   assert.ok(
-    appContent.includes("activeNav === 'today'") && appContent.includes('var(--pata-accent)'),
-    '导航项在 active 时应使用 var(--pata-accent) 语义 Token'
+    appContent.includes("activeNav === 'today'") &&
+      appContent.includes('bg-stone-200/80') &&
+      appContent.includes('text-stone-900'),
+    '导航项在 active 时应使用克制的中性高对比底色与文字'
   );
 });
 

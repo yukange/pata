@@ -136,8 +136,8 @@ test('ActivityComposer: Cmd/Ctrl+Enter 快捷提交与输入法合成保护', ()
 
   // 5. 输入框与发送按钮位于同一卡片容器，发送按钮位于右下角
   assert.ok(
-    content.includes('focus-within:ring-2') && content.includes('justify-end'),
-    'ActivityComposer 应提供一体式卡片焦点环与右下角按钮'
+    content.includes('focus-within:border-[var(--pata-accent-focus)]') && content.includes('justify-end'),
+    'ActivityComposer 应提供一体式卡片焦点反馈与右下角按钮'
   );
 });
 

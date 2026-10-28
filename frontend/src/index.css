@@ -93,7 +93,6 @@
   --pata-accent-subtle: color-mix(in srgb, var(--pata-accent) 10%, white);
   --pata-accent-focus: var(--pata-focus-ring);
   --pata-accent-solid-hover: var(--pata-accent-hover);
-  --pata-activity-link: color-mix(in srgb, var(--pata-accent-text) 60%, var(--pata-foreground) 40%);
 }
 :root.dark {
   --pata-accent-subtle: color-mix(in srgb, var(--pata-accent) 16%, #1c1917);
