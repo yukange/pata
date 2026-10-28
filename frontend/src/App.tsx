@@ -832,7 +832,7 @@ export default function App() {
               aria-label="Today"
               className={`h-7 flex items-center space-x-1.5 px-2.5 rounded-md font-medium transition cursor-pointer ${
                 activeNav === 'today'
-                  ? 'bg-[var(--pata-accent)] text-[var(--pata-accent-foreground)] shadow-xs'
+                  ? 'bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] shadow-xs'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
               }`}
             >
@@ -845,7 +845,7 @@ export default function App() {
               aria-label="Tasks"
               className={`h-7 flex items-center space-x-1.5 px-2.5 rounded-md font-medium transition cursor-pointer ${
                 activeNav === 'tasks'
-                  ? 'bg-[var(--pata-accent)] text-[var(--pata-accent-foreground)] shadow-xs'
+                  ? 'bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] shadow-xs'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
               }`}
             >
@@ -858,7 +858,7 @@ export default function App() {
               aria-label="Notes"
               className={`h-7 flex items-center space-x-1.5 px-2.5 rounded-md font-medium transition cursor-pointer ${
                 activeNav === 'notes'
-                  ? 'bg-[var(--pata-accent)] text-[var(--pata-accent-foreground)] shadow-xs'
+                  ? 'bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] shadow-xs'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
               }`}
             >
@@ -898,7 +898,7 @@ export default function App() {
               title="设置 (⌘,)"
               className={`h-7 w-7 flex items-center justify-center rounded-md text-xs font-medium transition cursor-pointer ${
                 isSettingsOpen
-                  ? 'bg-[var(--pata-accent)] text-[var(--pata-accent-foreground)] shadow-xs'
+                  ? 'bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] shadow-xs'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
               }`}
             >
@@ -1008,7 +1008,7 @@ export default function App() {
                   aria-label="Today"
                   className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                     activeNav === 'today'
-                      ? 'bg-[var(--pata-accent)] text-[var(--pata-accent-foreground)] shadow-xs'
+                      ? 'bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] shadow-xs'
                       : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
                   }`}
                   title="Today"
@@ -1023,7 +1023,7 @@ export default function App() {
                   aria-label="Tasks"
                   className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                     activeNav === 'tasks'
-                      ? 'bg-[var(--pata-accent)] text-[var(--pata-accent-foreground)] shadow-xs'
+                      ? 'bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] shadow-xs'
                       : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
                   }`}
                   title="Tasks"
@@ -1038,7 +1038,7 @@ export default function App() {
                   aria-label="Notes"
                   className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                     activeNav === 'notes'
-                      ? 'bg-[var(--pata-accent)] text-[var(--pata-accent-foreground)] shadow-xs'
+                      ? 'bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] shadow-xs'
                       : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
                   }`}
                   title="Notes"
@@ -1122,7 +1122,7 @@ export default function App() {
                     aria-label="设置"
                     className={`flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs font-medium transition cursor-pointer ${
                       isSettingsOpen
-                        ? 'bg-[var(--pata-accent)] text-[var(--pata-accent-foreground)] shadow-xs'
+                        ? 'bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] shadow-xs'
                         : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
                     }`}
                     title="设置 (⌘,)"
