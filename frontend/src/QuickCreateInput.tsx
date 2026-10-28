@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Circle, Plus } from 'lucide-react';
 import type { Task } from '../bindings/pata/internal/storage/markdown/models.js';
-import { splitAndSortTasksForPicker } from './taskPicker';
+import { getInlineTaskCandidates } from './taskPicker';
 import { activeTagQuery, parseQuickTask } from './quickCreate';
 
 interface QuickCreateInputProps {
@@ -64,13 +64,7 @@ export function QuickCreateInput({
 
   const taskSections = useMemo(() => {
     if (!existingTasks || !onSelectExisting) return { uncompletedTasks: [] as Task[], completedTasks: [] as Task[] };
-    const titleQuery = parseQuickTask(value).title;
-    const sections = splitAndSortTasksForPicker(existingTasks, planTaskIds ?? [], titleQuery);
-    return {
-      uncompletedTasks: sections.uncompletedTasks.slice(0, 5),
-      // Keep completed tasks searchable, but do not suggest them when the input is empty.
-      completedTasks: titleQuery.trim() ? sections.completedTasks.slice(0, 5) : [],
-    };
+    return getInlineTaskCandidates(existingTasks, planTaskIds ?? [], parseQuickTask(value).title);
   }, [existingTasks, planTaskIds, onSelectExisting, value]);
   const taskOptions = [...taskSections.uncompletedTasks, ...taskSections.completedTasks];
   const taskOpen = Boolean(onSelectExisting) && focused && !busy && !tagQuery && dismissedFor !== value && taskOptions.length > 0;
