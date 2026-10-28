@@ -160,7 +160,7 @@ export function DetailSplit({ panel, hidden = false, children }: { panel: ReactN
           )}
           <aside
             style={{ width: effectiveWidth, display: hidden ? 'none' : undefined }}
-            className="shrink-0 h-full min-h-0 overflow-hidden flex flex-col"
+            className="shrink-0 h-full min-h-0 flex flex-col relative z-20"
             aria-label="任务详情"
           >
             {panel}

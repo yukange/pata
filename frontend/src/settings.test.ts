@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
+import fs from 'node:fs';
 
 test('theme preference: 校验允许的主题取值', () => {
   const validThemes = ['system', 'light', 'dark'];
@@ -29,4 +30,17 @@ test('API Key 输入验证: 去除空白后不能为空', () => {
   assert.strictEqual(validateKey('\t\n'), false);
   assert.strictEqual(validateKey('sk-1234567890abcdef'), true);
   assert.strictEqual(validateKey('  sk-test-with-spaces  '), true);
+});
+
+test('ASR API Key: 进入设置未配置 Key 时不应自动对焦输入框', () => {
+  const settingsSrc = fs.readFileSync(new URL('./SettingsView.tsx', import.meta.url), 'utf-8');
+  assert.strictEqual(
+    settingsSrc.includes('\n                      autoFocus\n'),
+    false,
+    '输入框不应包含无条件 autoFocus'
+  );
+  assert.ok(
+    settingsSrc.includes('autoFocus={isReplacingKey}'),
+    '仅在用户主动点击更换 API Key 时才对焦输入框'
+  );
 });
