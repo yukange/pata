@@ -13,7 +13,7 @@ interface Props {
 const PRESET_COLORS = [
   { name: '蓝色', value: '#007aff' },
   { name: '紫色', value: '#af52de' },
-  { name: '绿色', value: '#34c759' },
+  { name: '绿色', value: '#27836b' },
   { name: '橙色', value: '#ff9500' },
   { name: '粉色', value: '#ff2d55' },
   { name: '灰色', value: '#8e8e93' },
