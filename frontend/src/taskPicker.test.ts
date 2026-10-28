@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Task } from '../bindings/pata/internal/storage/markdown/models.js';
-import { splitAndSortTasksForPicker, sortTasksChronologically } from './taskPicker.ts';
+import { getInlineTaskCandidates, splitAndSortTasksForPicker, sortTasksChronologically } from './taskPicker.ts';
 
 function makeTask(overrides: Partial<Task>): Task {
   return {
@@ -80,4 +80,26 @@ test('splitAndSortTasksForPicker: 兼容 doing 等状态归入未完成', () => 
   const { uncompletedTasks, completedTasks } = splitAndSortTasksForPicker([taskDoing], [], '');
   assert.strictEqual(uncompletedTasks.length, 1);
   assert.strictEqual(completedTasks.length, 0);
+});
+
+test('getInlineTaskCandidates: empty input suggests up to five unfinished tasks, excluding the day plan', () => {
+  const tasks = Array.from({ length: 7 }, (_, i) =>
+    makeTask({ id: `t${i + 1}`, title: `待办 ${i + 1}`, status: 'todo' as any, created_at: `2026-10-20T10:0${i}:00+08:00` })
+  );
+  tasks.push(makeTask({ id: 'done', title: '已完成', status: 'done' as any }));
+
+  const result = getInlineTaskCandidates(tasks, ['t1'], '');
+  assert.deepEqual(result.uncompletedTasks.map((t) => t.id), ['t2', 't3', 't4', 't5', 't6']);
+  assert.deepEqual(result.completedTasks, []);
+});
+
+test('getInlineTaskCandidates: typed query matches title/tags and still offers completed tasks', () => {
+  const tasks = [
+    makeTask({ id: 'todo', title: 'Pata 任务', status: 'todo' as any }),
+    makeTask({ id: 'done', title: '设计', tags: ['pata'], status: 'done' as any }),
+    makeTask({ id: 'other', title: '其他任务', status: 'todo' as any }),
+  ];
+  const result = getInlineTaskCandidates(tasks, [], 'PATA');
+  assert.deepEqual(result.uncompletedTasks.map((t) => t.id), ['todo']);
+  assert.deepEqual(result.completedTasks.map((t) => t.id), ['done']);
 });
