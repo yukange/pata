@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { componentCallbacks } from '../scripts/componentCallbacks.ts';
 
 const callback = componentCallbacks(new URL('./TaskDetailPanel.tsx', import.meta.url));
@@ -147,4 +148,19 @@ test('Clipboard failure explains what happened without reporting a successful co
   })();
   assert.deepEqual(feedback, []);
   assert.deepEqual(errors, ['检查 MCP 状态或复制失败，请重试']);
+});
+
+test('Copy for Agent includes hover preview tooltip matching settings copy instruction preview', () => {
+  const panelSrc = fs.readFileSync(new URL('./TaskDetailPanel.tsx', import.meta.url), 'utf-8');
+  assert.ok(panelSrc.includes('id="task-agent-prompt-preview"'), '应包含 task-agent-prompt-preview ID');
+  assert.ok(panelSrc.includes('role="tooltip"'), '应具有标准 tooltip 无障碍角色');
+  assert.ok(panelSrc.includes('aria-describedby="task-agent-prompt-preview"'), '按钮应通过 aria-describedby 关联预览');
+  assert.ok(panelSrc.includes('Agent 任务指令'), '悬停预览标题应为 Agent 任务指令');
+  assert.ok(panelSrc.includes('group-hover:block'), '悬停时应展示预览框');
+  assert.ok(panelSrc.includes('group-focus-within:block'), '获得焦点时应展示预览框');
+  assert.ok(panelSrc.includes('select-text'), '预览文本应可选中复制');
+  assert.ok(
+    panelSrc.includes('`处理这个 Pata 任务：pata://task/${taskId}`'),
+    '预览文本应包含正确的任务指令格式'
+  );
 });

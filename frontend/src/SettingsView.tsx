@@ -471,7 +471,7 @@ export function SettingsView({
                       value={apiKeyInput}
                       onChange={(e) => setApiKeyInput(e.target.value)}
                       placeholder="sk-..."
-                      autoFocus
+                      autoFocus={isReplacingKey}
                       className="w-full pl-9 pr-3 py-2 rounded-lg bg-white dark:bg-stone-950 border border-stone-200 dark:border-stone-800 font-mono text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:border-interaction-500 focus:ring-1 focus:ring-interaction-500 transition"
                     />
                   </div>

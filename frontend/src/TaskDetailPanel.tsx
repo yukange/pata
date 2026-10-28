@@ -694,6 +694,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
     () => buildTaskTimelineItems(task, taskActivities),
     [task, taskActivities]
   );
+  const agentTaskPrompt = `处理这个 Pata 任务：pata://task/${taskId}`;
 
   if (!task) {
     return (
@@ -764,14 +765,29 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                   <span>任务信息</span>
                 </button>
                 {canCopyForAgent && (
-                  <button
-                    type="button"
-                    onClick={() => void handleCopyForAgent()}
-                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition text-left"
-                  >
-                    <Copy className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                    <span>复制给 Agent</span>
-                  </button>
+                  <div className="group relative">
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyForAgent()}
+                      aria-describedby="task-agent-prompt-preview"
+                      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-stone-800 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition text-left"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                      <span>复制给 Agent</span>
+                    </button>
+                    <div
+                      id="task-agent-prompt-preview"
+                      role="tooltip"
+                      className="absolute right-full top-0 z-30 hidden w-[min(18rem,calc(100vw-3rem))] pr-2 group-hover:block group-focus-within:block"
+                    >
+                      <div className="rounded-lg border border-stone-200 bg-white p-3 shadow-lg dark:border-stone-700 dark:bg-stone-900">
+                        <p className="mb-1.5 text-xs font-medium text-stone-800 dark:text-stone-200">Agent 任务指令</p>
+                        <p className="select-text break-words text-xs leading-relaxed text-stone-600 dark:text-stone-300">
+                          {agentTaskPrompt}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 )}
                 {planDateContext && (
                   <button
