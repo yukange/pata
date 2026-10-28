@@ -59,3 +59,16 @@ export function splitAndSortTasksForPicker(
     totalAvailableCount: uncompleted.length + completed.length,
   };
 }
+
+/** Inline Today suggestions: show a few unfinished tasks on focus; completed ones only when searching. */
+export function getInlineTaskCandidates(
+  tasks: Task[],
+  dayPlanTaskIds: string[],
+  titleQuery: string
+): Pick<TaskPickerSections, 'uncompletedTasks' | 'completedTasks'> {
+  const sections = splitAndSortTasksForPicker(tasks, dayPlanTaskIds, titleQuery);
+  return {
+    uncompletedTasks: sections.uncompletedTasks.slice(0, 5),
+    completedTasks: titleQuery.trim() ? sections.completedTasks.slice(0, 5) : [],
+  };
+}
