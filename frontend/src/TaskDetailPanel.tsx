@@ -1286,7 +1286,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                 type="button"
                 onClick={() => void finishLeavePrompt('save')}
                 disabled={submittingActivity || editSaving}
-                className="px-3 py-1.5 rounded-md bg-interaction-700 hover:bg-interaction-800 text-white text-xs font-medium transition disabled:opacity-50 cursor-pointer"
+                className="px-3 py-1.5 rounded-md bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] text-xs font-medium transition disabled:opacity-50 cursor-pointer"
               >
                 {submittingActivity || editSaving ? '保存中...' : '保存并离开'}
               </button>
