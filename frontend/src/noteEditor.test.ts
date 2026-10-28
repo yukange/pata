@@ -76,6 +76,12 @@ test('笔记外部冲突处理：干净状态下静默重载，脏状态下提�
   const notesSrc = fs.readFileSync(new URL('./NotesView.tsx', import.meta.url), 'utf-8');
   assert.ok(notesSrc.includes('!dirty'), '应先判断当前编辑器是否处于干净状态');
   assert.ok(notesSrc.includes('isDirtyRef.current(curTitle, curTags, curBody)'), '静默重载在异步返回后应二次检查脏状态防丢输入');
+  assert.ok(notesSrc.includes('lastSavedStateRef.current.body = vditor.getValue()'), 'Vditor 挂载后应将基准正文对齐为编辑器规范化值，避免打开即判定为脏数据');
+  assert.ok(notesSrc.includes('normalizeBody'), '应使用 normalizeBody 归一化换行符与尾随空白对比正文，避免假冲突');
+  assert.ok(!notesSrc.includes('isUserEditedRef'), '精简状态：不需要维护额外的 isUserEditedRef 标记');
+  assert.ok(!notesSrc.includes('isVditorMountedRef'), '精简状态：直接使用 vditorRef 判定挂载，不维护冗余布尔值');
+  assert.ok(!notesSrc.includes('hasConflictRef'), '精简状态：保存冲突收敛至 saveStatus 状态机');
+  assert.ok(!notesSrc.includes('isSavingRef'), '精简状态：保存中统一由 inFlightSaveRef 判定');
   assert.ok(notesSrc.includes('用本地草稿覆盖'), '冲突栏应提供用本地草稿覆盖按钮');
   assert.ok(notesSrc.includes('载入外部版本'), '冲突栏应提供载入外部版本按钮');
   assert.ok(notesSrc.includes('handleResolveConflictKeepMine'), '应包含覆盖外部保存的逻辑');
@@ -83,4 +89,25 @@ test('笔记外部冲突处理：干净状态下静默重载，脏状态下提�
   assert.ok(!notesSrc.includes('currentSrc.includes(fileName)'), '图片刷新不应使用模糊的前缀/子串匹配');
   assert.ok(notesSrc.includes('srcName === fileName'), '图片刷新应对文件名作精确比对与 URL 解码');
   assert.ok(!notesSrc.includes('自动保存已停止，当前本地草稿尚未写盘。为防内容丢失'), '不应再使用旧的长篇恐吓说明文案');
+  assert.ok(!notesSrc.includes('<span>保存中...</span>'), '本地自动写盘应静默无感，不应在右上角闪烁保存中提示');
+});
+
+test('笔记编辑器生命周期与防重置：Vditor 挂载仅依赖 loadingNote，保存不重构编辑器', () => {
+  const notesSrc = fs.readFileSync(new URL('./NotesView.tsx', import.meta.url), 'utf-8');
+  assert.ok(
+    notesSrc.includes('}, [loadingNote]);'),
+    'Vditor 挂载 useEffect 依赖数组应仅为 [loadingNote]，不能包含 initialNote，避免保存时销毁编辑器并失焦滚顶'
+  );
+  assert.ok(
+    notesSrc.includes('inFlightSaveRef.current'),
+    '应使用 inFlightSaveRef 记录在途保存状态'
+  );
+  assert.ok(
+    notesSrc.includes('isDiskIdenticalToLocal'),
+    '应对比磁盘内容与最后保存或在途保存状态，判定是否为自身写入事件'
+  );
+  assert.ok(
+    notesSrc.includes('if (diskBody !== vditorRef.current.getValue())'),
+    '仅在外部磁盘正文与当前编辑器内容真实不一致时才调用 setValue'
+  );
 });
