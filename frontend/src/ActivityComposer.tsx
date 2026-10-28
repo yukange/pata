@@ -26,7 +26,7 @@ export interface ActivityComposerProps {
 /**
  * 统一的一体式 Activity 输入组件。
  * 输入框与发送按钮位于同一圆角卡片容器中，发送按钮在右下角。
- * 共享边框、焦点光圈、发送状态、错误反馈与快捷键 (⌘+Enter)。
+ * 共享边框、轻量焦点反馈、发送状态、错误反馈与快捷键 (⌘+Enter)。
  */
 export function ActivityComposer({
   value,
@@ -47,7 +47,7 @@ export function ActivityComposer({
 }: ActivityComposerProps) {
   return (
     <div className={`space-y-1.5 ${className}`.trim()}>
-      <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-2.5 focus-within:border-interaction-600/80 dark:focus-within:border-interaction-500/80 focus-within:ring-2 focus-within:ring-interaction-500/20 transition shadow-2xs">
+      <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-2.5 focus-within:border-[var(--pata-accent-focus)] focus-within:ring-0 transition shadow-2xs">
         <NoteRefTextarea
           value={value}
           onChange={onChange}
