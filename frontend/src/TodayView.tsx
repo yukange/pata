@@ -5,12 +5,9 @@ import {
   ChevronRight,
   RotateCcw,
   Plus,
-  Search,
   X,
   AlertCircle,
   FolderOpen,
-  Circle,
-  CheckCircle2,
 } from 'lucide-react';
 import * as VaultService from '../bindings/pata/internal/app/vaultservice';
 import { Task, TaskStatus } from '../bindings/pata/internal/storage/markdown/models';
@@ -23,8 +20,6 @@ import { ActivityComposer } from './ActivityComposer';
 import { ActivityItem } from './ActivityItem';
 import { NoteRefMap, pruneRefs, sameRefs, useNoteRefs } from './noteRefs';
 import { getLocalDateStr, followTodayOnDateChange } from './todayDate';
-import { formatActivityTimestamp } from './taskTimeline';
-import { splitAndSortTasksForPicker } from './taskPicker';
 
 interface TodayViewProps {
   vaultStatus: VaultStatus | null;
@@ -153,9 +148,6 @@ export function TodayView({
   const [editRefs, setEditRefs] = useState<NoteRefMap>({});
   const [editSaving, setEditSaving] = useState(false);
   const [leavePrompt, setLeavePrompt] = useState<((r: boolean) => void) | null>(null);
-
-  const [addModalOpen, setAddModalOpen] = useState(false);
-  const [addSearch, setAddSearch] = useState('');
 
   useEffect(() => { onDateSelected(selectedDate); }, [selectedDate, onDateSelected]);
 
@@ -320,10 +312,6 @@ export function TodayView({
       .filter((t): t is Task => !!t && t.status !== TaskStatus.TaskStatusDone && !currentSet.has(t.id));
   }, [selectedDate, todayStr, dayPlanTaskIds, yesterdayTaskIds, taskMap]);
 
-  const { uncompletedTasks, completedTasks, totalAvailableCount } = useMemo(() => {
-    return splitAndSortTasksForPicker(tasks, dayPlanTaskIds, addSearch);
-  }, [tasks, dayPlanTaskIds, addSearch]);
-
   // 当前选中任务由 App Shell 管理；Today 只提供计划上下文。
   const openTask = (id: string) => {
     onOpenTask(id, dayPlanTaskIds.includes(id) ? { date: selectedDate, isToday: selectedDate === todayStr } : undefined);
@@ -387,9 +375,9 @@ export function TodayView({
 
   const handleRemove = (taskId: string) => persistPlan(dayPlanTaskIds.filter((id) => id !== taskId));
 
-  const handleAddExisting = async (taskId: string) => {
-    if (validPlanIds.includes(taskId)) return;
-    await persistPlan([...validPlanIds, taskId]);
+  const handleAddExisting = async (taskId: string): Promise<boolean> => {
+    if (validPlanIds.includes(taskId)) return true;
+    return persistPlan([...validPlanIds, taskId]);
   };
 
   // 把已创建的任务追加到指定日期的计划；失败时保留 pendingPlan 供重试
@@ -709,17 +697,6 @@ export function TodayView({
                   {completedCount} / {dayPlanTaskIds.length}
                 </span>
               </div>
-              <button
-                onClick={() => {
-                  setAddSearch('');
-                  setAddModalOpen(true);
-                }}
-                disabled={saving}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 font-medium transition disabled:opacity-50"
-              >
-                <Plus className="w-3.5 h-3.5 text-interaction-600" />
-                <span>从已有任务中选择</span>
-              </button>
             </div>
 
             <QuickCreateInput
@@ -727,6 +704,9 @@ export function TodayView({
               submitLabel="添加"
               tagNames={tagNames}
               onSubmit={handleQuickCreate}
+              existingTasks={tasks}
+              planTaskIds={dayPlanTaskIds}
+              onSelectExisting={handleAddExisting}
               disabled={saving}
             />
 
@@ -897,156 +877,6 @@ export function TodayView({
         </div>
       )}
 
-      {/* Task Picker Modal */}
-      {addModalOpen && (
-        <div
-          className="pata-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4"
-          onKeyDown={(e) => e.key === 'Escape' && setAddModalOpen(false)}
-        >
-          <div className="w-full max-w-md rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-stone-100 dark:border-stone-800">
-              <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">选择任务加入{planWord}计划</h3>
-              <button type="button" onClick={() => setAddModalOpen(false)} className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={addSearch}
-                onChange={(e) => setAddSearch(e.target.value)}
-                placeholder="搜索任务标题或标签..."
-                autoFocus
-                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus:border-stone-400 dark:focus:border-stone-600"
-              />
-            </div>
-
-            <div className="max-h-72 overflow-y-auto space-y-4 pr-1">
-              {totalAvailableCount === 0 ? (
-                <div className="py-8 text-center text-xs text-muted-foreground">
-                  {tasks.length === 0 ? '任务池为空' : '没有可添加的任务（已全部加入或无匹配项）'}
-                </div>
-              ) : (
-                <>
-                  {/* 第一块：未完成 */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-[11px] font-semibold text-muted-foreground">
-                        未完成 ({uncompletedTasks.length})
-                      </span>
-                    </div>
-                    {uncompletedTasks.length === 0 ? (
-                      <div className="py-3 text-center text-xs text-muted-foreground rounded-lg bg-stone-50/60 dark:bg-stone-800/30">
-                        暂无未完成任务
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {uncompletedTasks.map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={async () => {
-                              await handleAddExisting(t.id);
-                              setAddModalOpen(false);
-                            }}
-                            className="w-full text-left p-2.5 rounded-lg border border-stone-100 dark:border-stone-800 hover:border-interaction-500/60 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition flex items-center justify-between gap-2 group"
-                          >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <Circle className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                              <span className="text-[13px] truncate text-stone-900 dark:text-stone-100">{t.title}</span>
-                              {(t.tags ?? []).length > 0 && (
-                                <span className="hidden sm:inline-flex items-center gap-1 shrink-0">
-                                  {(t.tags ?? []).map((tag) => (
-                                    <span key={tag} className="text-[11px] text-muted-foreground">
-                                      #{tag}
-                                    </span>
-                                  ))}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {t.created_at && (
-                                <span className="text-[11px] font-mono text-muted-foreground">
-                                  {formatActivityTimestamp(t.created_at)}
-                                </span>
-                              )}
-                              <Plus className="w-3.5 h-3.5 text-interaction-600 group-hover:scale-110 transition-transform" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 第二块：已完成 */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between px-1 pt-1">
-                      <span className="text-[11px] font-semibold text-muted-foreground">
-                        已完成 ({completedTasks.length})
-                      </span>
-                    </div>
-                    {completedTasks.length === 0 ? (
-                      <div className="py-3 text-center text-xs text-muted-foreground rounded-lg bg-stone-50/60 dark:bg-stone-800/30">
-                        暂无已完成任务
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5">
-                        {completedTasks.map((t) => (
-                          <button
-                            key={t.id}
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={async () => {
-                              await handleAddExisting(t.id);
-                              setAddModalOpen(false);
-                            }}
-                            className="w-full text-left p-2.5 rounded-lg border border-stone-100 dark:border-stone-800/80 bg-stone-50/40 dark:bg-stone-900/40 hover:border-interaction-500/60 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition flex items-center justify-between gap-2 group"
-                          >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-500 shrink-0" />
-                              <span className="text-[13px] truncate line-through text-muted-foreground">{t.title}</span>
-                              {(t.tags ?? []).length > 0 && (
-                                <span className="hidden sm:inline-flex items-center gap-1 shrink-0">
-                                  {(t.tags ?? []).map((tag) => (
-                                    <span key={tag} className="text-[11px] text-muted-foreground">
-                                      #{tag}
-                                    </span>
-                                  ))}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              {t.created_at && (
-                                <span className="text-[11px] font-mono text-muted-foreground">
-                                  {formatActivityTimestamp(t.created_at)}
-                                </span>
-                              )}
-                              <Plus className="w-3.5 h-3.5 text-interaction-600 group-hover:scale-110 transition-transform" />
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={() => setAddModalOpen(false)}
-                className="px-3 py-1.5 rounded-md text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
-              >
-                关闭
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
