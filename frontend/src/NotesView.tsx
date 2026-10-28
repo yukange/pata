@@ -203,6 +203,8 @@ function NoteEditor({
   const [editTitle, setEditTitle] = useState<string>('');
   const [editTags, setEditTags] = useState<string[]>([]);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved' | 'failed' | 'conflict'>('saved');
+  const saveStatusRef = useRef(saveStatus);
+  saveStatusRef.current = saveStatus;
   const [saveError, setSaveError] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [titleError, setTitleError] = useState<string | null>(null);
@@ -285,16 +287,14 @@ function NoteEditor({
   const vditorRef = useRef<Vditor | null>(null);
   const vditorContainerRef = useRef<HTMLDivElement | null>(null);
   const lastSavedStateRef = useRef<{ title: string; tags: string[]; body: string } | null>(null);
+  const inFlightSaveRef = useRef<{ title: string; tags: string[]; body: string } | null>(null);
   const debounceTimerRef = useRef<number | null>(null);
-  const hasConflictRef = useRef<boolean>(false);
-  const isSavingRef = useRef<boolean>(false);
   const isDeletedRef = useRef<boolean>(false);
   const isUnmountedRef = useRef<boolean>(false);
 
   const editTitleRef = useRef<string>('');
   const editTagsRef = useRef<string[]>([]);
   const triggerDebouncedSaveRef = useRef<() => void>(() => {});
-  const isVditorMountedRef = useRef<boolean>(false);
   const onNoteCreatedRef = useRef(onNoteCreated);
   onNoteCreatedRef.current = onNoteCreated;
   const onNoteUpdatedRef = useRef(onNoteUpdated);
@@ -308,6 +308,8 @@ function NoteEditor({
 
   const isDraftNote = isNewDraftRef.current ? isDraftType : Boolean(initialNote?.draft);
 
+  const normalizeBody = (s: string) => s.replace(/\r\n/g, '\n').trimEnd();
+
   // Dirty check: comparison with last persisted state
   const isDirty = useCallback((currentTitle: string, currentTags: string[], currentBody: string): boolean => {
     if (isNewDraftRef.current) {
@@ -319,10 +321,10 @@ function NoteEditor({
     if (!lastSavedStateRef.current) return false;
     const last = lastSavedStateRef.current;
     if (currentTitle.trim() !== last.title.trim()) return true;
-    if (!isAudioTranscriptNote(initialNoteRef.current) && currentBody !== last.body) return true;
+    if (!isAudioTranscriptNote(initialNoteRef.current) && normalizeBody(currentBody) !== normalizeBody(last.body)) return true;
     if (currentTags.length !== last.tags.length) return true;
     for (let i = 0; i < currentTags.length; i++) {
-      if (currentTags[i] !== last.tags[i]) return true;
+      if (currentTags[i].trim().toLowerCase() !== last.tags[i]?.trim().toLowerCase()) return true;
     }
     return false;
   }, [isDraftType]);
@@ -336,7 +338,7 @@ function NoteEditor({
       return false;
     }
 
-    if (hasConflictRef.current && !force) {
+    if (saveStatusRef.current === 'conflict' && !force) {
       return false;
     }
 
@@ -373,11 +375,15 @@ function NoteEditor({
         setTitleError(null);
       }
 
-      if (isSavingRef.current) {
+      if (inFlightSaveRef.current !== null) {
         return false;
       }
 
-      isSavingRef.current = true;
+      inFlightSaveRef.current = {
+        title: currentTitle,
+        tags: isDraftType ? [] : currentTags,
+        body: currentBody,
+      };
       setSaveStatus('saving');
       let createdNote = false;
 
@@ -399,7 +405,6 @@ function NoteEditor({
             tags: isDraftType ? [] : currentTags,
             body: currentBody,
           };
-          hasConflictRef.current = false;
           setConflictError(null);
           setSaveStatus('saved');
           setSaveError(null);
@@ -417,12 +422,12 @@ function NoteEditor({
         }
         return false;
       } finally {
-        isSavingRef.current = false;
+        inFlightSaveRef.current = null;
         if (createdNote && vditorRef.current) {
           const bodyNow = vditorRef.current.getValue();
           const titleNow = editTitleRef.current;
           const tagsNow = editTagsRef.current;
-          if (isDirtyRef.current(titleNow, tagsNow, bodyNow) && !hasConflictRef.current) {
+          if (isDirtyRef.current(titleNow, tagsNow, bodyNow) && saveStatusRef.current !== 'conflict') {
             triggerDebouncedSaveRef.current();
           }
         }
@@ -439,8 +444,12 @@ function NoteEditor({
         if (!isDirtyRef.current(currentTitle, currentTags, currentBody)) {
           return true;
         }
-        if (isSavingRef.current) return false;
-        isSavingRef.current = true;
+        if (inFlightSaveRef.current !== null) return false;
+        inFlightSaveRef.current = {
+          title: '',
+          tags: [],
+          body: currentBody,
+        };
         setSaveStatus('saving');
         try {
           const input: UpdateNoteInput = {
@@ -469,14 +478,18 @@ function NoteEditor({
           setSaveError(err?.message || String(err));
           return false;
         } finally {
-          isSavingRef.current = false;
+          inFlightSaveRef.current = null;
         }
       }
 
       // 非空标题：转为正式笔记并更新元数据
       setTitleError(null);
-      if (isSavingRef.current) return false;
-      isSavingRef.current = true;
+      if (inFlightSaveRef.current !== null) return false;
+      inFlightSaveRef.current = {
+        title: currentTitle,
+        tags: currentTags,
+        body: currentBody,
+      };
       setSaveStatus('saving');
       let converted = false;
       try {
@@ -497,7 +510,6 @@ function NoteEditor({
             tags: currentTags,
             body: currentBody,
           };
-          hasConflictRef.current = false;
           setConflictError(null);
           setSaveStatus('saved');
           setSaveError(null);
@@ -513,7 +525,7 @@ function NoteEditor({
         setTitleError(err?.message || String(err));
         return false;
       } finally {
-        isSavingRef.current = false;
+        inFlightSaveRef.current = null;
       }
     }
 
@@ -525,8 +537,12 @@ function NoteEditor({
         return true;
       }
 
-      if (isSavingRef.current) return false;
-      isSavingRef.current = true;
+      if (inFlightSaveRef.current !== null) return false;
+      inFlightSaveRef.current = {
+        title: '',
+        tags: [],
+        body: currentBody,
+      };
       setSaveStatus('saving');
       let savedDraft = false;
 
@@ -546,7 +562,6 @@ function NoteEditor({
             tags: [],
             body: currentBody,
           };
-          hasConflictRef.current = false;
           setConflictError(null);
           setSaveStatus('saved');
           setSaveError(null);
@@ -559,7 +574,6 @@ function NoteEditor({
         const errMsg = err?.message || String(err);
         const isConflict = errMsg.includes('conflict') || errMsg.includes('写入冲突');
         if (isConflict) {
-          hasConflictRef.current = true;
           setSaveStatus('conflict');
           setConflictError('外部文件已更新（本地有未保存修改）');
           if (debounceTimerRef.current) {
@@ -572,10 +586,10 @@ function NoteEditor({
         }
         return false;
       } finally {
-        isSavingRef.current = false;
+        inFlightSaveRef.current = null;
         if (savedDraft && vditorRef.current) {
           const bodyNow = vditorRef.current.getValue();
-          if (isDirtyRef.current('', [], bodyNow) && !hasConflictRef.current) {
+          if (isDirtyRef.current('', [], bodyNow) && saveStatusRef.current !== 'conflict') {
             triggerDebouncedSaveRef.current();
           }
         }
@@ -597,11 +611,15 @@ function NoteEditor({
       return true;
     }
 
-    if (isSavingRef.current) {
+    if (inFlightSaveRef.current !== null) {
       return false;
     }
 
-    isSavingRef.current = true;
+    inFlightSaveRef.current = {
+      title: currentTitle,
+      tags: currentTags,
+      body: currentBody,
+    };
     setSaveStatus('saving');
     let saved = false;
 
@@ -624,7 +642,6 @@ function NoteEditor({
           tags: currentTags,
           body: currentBody,
         };
-        hasConflictRef.current = false;
         setConflictError(null);
         setSaveStatus('saved');
         setSaveError(null);
@@ -638,7 +655,6 @@ function NoteEditor({
       const isConflict = errMsg.includes('conflict') || errMsg.includes('写入冲突');
 
       if (isConflict) {
-        hasConflictRef.current = true;
         setSaveStatus('conflict');
         setConflictError('外部文件已更新（本地有未保存修改）');
         if (debounceTimerRef.current) {
@@ -652,12 +668,12 @@ function NoteEditor({
       }
       return false;
     } finally {
-      isSavingRef.current = false;
+      inFlightSaveRef.current = null;
       if (saved && (vditorRef.current || isAudioTranscriptNote(initialNoteRef.current))) {
         const bodyNow = vditorRef.current ? vditorRef.current.getValue() : (initialNoteRef.current?.body ?? '');
         const titleNow = editTitleRef.current;
         const tagsNow = editTagsRef.current;
-        if (isDirtyRef.current(titleNow, tagsNow, bodyNow) && !hasConflictRef.current) {
+        if (isDirtyRef.current(titleNow, tagsNow, bodyNow) && saveStatusRef.current !== 'conflict') {
           triggerDebouncedSaveRef.current();
         }
       }
@@ -668,7 +684,7 @@ function NoteEditor({
 
   // Debounced auto-save (0.5s)
   const triggerDebouncedSave = useCallback(() => {
-    if (isDeletedRef.current || hasConflictRef.current) return;
+    if (isDeletedRef.current || saveStatusRef.current === 'conflict') return;
     setSaveStatus('unsaved');
     if (debounceTimerRef.current) {
       window.clearTimeout(debounceTimerRef.current);
@@ -873,60 +889,78 @@ function NoteEditor({
         const tagsNow = editTagsRef.current;
         const dirty = isDirtyRef.current(titleNow, tagsNow, bodyNow);
 
-        if (!dirty) {
-          // Clean state: silently update in place without banner or error
-          VaultService.GetNote(currentNoteIdRef.current)
-            .then((updated) => {
-              if (!updated || updated.id !== currentNoteIdRef.current) return;
+        VaultService.GetNote(currentNoteIdRef.current)
+          .then((updated) => {
+            if (!updated || updated.id !== currentNoteIdRef.current) return;
 
-              // Check if user started editing while GetNote was in flight
-              const isAudioTranscriptNow = isAudioTranscriptNote(initialNoteRef.current);
-              const curBody = vditorRef.current ? vditorRef.current.getValue() : (initialNoteRef.current?.body ?? '');
-              const curTitle = editTitleRef.current;
-              const curTags = editTagsRef.current;
-              if (isDirtyRef.current(curTitle, curTags, curBody)) {
-                hasConflictRef.current = true;
-                if (debounceTimerRef.current) {
-                  window.clearTimeout(debounceTimerRef.current);
-                  debounceTimerRef.current = null;
-                }
-                setSaveStatus('conflict');
-                setConflictError('外部文件已更新（本地有未保存修改）');
-                return;
+            const isAudioTranscriptNow = isAudioTranscriptNote(initialNoteRef.current);
+            const target = inFlightSaveRef.current || lastSavedStateRef.current;
+            const diskTitle = updated.title.trim();
+            const diskBody = updated.body ?? '';
+            const diskTags = updated.tags ?? [];
+
+            const isDiskIdenticalToLocal =
+              target !== null &&
+              diskTitle === target.title.trim() &&
+              (isAudioTranscriptNow ? true : normalizeBody(diskBody) === normalizeBody(target.body)) &&
+              diskTags.length === target.tags.length &&
+              diskTags.every((t, i) => t.toLowerCase() === target.tags[i]?.toLowerCase());
+
+            // If disk content is identical to what we saved or are in-flight saving, ignore internal write event
+            if (isDiskIdenticalToLocal) {
+              return;
+            }
+
+            // Real external change occurred on disk!
+            const curBody = vditorRef.current ? vditorRef.current.getValue() : (initialNoteRef.current?.body ?? '');
+            const curTitle = editTitleRef.current;
+            const curTags = editTagsRef.current;
+
+            if (dirty || isDirtyRef.current(curTitle, curTags, curBody)) {
+              // Local has unsaved edits AND disk changed externally -> real conflict
+              if (debounceTimerRef.current) {
+                window.clearTimeout(debounceTimerRef.current);
+                debounceTimerRef.current = null;
               }
+              setSaveStatus('conflict');
+              setConflictError('外部文件已更新（本地有未保存修改）');
+              return;
+            }
 
+            if (!dirty) {
+              // Clean state: silently update in place without banner or error
               setInitialNote(updated);
               initialNoteRef.current = updated;
               lastSavedStateRef.current = {
                 title: updated.title,
-                tags: updated.tags || [],
-                body: updated.body || '',
+                tags: diskTags,
+                body: diskBody,
               };
-              setEditTitle(updated.title);
-              editTitleRef.current = updated.title;
-              setEditTags(updated.tags || []);
-              editTagsRef.current = updated.tags || [];
+              if (diskTitle !== curTitle.trim()) {
+                setEditTitle(updated.title);
+                editTitleRef.current = updated.title;
+              }
+              const tagsDiffer =
+                diskTags.length !== curTags.length ||
+                diskTags.some((t, i) => t.toLowerCase() !== curTags[i]?.toLowerCase());
+              if (tagsDiffer) {
+                setEditTags(diskTags);
+                editTagsRef.current = diskTags;
+              }
               if (vditorRef.current && !isAudioTranscriptNow) {
-                vditorRef.current.setValue(updated.body || '');
+                if (diskBody !== vditorRef.current.getValue()) {
+                  vditorRef.current.setValue(diskBody);
+                }
+                lastSavedStateRef.current.body = vditorRef.current.getValue();
               }
               setSaveStatus('saved');
               setConflictError(null);
-              hasConflictRef.current = false;
-            })
-            .catch((err) => {
-              console.warn('Failed to silently reload clean note:', err);
-            });
-          return;
-        }
-
-        // Dirty state: pause auto-save and show conflict action bar
-        hasConflictRef.current = true;
-        if (debounceTimerRef.current) {
-          window.clearTimeout(debounceTimerRef.current);
-          debounceTimerRef.current = null;
-        }
-        setSaveStatus('conflict');
-        setConflictError('外部文件已更新（本地有未保存修改）');
+            }
+          })
+          .catch((err) => {
+            console.warn('Failed to silently reload clean note:', err);
+          });
+        return;
       }
       if (data?.type === 'file' || data?.entity_id?.startsWith('files/')) {
         const container = vditorContainerRef.current;
@@ -968,7 +1002,7 @@ function NoteEditor({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
-        if (isDeletedRef.current || hasConflictRef.current) return;
+        if (isDeletedRef.current || saveStatusRef.current === 'conflict') return;
         if (debounceTimerRef.current) {
           window.clearTimeout(debounceTimerRef.current);
           debounceTimerRef.current = null;
@@ -983,7 +1017,7 @@ function NoteEditor({
   // Window beforeunload flush
   useEffect(() => {
     const handleBeforeUnload = () => {
-      if (isDeletedRef.current || hasConflictRef.current) return;
+      if (isDeletedRef.current || saveStatusRef.current === 'conflict') return;
       if (debounceTimerRef.current) {
         window.clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
@@ -998,7 +1032,7 @@ function NoteEditor({
   useEffect(() => {
     return () => {
       isUnmountedRef.current = true;
-      if (isDeletedRef.current || hasConflictRef.current) return;
+      if (isDeletedRef.current || saveStatusRef.current === 'conflict') return;
       if (debounceTimerRef.current) {
         window.clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;
@@ -1056,8 +1090,8 @@ function NoteEditor({
 
   // Mount Vditor editor when note is loaded (only for normal editable notes)
   useEffect(() => {
-    if (loadingNote || !initialNote || !vditorContainerRef.current || isVditorMountedRef.current || isAudioTranscriptNote(initialNote)) return;
-    isVditorMountedRef.current = true;
+    const currentNote = initialNoteRef.current || initialNote;
+    if (loadingNote || !currentNote || !vditorContainerRef.current || vditorRef.current || isAudioTranscriptNote(currentNote)) return;
 
     const isDark = document.documentElement.classList.contains('dark');
 
@@ -1065,7 +1099,7 @@ function NoteEditor({
       cdn: '/vditor',
       mode: 'ir',
       undoDelay: 100,
-      value: initialNote.body ?? '',
+      value: currentNote.body ?? '',
       height: '100%',
       placeholder: isDraftNote ? '记录想法...（支持 Markdown 语法，随时可点击「转为笔记」）' : '开始记录内容...（支持 Markdown 语法、表格、代码块）',
       theme: isDark ? 'dark' : 'classic',
@@ -1096,17 +1130,17 @@ function NoteEditor({
         syncPickerRef.current();
       },
       after: () => {
-        vditorRef.current = vditor;
         // 如果是新建草稿，直接聚焦编辑器正文
         if (isNewDraftRef.current && isDraftType) {
           vditor.focus();
         }
-        const bodyNow = vditor.getValue();
-        if (isDirtyRef.current(editTitleRef.current, editTagsRef.current, bodyNow)) {
-          triggerDebouncedSaveRef.current();
+        if (lastSavedStateRef.current) {
+          lastSavedStateRef.current.body = vditor.getValue();
         }
       },
     });
+
+    vditorRef.current = vditor;
 
     // Dark mode observer
     const observer = new MutationObserver(() => {
@@ -1125,9 +1159,8 @@ function NoteEditor({
         vditor.destroy();
       } catch {}
       vditorRef.current = null;
-      isVditorMountedRef.current = false;
     };
-  }, [loadingNote, initialNote, isDraftType, isDraftNote]);
+  }, [loadingNote]);
 
   // ---- `[[` 笔记候选 + 链接点击 ----
   const syncPicker = () => {
@@ -1291,7 +1324,7 @@ function NoteEditor({
   useEffect(() => {
     if (!leaveGuardRef) return;
     leaveGuardRef.current = async () => {
-      if (hasConflictRef.current) {
+      if (saveStatusRef.current === 'conflict') {
         return askUserConfirm(() => setShowLeaveConflictConfirm(true));
       }
       const currentBody = vditorRef.current ? vditorRef.current.getValue() : (initialNoteRef.current?.body ?? '');
@@ -1351,7 +1384,6 @@ function NoteEditor({
       setEditTags([]);
       editTagsRef.current = [];
       if (vditorRef.current) vditorRef.current.setValue('');
-      hasConflictRef.current = false;
       setConflictError(null);
       setSaveStatus('saved');
       return;
@@ -1384,10 +1416,9 @@ function NoteEditor({
       lastSavedStateRef.current = {
         title: diskNote.title,
         tags: diskNote.tags ?? [],
-        body,
+        body: vditorRef.current && !isAudioTranscriptNote(diskNote) ? vditorRef.current.getValue() : body,
       };
 
-      hasConflictRef.current = false;
       setConflictError(null);
       setSaveStatus('saved');
       onNoteUpdatedRef.current();
@@ -1402,7 +1433,6 @@ function NoteEditor({
     try {
       const saved = await doSave(true);
       if (saved) {
-        hasConflictRef.current = false;
         setConflictError(null);
         setSaveStatus('saved');
         showToast('已用本地草稿覆盖外部版本');
@@ -1498,28 +1528,15 @@ function NoteEditor({
     );
   }
 
-  const renderSaveStatus = () => (
-    <>
-      {saveStatus === 'saving' && (
-        <span className="text-muted-foreground flex items-center space-x-1.5">
-          <Loader2 className="w-3 h-3 animate-spin text-interaction-600" />
-          <span>保存中...</span>
-        </span>
-      )}
-      {saveStatus === 'failed' && (
-        <span className="text-rose-600 dark:text-rose-400 font-medium flex items-center space-x-1.5" title={saveError || '保存失败'}>
-          <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-          <span>保存失败</span>
-        </span>
-      )}
-      {saveStatus === 'conflict' && (
-        <span className="text-rose-600 dark:text-rose-400 font-semibold flex items-center space-x-1.5">
-          <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-          <span>保存冲突</span>
-        </span>
-      )}
-    </>
-  );
+  const renderSaveStatus = () => {
+    if (saveStatus !== 'failed') return null;
+    return (
+      <span className="text-rose-600 dark:text-rose-400 font-medium flex items-center space-x-1.5" title={saveError || '保存失败'}>
+        <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+        <span>保存失败</span>
+      </span>
+    );
+  };
 
   const renderMoreMenu = () => (
     <div className="relative" ref={moreMenuRef}>
@@ -1634,7 +1651,7 @@ function NoteEditor({
       </div>
 
       {/* Conflict Action Bar: 外部变动且本地有未保存内容时的选择条 */}
-      {(hasConflictRef.current || conflictError) && (
+      {(saveStatus === 'conflict' || conflictError) && (
         <div className="px-3.5 py-2 rounded-lg border border-amber-200 dark:border-amber-900/60 bg-amber-50/90 dark:bg-amber-950/40 text-xs flex items-center justify-between gap-3 shadow-xs shrink-0 animate-in fade-in duration-150">
           <div className="flex items-center space-x-2 min-w-0">
             <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-500 shrink-0" />
@@ -1859,7 +1876,8 @@ function NoteEditor({
         }}
         onConfirm={() => {
           setShowLeaveConflictConfirm(false);
-          hasConflictRef.current = false;
+          setConflictError(null);
+          setSaveStatus('saved');
           const go = pendingGoRef.current;
           pendingGoRef.current = null;
           const resolve = leavePromptResolverRef.current;
