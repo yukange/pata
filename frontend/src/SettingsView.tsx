@@ -465,7 +465,7 @@ export function SettingsView({
                   <button
                     type="submit"
                     disabled={asrSaving || !apiKeyInput.trim()}
-                    className="px-3.5 py-2 rounded-lg bg-interaction-700 hover:bg-interaction-800 disabled:opacity-50 text-white text-xs font-medium transition shadow-2xs shrink-0 cursor-pointer"
+                    className="px-3.5 py-2 rounded-lg bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] disabled:opacity-50 text-[var(--pata-accent-on-solid)] text-xs font-medium transition shadow-2xs shrink-0 cursor-pointer"
                   >
                     {asrSaving ? '保存中...' : '保存到 Keychain'}
                   </button>
