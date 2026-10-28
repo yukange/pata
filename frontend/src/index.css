@@ -93,6 +93,7 @@
   --pata-accent-subtle: color-mix(in srgb, var(--pata-accent) 10%, white);
   --pata-accent-focus: var(--pata-focus-ring);
   --pata-accent-solid-hover: var(--pata-accent-hover);
+  --pata-activity-link: color-mix(in srgb, var(--pata-accent-text) 60%, var(--pata-foreground) 40%);
 }
 :root.dark {
   --pata-accent-subtle: color-mix(in srgb, var(--pata-accent) 16%, #1c1917);
@@ -205,8 +206,8 @@ textarea.bg-transparent:focus-visible,
 .quick-entry:focus,
 .quick-entry:focus-visible {
   outline: none;
-  border-color: var(--pata-accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--pata-accent) 20%, transparent);
+  border-color: var(--pata-accent-focus);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--pata-accent-focus) 10%, transparent);
 }
 
 /* 弹出层（菜单/建议/模态）的轻量出现动效；系统开启「减少动态效果」时关闭 */
