@@ -98,6 +98,13 @@ const roleNames: (keyof AccentRoles)[] = ['source', 'solid', 'onSolid', 'hover',
 
 export function applyAccent(color: string): void {
   const style = document.documentElement.style;
+  // Old versions wrote the palette directly on <html>; remove those inline
+  // overrides so they cannot shadow the new light/dark CSS role mapping.
+  for (const shade of [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950]) {
+    style.removeProperty(`--pata-interaction-${shade}`);
+  }
+  style.removeProperty('--pata-custom-accent');
+  style.removeProperty('--pata-custom-accent-hover');
   const custom = !!color && validAccent(color);
   document.documentElement.toggleAttribute('data-pata-custom-accent', custom);
   if (!custom) {
