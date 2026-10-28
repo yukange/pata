@@ -592,7 +592,7 @@ export function TodayView({
         <button
           onClick={onSelectVault}
           disabled={vaultBusy}
-          className="mx-auto flex items-center space-x-1.5 px-4 py-2 rounded-md bg-interaction-700 hover:bg-interaction-800 text-white text-xs font-medium transition disabled:opacity-50 shadow-xs"
+          className="mx-auto flex items-center space-x-1.5 px-4 py-2 rounded-md bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] text-xs font-medium transition disabled:opacity-50 shadow-xs"
         >
           <FolderOpen className="w-3.5 h-3.5" />
           <span>选择 Vault 目录</span>
@@ -614,7 +614,7 @@ export function TodayView({
         <button
           onClick={onSelectVault}
           disabled={vaultBusy}
-          className="px-3.5 py-1.5 rounded-md bg-interaction-700 hover:bg-interaction-800 text-white font-medium transition disabled:opacity-50"
+          className="px-3.5 py-1.5 rounded-md bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] font-medium transition disabled:opacity-50"
         >
           重新选择目录
         </button>
@@ -891,7 +891,7 @@ export function TodayView({
             <div className="flex justify-end gap-2 text-xs">
               <button type="button" autoFocus disabled={creatingActivity || editSaving} onClick={() => void finishLeavePrompt('cancel')} className="px-3 py-1.5 rounded text-stone-600 dark:text-stone-300">取消</button>
               <button type="button" disabled={creatingActivity || editSaving} onClick={() => void finishLeavePrompt('discard')} className="px-3 py-1.5 rounded text-rose-600">放弃</button>
-              <button type="button" disabled={creatingActivity || editSaving} onClick={() => void finishLeavePrompt('save')} className="px-3 py-1.5 rounded bg-interaction-700 text-white disabled:opacity-40">保存并离开</button>
+              <button type="button" disabled={creatingActivity || editSaving} onClick={() => void finishLeavePrompt('save')} className="px-3 py-1.5 rounded bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] disabled:opacity-40">保存并离开</button>
             </div>
           </div>
         </div>

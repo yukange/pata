@@ -165,7 +165,7 @@ export function QuickCreateInput({ placeholder, submitLabel, tagNames, onSubmit,
           }}
           onClick={() => void submit()}
           disabled={busy || disabled || !value.trim()}
-          className="flex items-center space-x-1 px-3 py-2 h-[34px] rounded-lg bg-interaction-700 hover:bg-interaction-800 text-white text-xs font-medium transition disabled:opacity-40 shadow-2xs shrink-0"
+          className="flex items-center space-x-1 px-3 py-2 h-[34px] rounded-lg bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] text-xs font-medium transition disabled:opacity-40 shadow-2xs shrink-0"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>{busy ? '创建中' : submitLabel}</span>

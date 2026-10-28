@@ -2463,7 +2463,7 @@ export function NotesView({
         <button
           onClick={onSelectVault}
           disabled={vaultBusy}
-          className="mx-auto flex items-center space-x-1.5 px-4 py-2 rounded-md bg-interaction-700 hover:bg-interaction-800 text-white text-xs font-medium transition disabled:opacity-50 shadow-xs cursor-pointer"
+          className="mx-auto flex items-center space-x-1.5 px-4 py-2 rounded-md bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] text-xs font-medium transition disabled:opacity-50 shadow-xs cursor-pointer"
         >
           <FolderOpen className="w-3.5 h-3.5" />
           <span>选择 Vault 目录</span>
@@ -2482,7 +2482,7 @@ export function NotesView({
         <button
           onClick={onSelectVault}
           disabled={vaultBusy}
-          className="px-3.5 py-1.5 rounded-md bg-interaction-700 hover:bg-interaction-800 text-white font-medium transition disabled:opacity-50 cursor-pointer"
+          className="px-3.5 py-1.5 rounded-md bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] font-medium transition disabled:opacity-50 cursor-pointer"
         >
           重新选择目录
         </button>
@@ -2517,7 +2517,7 @@ export function NotesView({
                 <button
                   type="button"
                   onClick={handleStartCreateDraft}
-                  className="flex items-center space-x-1 px-2.5 py-1 rounded-l-md bg-interaction-700 hover:bg-interaction-800 text-white text-xs font-medium transition cursor-pointer"
+                  className="flex items-center space-x-1 px-2.5 py-1 rounded-l-md bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] text-xs font-medium transition cursor-pointer"
                   title="新建草稿"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -2526,7 +2526,7 @@ export function NotesView({
                 <button
                   type="button"
                   onClick={() => setCreateMenuOpen((v) => !v)}
-                  className="flex items-center justify-center px-1 py-1 rounded-r-md bg-interaction-700 hover:bg-interaction-800 border-l border-white/20 text-white text-xs transition cursor-pointer"
+                  className="flex items-center justify-center px-1 py-1 rounded-r-md bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] border-l border-white/20 text-[var(--pata-accent-on-solid)] text-xs transition cursor-pointer"
                   title="更多新建选项"
                 >
                   <ChevronDown className="w-3.5 h-3.5" />
@@ -2749,7 +2749,7 @@ export function NotesView({
           onPointerMove={handleDividerPointerMove}
           onPointerUp={handleDividerPointerUp}
           onPointerCancel={handleDividerPointerUp}
-          className="relative z-10 w-px shrink-0 bg-stone-200/70 dark:bg-stone-800/70 hover:bg-stone-400 dark:hover:bg-stone-600 cursor-col-resize touch-none no-drag-region focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--pata-accent)] before:absolute before:inset-y-0 before:-left-1.5 before:w-3 before:cursor-col-resize before:touch-none"
+          className="relative z-10 w-px shrink-0 bg-stone-200/70 dark:bg-stone-800/70 hover:bg-stone-400 dark:hover:bg-stone-600 cursor-col-resize touch-none no-drag-region focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--pata-accent-focus)] before:absolute before:inset-y-0 before:-left-1.5 before:w-3 before:cursor-col-resize before:touch-none"
           title="拖拽调整笔记列表宽度"
         />
       )}

@@ -13,7 +13,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const variantStyles: Record<ButtonVariant, string> = {
   // default: Follows macOS system accent
   default:
-    'bg-[var(--pata-accent)] text-white hover:opacity-90 shadow-2xs active:opacity-95',
+    'bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)] hover:bg-[var(--pata-accent-solid-hover)] shadow-2xs active:opacity-95',
   secondary:
     'bg-stone-200/70 dark:bg-stone-800 text-stone-800 dark:text-stone-200 hover:bg-stone-300/80 dark:hover:bg-stone-700 active:bg-stone-300 dark:active:bg-stone-700/90 shadow-2xs',
   outline:

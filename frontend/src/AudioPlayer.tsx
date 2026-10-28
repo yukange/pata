@@ -304,8 +304,8 @@ export function AudioPlayer({
             !audioSrc || audioLoadError
               ? 'bg-stone-200 dark:bg-stone-800 text-stone-400 cursor-not-allowed'
               : isPlaying
-              ? 'bg-interaction-700 hover:bg-interaction-800 text-white'
-              : 'bg-interaction-600 hover:bg-interaction-700 text-white'
+              ? 'bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)]'
+              : 'bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid)] text-[var(--pata-accent-on-solid)]'
           }`}
           title={isPlaying ? '暂停' : '播放'}
         >

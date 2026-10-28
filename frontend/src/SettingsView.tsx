@@ -247,49 +247,30 @@ export function SettingsView({
         >
           <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">外观</h2>
 
-          <div>
-            <label className="text-xs font-medium text-stone-700 dark:text-stone-300 block mb-2">
-              主题模式
-            </label>
-            <div className="grid grid-cols-3 gap-3">
-              <button
-                type="button"
-                onClick={() => onThemeChange('system')}
-                className={`flex items-center justify-center space-x-2 px-3 py-2.5 rounded-lg border text-xs font-medium transition cursor-pointer ${
-                  themeMode === 'system'
-                    ? 'border-interaction-600 bg-interaction-50/80 text-interaction-900 dark:bg-interaction-950/50 dark:border-interaction-500 dark:text-interaction-200 shadow-2xs font-semibold'
-                    : 'border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-400'
-                }`}
-              >
-                <Monitor className="w-4 h-4 shrink-0" />
-                <span>跟随系统</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onThemeChange('light')}
-                className={`flex items-center justify-center space-x-2 px-3 py-2.5 rounded-lg border text-xs font-medium transition cursor-pointer ${
-                  themeMode === 'light'
-                    ? 'border-interaction-600 bg-interaction-50/80 text-interaction-900 dark:bg-interaction-950/50 dark:border-interaction-500 dark:text-interaction-200 shadow-2xs font-semibold'
-                    : 'border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-400'
-                }`}
-              >
-                <Sun className="w-4 h-4 shrink-0" />
-                <span>浅色模式</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => onThemeChange('dark')}
-                className={`flex items-center justify-center space-x-2 px-3 py-2.5 rounded-lg border text-xs font-medium transition cursor-pointer ${
-                  themeMode === 'dark'
-                    ? 'border-interaction-600 bg-interaction-50/80 text-interaction-900 dark:bg-interaction-950/50 dark:border-interaction-500 dark:text-interaction-200 shadow-2xs font-semibold'
-                    : 'border-stone-200 dark:border-stone-800 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-600 dark:text-stone-400'
-                }`}
-              >
-                <Moon className="w-4 h-4 shrink-0" />
-                <span>深色模式</span>
-              </button>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-xs font-medium text-stone-700 dark:text-stone-300">主题模式</span>
+            <div role="group" aria-label="主题模式" className="inline-flex items-center gap-0.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-100/80 dark:bg-stone-800/70 p-0.5">
+              {([
+                { mode: 'system' as const, label: '跟随系统', Icon: Monitor },
+                { mode: 'light' as const, label: '浅色', Icon: Sun },
+                { mode: 'dark' as const, label: '深色', Icon: Moon },
+              ]).map(({ mode, label, Icon }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={themeMode === mode}
+                  onClick={() => onThemeChange(mode)}
+                  className={[
+                    'inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors cursor-pointer',
+                    themeMode === mode
+                      ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-2xs'
+                      : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200',
+                  ].join(' ')}
+                >
+                  <Icon className="w-3.5 h-3.5 shrink-0" />
+                  <span>{label}</span>
+                </button>
+              ))}
             </div>
           </div>
           <AccentColorSettings {...accent} onChange={accent.change} onRetry={accent.retry} />
@@ -484,7 +465,7 @@ export function SettingsView({
                   <button
                     type="submit"
                     disabled={asrSaving || !apiKeyInput.trim()}
-                    className="px-3.5 py-2 rounded-lg bg-interaction-700 hover:bg-interaction-800 disabled:opacity-50 text-white text-xs font-medium transition shadow-2xs shrink-0 cursor-pointer"
+                    className="px-3.5 py-2 rounded-lg bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] disabled:opacity-50 text-[var(--pata-accent-on-solid)] text-xs font-medium transition shadow-2xs shrink-0 cursor-pointer"
                   >
                     {asrSaving ? '保存中...' : '保存到 Keychain'}
                   </button>

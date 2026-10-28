@@ -206,7 +206,7 @@ export function ActivityItem({
               onMouseDown={(e) => e.preventDefault()}
               onClick={onSaveEdit}
               disabled={editSaving || !editBody.trim()}
-              className="px-2.5 py-1 rounded-md bg-interaction-700 hover:bg-interaction-800 text-white text-xs font-medium disabled:opacity-40 transition cursor-pointer"
+              className="px-2.5 py-1 rounded-md bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] text-xs font-medium disabled:opacity-40 transition cursor-pointer"
             >
               {editSaving ? '保存中' : '保存'}
             </button>
