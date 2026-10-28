@@ -720,7 +720,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
   return (
     <div className="h-full flex flex-col min-h-0 bg-stone-50/50 dark:bg-stone-900/50 select-text">
       {/* 1. Top Navigation Bar */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-stone-200/80 dark:border-stone-800/80 shrink-0 drag-region select-none">
+      <div className="flex items-center justify-between px-6 py-3 border-b border-[var(--pata-border)] shrink-0 drag-region select-none">
         <button
           type="button"
           onClick={handleCloseClick}
@@ -732,12 +732,12 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
 
         <div className="no-drag-region flex items-center space-x-1">
           {copiedForAgent && (
-            <span role="status" className="text-[11px] text-stone-500 dark:text-stone-400 mr-1 select-none">
+            <span role="status" className="text-[11px] text-muted-foreground mr-1 select-none">
               已复制
             </span>
           )}
           {saving && (
-            <span className="text-[11px] text-stone-400 dark:text-stone-500 mr-1 select-none animate-pulse">
+            <span className="text-[11px] text-muted-foreground mr-1 select-none animate-pulse">
               保存中...
             </span>
           )}
@@ -752,7 +752,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-lg py-1 z-30">
+              <div className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-900 shadow-lg py-1 z-30">
                 <button
                   type="button"
                   onClick={() => {
@@ -890,7 +890,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
             }}
             placeholder="任务标题..."
             rows={1}
-            className="w-full text-lg font-semibold text-stone-900 dark:text-stone-100 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 resize-none overflow-hidden p-0 leading-snug transition-none placeholder:text-stone-400"
+            className="w-full text-lg font-semibold text-stone-900 dark:text-stone-100 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 resize-none overflow-hidden p-0 leading-snug transition-none placeholder:text-muted-foreground"
           />
         </div>
 
@@ -937,7 +937,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                     ? 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
                     : detailDue
                     ? 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
-                    : 'text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
+                    : 'text-muted-foreground hover:text-stone-700 dark:hover:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
                 }`}
               >
                 <Calendar className="w-3.5 h-3.5 shrink-0" />
@@ -945,7 +945,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
               </button>
 
               {dueOpen && (
-                <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-lg p-2 z-30 space-y-2">
+                <div className="absolute left-0 top-full mt-1 w-48 rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-900 shadow-lg p-2 z-30 space-y-2">
                   <div className="space-y-0.5">
                     <button
                       type="button"
@@ -971,12 +971,12 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                   </div>
 
                   <div className="pt-1.5 border-t border-stone-100 dark:border-stone-800">
-                    <label className="block text-[10px] text-stone-400 mb-1">选择具体日期</label>
+                    <label className="block text-[11px] text-muted-foreground mb-1">选择具体日期</label>
                     <input
                       type="date"
                       value={detailDue}
                       onChange={(e) => void handleDueChange(e.target.value)}
-                      className="w-full px-2 py-1 text-xs rounded border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-0 focus:border-stone-300 dark:focus:border-stone-700"
+                      className="w-full px-2 py-1 text-xs rounded border border-[var(--pata-border)] bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-0 focus:border-stone-300 dark:focus:border-stone-700"
                     />
                   </div>
 
@@ -1008,7 +1008,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
 
         {/* Task Description (Seamless inline viewing and editing, 0px size jumping, clickable [[ notes) */}
         <div className="space-y-1 pt-1">
-          <div className="text-[11px] font-medium text-stone-400 dark:text-stone-500">
+          <div className="text-[11px] font-medium text-muted-foreground">
             描述
           </div>
           {isEditingBody || !detailBody.trim() ? (
@@ -1035,7 +1035,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
               }}
               placeholder="添加描述… (输入 [[ 引用笔记)"
               rows={1}
-              className="w-full text-xs sm:text-sm text-stone-800 dark:text-stone-200 placeholder-stone-400 dark:placeholder-stone-500 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 resize-none overflow-hidden leading-relaxed p-0 min-h-[22px] transition-none"
+              className="w-full text-sm text-stone-800 dark:text-stone-200 placeholder:text-muted-foreground bg-transparent border-0 outline-none focus:outline-none focus:ring-0 resize-none overflow-hidden leading-relaxed p-0 min-h-[22px] transition-none"
             />
           ) : (
             <div
@@ -1051,7 +1051,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                   setIsEditingBody(true);
                 }
               }}
-              className="cursor-text leading-relaxed text-xs sm:text-sm text-stone-800 dark:text-stone-200 p-0 border-0 outline-none focus:outline-none min-h-[22px] select-text"
+              className="cursor-text leading-relaxed text-sm text-stone-800 dark:text-stone-200 p-0 border-0 outline-none focus:outline-none min-h-[22px] select-text"
             >
               <NoteRefText
                 text={detailBody}
@@ -1065,11 +1065,11 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
         </div>
 
         {/* Divider */}
-        <div className="border-t border-stone-200/80 dark:border-stone-800/80 my-3" />
+        <div className="border-t border-[var(--pata-border)] my-3" />
 
         {/* Activities Section */}
         <div className="space-y-3 pt-1">
-          <div className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
+          <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
             活动
           </div>
 
@@ -1081,7 +1081,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
           )}
 
           {timelineItems.length === 0 ? (
-            <div className="py-4 text-center text-xs text-stone-400 dark:text-stone-500">
+            <div className="py-4 text-center text-xs text-muted-foreground">
               暂无活动记录
             </div>
           ) : (
@@ -1166,7 +1166,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
       {/* Task Info Modal */}
       {showTaskInfo && (
         <div className="pata-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
+          <div className="w-full max-w-sm rounded-xl border border-[var(--pata-border)] bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-stone-100 dark:border-stone-800">
               <h3 className="text-sm font-semibold text-stone-900 dark:text-stone-100">任务信息</h3>
               <button
@@ -1180,20 +1180,20 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
 
             <div className="space-y-3 text-xs">
               <div>
-                <div className="text-[11px] text-stone-400 mb-0.5">任务 ID</div>
+                <div className="text-[11px] text-muted-foreground mb-0.5">任务 ID</div>
                 <div className="font-mono text-stone-800 dark:text-stone-200 select-all bg-stone-100/60 dark:bg-stone-800/60 px-2 py-1 rounded">
                   {task.id}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <div className="text-[11px] text-stone-400 mb-0.5">创建时间</div>
+                  <div className="text-[11px] text-muted-foreground mb-0.5">创建时间</div>
                   <div className="font-mono text-[11px] text-stone-700 dark:text-stone-300">
                     {formatFullLocalTimestamp(task.created_at) || '-'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-stone-400 mb-0.5">更新时间</div>
+                  <div className="text-[11px] text-muted-foreground mb-0.5">更新时间</div>
                   <div className="font-mono text-[11px] text-stone-700 dark:text-stone-300">
                     {formatFullLocalTimestamp(task.updated_at) || '-'}
                   </div>
@@ -1217,7 +1217,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
       {/* Delete Confirmation Modal */}
       {deleteModalOpen && (
         <div className="pata-fade fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
+          <div className="w-full max-w-sm rounded-xl border border-[var(--pata-border)] bg-white dark:bg-stone-900 p-5 shadow-xl space-y-4">
             <div className="flex items-start space-x-3">
               <div className="p-2 rounded-full bg-rose-100 dark:bg-rose-950/60 text-rose-600 shrink-0">
                 <AlertCircle className="w-5 h-5" />

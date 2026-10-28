@@ -1501,7 +1501,7 @@ function NoteEditor({
   const renderSaveStatus = () => (
     <>
       {saveStatus === 'saving' && (
-        <span className="text-stone-400 flex items-center space-x-1.5">
+        <span className="text-muted-foreground flex items-center space-x-1.5">
           <Loader2 className="w-3 h-3 animate-spin text-interaction-600" />
           <span>保存中...</span>
         </span>
@@ -1532,7 +1532,7 @@ function NoteEditor({
         <MoreHorizontal className="w-4 h-4" />
       </button>
       {moreMenuOpen && (
-        <div className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-lg py-1 z-30">
+        <div className="absolute right-0 top-full mt-1 w-40 rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-900 shadow-lg py-1 z-30">
           <button
             type="button"
             onClick={handleCopyAbsolutePath}
@@ -1612,7 +1612,7 @@ function NoteEditor({
                 }
               }}
               placeholder={isNaming ? '输入笔记标题以转为笔记...' : '无标题笔记'}
-              className="w-full text-2xl font-bold bg-transparent text-stone-900 dark:text-stone-100 placeholder-stone-300 dark:placeholder-stone-700 focus:outline-hidden border-none p-0 leading-tight tracking-tight"
+              className="w-full text-2xl font-semibold bg-transparent text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground focus:outline-hidden border-none p-0 leading-tight tracking-tight"
             />
           )}
         </div>
@@ -1679,7 +1679,7 @@ function NoteEditor({
           )}
 
           {initialNote && !isDraftNote && (
-            <div className="flex items-center gap-1 text-[11px] text-stone-400 dark:text-stone-500">
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
               {initialNote.created_by === 'agent'
                 ? <Bot aria-hidden="true" className="w-3 h-3" />
                 : <UserRound aria-hidden="true" className="w-3 h-3" />}
@@ -2505,7 +2505,7 @@ export function NotesView({
               <h2 className="text-xs font-semibold text-stone-800 dark:text-stone-200 truncate">
                 全部笔记
               </h2>
-              <span className="text-[10px] font-mono text-stone-400">
+              <span className="text-[11px] font-mono text-muted-foreground">
                 {notes.length}
               </span>
               {loading && <Loader2 className="w-3 h-3 text-stone-400 animate-spin shrink-0" />}
@@ -2532,7 +2532,7 @@ export function NotesView({
                   <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 {createMenuOpen && (
-                  <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-lg py-1 z-30">
+                  <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-900 shadow-lg py-1 z-30">
                     <button
                       type="button"
                       onClick={() => {
@@ -2587,7 +2587,7 @@ export function NotesView({
               <button
                 type="button"
                 onClick={() => setCreateAudioNoteError(null)}
-                className="text-stone-400 hover:text-stone-600 text-[10px]"
+                className="text-muted-foreground hover:text-stone-600 text-[11px]"
               >
                 关闭
               </button>
@@ -2599,7 +2599,7 @@ export function NotesView({
             {/* Group 1: 草稿 */}
             <div className="space-y-1">
               <div
-                className="w-full flex items-center justify-between px-1.5 py-1 text-xs font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 cursor-pointer rounded"
+                className="w-full flex items-center justify-between px-1.5 py-1 text-xs font-semibold text-muted-foreground hover:text-stone-800 dark:hover:text-stone-200 cursor-pointer rounded"
                 onClick={() => setIsDraftsCollapsed((v) => !v)}
               >
                 <div className="flex items-center space-x-1.5 min-w-0">
@@ -2609,7 +2609,7 @@ export function NotesView({
                     <ChevronDown className="w-3 h-3 text-stone-400 shrink-0" />
                   )}
                   <span>草稿</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-stone-200/60 dark:bg-stone-800 text-stone-500 dark:text-stone-400">
+                  <span className="text-[11px] font-mono px-1.5 py-0.2 rounded-full bg-stone-200/60 dark:bg-stone-800 text-muted-foreground">
                     {displayedDrafts.length}
                   </span>
                 </div>
@@ -2629,7 +2629,7 @@ export function NotesView({
               {!isDraftsCollapsed && (
                 <div className="space-y-0.5 pl-1">
                   {displayedDrafts.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-stone-400 dark:text-stone-500 italic">
+                    <div className="px-3 py-2 text-xs text-muted-foreground italic">
                       暂无草稿
                     </div>
                   ) : (
@@ -2640,6 +2640,7 @@ export function NotesView({
                         <div
                           key={n.id}
                           id={`note-item-${n.id}`}
+                          data-selected={isSelected}
                           onClick={() => handleSelectNote(n.id)}
                           onContextMenu={(e) => {
                             e.preventDefault();
@@ -2649,7 +2650,7 @@ export function NotesView({
                               note: n,
                             });
                           }}
-                          className={`group px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition ${
+                          className={`group px-2.5 py-1.5 rounded-lg text-[13px] cursor-pointer select-none transition ${
                             isSelected
                               ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-medium'
                               : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/50 dark:hover:bg-stone-800/40'
@@ -2660,7 +2661,7 @@ export function NotesView({
                               {excerpt}
                             </p>
                           ) : (
-                            <p className="italic text-stone-400 dark:text-stone-600">
+                            <p className="italic text-muted-foreground">
                               (空草稿)
                             </p>
                           )}
@@ -2675,7 +2676,7 @@ export function NotesView({
             {/* Group 2: 笔记 */}
             <div className="space-y-1">
               <div
-                className="w-full flex items-center justify-between px-1.5 py-1 text-xs font-semibold text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 cursor-pointer rounded"
+                className="w-full flex items-center justify-between px-1.5 py-1 text-xs font-semibold text-muted-foreground hover:text-stone-800 dark:hover:text-stone-200 cursor-pointer rounded"
                 onClick={() => setIsNotesCollapsed((v) => !v)}
               >
                 <div className="flex items-center space-x-1.5 min-w-0">
@@ -2685,7 +2686,7 @@ export function NotesView({
                     <ChevronDown className="w-3 h-3 text-stone-400 shrink-0" />
                   )}
                   <span>笔记</span>
-                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-stone-200/60 dark:bg-stone-800 text-stone-500 dark:text-stone-400">
+                  <span className="text-[11px] font-mono px-1.5 py-0.2 rounded-full bg-stone-200/60 dark:bg-stone-800 text-muted-foreground">
                     {displayedFormalNotes.length}
                   </span>
                 </div>
@@ -2694,7 +2695,7 @@ export function NotesView({
               {!isNotesCollapsed && (
                 <div className="space-y-0.5 pl-1">
                   {displayedFormalNotes.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-stone-400 dark:text-stone-500 italic">
+                    <div className="px-3 py-2 text-xs text-muted-foreground italic">
                       暂无笔记
                     </div>
                   ) : (
@@ -2704,6 +2705,7 @@ export function NotesView({
                         <div
                           key={n.id}
                           id={`note-item-${n.id}`}
+                          data-selected={isSelected}
                           onClick={() => handleSelectNote(n.id)}
                           onContextMenu={(e) => {
                             e.preventDefault();
@@ -2713,7 +2715,7 @@ export function NotesView({
                               note: n,
                             });
                           }}
-                          className={`group px-2.5 py-1.5 rounded-lg text-xs cursor-pointer select-none transition flex items-center space-x-1.5 ${
+                          className={`group px-2.5 py-1.5 rounded-lg text-[13px] cursor-pointer select-none transition flex items-center space-x-1.5 ${
                             isSelected
                               ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-medium'
                               : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/50 dark:hover:bg-stone-800/40'
@@ -2781,7 +2783,7 @@ export function NotesView({
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-stone-400 select-none">
             <FileText className="w-10 h-10 mb-3 text-stone-300 dark:text-stone-700" />
             <p className="text-sm font-medium text-stone-600 dark:text-stone-400">选择笔记开始阅读或编辑</p>
-            <p className="text-xs text-stone-400 dark:text-stone-500 mt-1 mb-4">或者直接创建新草稿随手记录</p>
+            <p className="text-xs text-muted-foreground mt-1 mb-4">或者直接创建新草稿随手记录</p>
             <Button
               variant="outline"
               size="sm"

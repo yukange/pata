@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { accentContrast, accentRGB, deriveAccentRoles } from './accentColor.ts';
+import { accentContrast, accentRGB, applyAccent, deriveAccentRoles } from './accentColor.ts';
 
 const LIGHT_SURFACE: [number, number, number] = [255, 255, 255];
 const DARK_SURFACE: [number, number, number] = [28, 25, 23];
@@ -20,8 +20,43 @@ test('custom accent roles preserve user RGB and meet light/dark contrast targets
       assert.ok(accentContrast(accentRGB(roles.hover), surface) >= 3, `${label}: hover not visible`);
       assert.ok(accentContrast(accentRGB(roles.hover), accentRGB(roles.onSolid)) >= 4.5, `${label}: hover label unreadable`);
       assert.ok(accentContrast(accentRGB(roles.text), surface) >= 4.5, `${label}: accent text unreadable`);
+      if (!dark) assert.ok(accentContrast(accentRGB(roles.text), [250, 250, 248]) >= 4.5, `${label}: warm background unreadable`);
+      assert.ok(accentContrast(accentRGB(roles.text), accentRGB(roles.subtle)) >= 4.5, `${label}: tinted label unreadable`);
       assert.ok(accentContrast(accentRGB(roles.focus), surface) >= 3, `${label}: focus ring not visible`);
     }
+  }
+});
+
+test('returning to system accent keeps readable links and removes custom control colors', (t) => {
+  const properties = new Map<string, string>();
+  const attributes = new Set<string>();
+  const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  t.after(() => {
+    if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
+    else Reflect.deleteProperty(globalThis, 'document');
+  });
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: {
+    documentElement: {
+      style: {
+        setProperty: (name: string, value: string) => properties.set(name, value),
+        removeProperty: (name: string) => properties.delete(name),
+      },
+      toggleAttribute: (name: string, force: boolean) => force ? attributes.add(name) : attributes.delete(name),
+    },
+  } });
+
+  applyAccent('#ffeb3b');
+  assert.ok(attributes.has('data-pata-custom-accent'));
+  assert.ok(properties.has('--pata-light-solid'));
+
+  applyAccent('');
+  assert.ok(!attributes.has('data-pata-custom-accent'));
+  for (const [mode, surface] of [['light', LIGHT_SURFACE], ['dark', DARK_SURFACE]] as const) {
+    const link = properties.get(`--pata-${mode}-text`);
+    assert.ok(link, `${mode}: default links need a color`);
+    assert.ok(accentContrast(accentRGB(link), [...surface]) >= 4.5);
+    assert.ok(!properties.has(`--pata-${mode}-solid`), 'system control fill must remain native');
+    assert.ok(!properties.has(`--pata-${mode}-on-solid`), 'system control label must remain native');
   }
 });
 

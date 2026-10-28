@@ -84,12 +84,12 @@ export function ActivityItem({
         className={`flex items-center gap-2 py-1.5 text-xs text-stone-600 dark:text-stone-300 ${className}`.trim()}
       >
         <span
-          className="font-mono text-[11px] text-stone-400 dark:text-stone-500 shrink-0 select-none"
+          className="font-mono text-[11px] text-muted-foreground shrink-0 select-none"
           title={fullTimeStr}
         >
           {timeStr}
         </span>
-        <SourceIcon aria-hidden="true" className="w-3.5 h-3.5 text-stone-400 dark:text-stone-500 shrink-0" />
+        <SourceIcon aria-hidden="true" className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <span className="min-w-0">
           <span>{formatStatusAction(statusEvent.action, statusEvent.by)}</span>
           {taskContext && (
@@ -108,9 +108,9 @@ export function ActivityItem({
                 {taskContext.taskTitle || taskContext.taskId}
               </button>
             ) : (
-              <span className="text-xs font-mono text-stone-400 dark:text-stone-500 break-words">
+              <span className="text-xs font-mono text-muted-foreground break-words">
                 {taskContext.taskTitle || taskContext.taskId}
-                <span className="ml-1 text-[10px] text-rose-500/80">(任务已删除)</span>
+                <span className="ml-1 text-[11px] text-rose-500/80">(任务已删除)</span>
               </span>
             )
           )}
@@ -124,16 +124,16 @@ export function ActivityItem({
 
   return (
     <div className={`group space-y-1 py-2 text-xs ${className}`.trim()}>
-      {/* 顶部元信息栏：时间在上，Today 的任务链接在时间右侧（同正文字号），编辑入口悬停出现 */}
+      {/* 顶部元信息栏：时间在上，Today 的任务链接在时间右侧（统一 12px 元信息字号），编辑入口悬停出现 */}
       <div className="flex items-start justify-between gap-2 min-w-0">
         <div className="flex items-baseline gap-2 min-w-0 flex-wrap">
           <span
-            className="font-mono text-[11px] text-stone-400 dark:text-stone-500 shrink-0 select-none"
+            className="font-mono text-[11px] text-muted-foreground shrink-0 select-none"
             title={fullTimeStr}
           >
             {timeStr}
           </span>
-          <span className="inline-flex items-center gap-1 text-[11px] text-stone-400 dark:text-stone-500 shrink-0">
+          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground shrink-0">
             <SourceIcon aria-hidden="true" className="w-3 h-3" />
             {formatSource(activity.by)}
           </span>
@@ -154,9 +154,9 @@ export function ActivityItem({
                 {taskContext.taskTitle || taskContext.taskId}
               </button>
             ) : (
-              <span className="text-xs font-mono text-stone-400 dark:text-stone-500">
+              <span className="text-xs font-mono text-muted-foreground">
                 {taskContext.taskTitle || taskContext.taskId}
-                <span className="ml-1 text-[10px] text-rose-500/80">(任务已删除)</span>
+                <span className="ml-1 text-[11px] text-rose-500/80">(任务已删除)</span>
               </span>
             )
           )}
@@ -197,7 +197,7 @@ export function ActivityItem({
             }}
             autoFocus
             rows={3}
-            className="w-full p-2 text-xs rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-0 focus:border-stone-400 dark:focus:border-stone-600 resize-y leading-relaxed"
+            className="w-full p-2 text-sm rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-0 focus:border-stone-400 dark:focus:border-stone-600 resize-y leading-relaxed"
           />
 
           <div className="flex items-center gap-2">
@@ -235,7 +235,7 @@ export function ActivityItem({
             refs={activity.note_refs ?? undefined}
             notes={notes}
             onOpenNote={onOpenNote}
-            className="text-xs text-stone-800 dark:text-stone-200 leading-relaxed font-sans whitespace-pre-wrap break-words"
+            className="text-sm text-stone-800 dark:text-stone-200 leading-relaxed font-sans whitespace-pre-wrap break-words"
           />
 
           {activity.tags && activity.tags.length > 0 && (
@@ -243,7 +243,7 @@ export function ActivityItem({
               {activity.tags.map((tag) => (
                 <span
                   key={tag}
-                  className="inline-flex items-center text-[10px] text-stone-400 font-mono"
+                  className="inline-flex items-center text-[11px] text-muted-foreground font-mono"
                 >
                   #{tag}
                 </span>

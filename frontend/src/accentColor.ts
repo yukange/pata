@@ -14,6 +14,7 @@ export interface AccentRoles {
 const WHITE: RGB = [255, 255, 255];
 const BLACK: RGB = [0, 0, 0];
 const LIGHT_SURFACE: RGB = [255, 255, 255];
+const LIGHT_BACKGROUND: RGB = [250, 250, 248];
 const DARK_SURFACE: RGB = [28, 25, 23];
 
 export function validAccent(value: unknown): value is string {
@@ -76,9 +77,12 @@ export function deriveAccentRoles(color: string, dark: boolean): AccentRoles {
     if (adjustment <= 32 && accentContrast(candidate, surface) >= 3) solid = candidate;
   }
   const onSolid = accentContrast(solid, WHITE) >= 4.5 ? WHITE : BLACK;
-  const text = ensureContrast(rgb, surface, 4.5, againstSurface);
-  const focus = ensureContrast(rgb, surface, 3, againstSurface);
   const subtle = mix(surface, rgb, dark ? 0.16 : 0.10);
+  const text = ensureContrast(
+    ensureContrast(rgb, dark ? DARK_SURFACE : LIGHT_BACKGROUND, 4.5, againstSurface),
+    subtle, 4.5, againstSurface,
+  );
+  const focus = ensureContrast(rgb, surface, 3, againstSurface);
   const hoverCandidate = mix(solid, onSolid, 0.08);
   const hover = accentContrast(hoverCandidate, surface) >= 3 && accentContrast(hoverCandidate, onSolid) >= 4.5
     ? hoverCandidate : solid;
@@ -110,6 +114,8 @@ export function applyAccent(color: string): void {
   if (!custom) {
     for (const mode of ['light', 'dark']) {
       for (const role of roleNames) style.removeProperty(`--pata-${mode}-${role.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase())}`);
+      // WKWebView's default blue also needs a separate, readable link color.
+      style.setProperty(`--pata-${mode}-text`, deriveAccentRoles(DEFAULT_ACCENT, mode === 'dark').text);
     }
     return;
   }

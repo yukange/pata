@@ -2,6 +2,9 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
+  --font-sans: var(--pata-font-sans);
+  --font-mono: var(--pata-font-mono);
+  --color-muted-foreground: var(--pata-muted-foreground);
   --color-interaction-50: var(--pata-interaction-50, color-mix(in srgb, var(--pata-accent) 4%, white));
   --color-interaction-100: var(--pata-interaction-100, color-mix(in srgb, var(--pata-accent) 10%, white));
   --color-interaction-200: var(--pata-interaction-200, color-mix(in srgb, var(--pata-accent) 20%, white));
@@ -30,7 +33,7 @@
   --pata-surface: #ffffff;
   --pata-surface-hover: rgba(231, 229, 228, 0.6); /* stone-200/60 */
   --pata-foreground: #1c1917; /* stone-900 */
-  --pata-muted-foreground: #78716c; /* stone-500 */
+  --pata-muted-foreground: #6b6560;
   --pata-border: #e7e5e4; /* stone-200 */
   --pata-border-subtle: #f5f5f4; /* stone-100 */
 
@@ -89,12 +92,15 @@
 :root {
   --pata-accent-solid: var(--pata-accent);
   --pata-accent-on-solid: AccentColorText;
-  --pata-accent-text: var(--pata-accent);
+  --pata-accent-text: var(--pata-light-text, #006bd6);
+  --pata-interaction-700: var(--pata-accent-text);
   --pata-accent-subtle: color-mix(in srgb, var(--pata-accent) 10%, white);
   --pata-accent-focus: var(--pata-focus-ring);
   --pata-accent-solid-hover: var(--pata-accent-hover);
 }
 :root.dark {
+  --pata-accent-text: var(--pata-dark-text, #0a84ff);
+  --pata-interaction-400: var(--pata-accent-text);
   --pata-accent-subtle: color-mix(in srgb, var(--pata-accent) 16%, #1c1917);
 }
 
@@ -143,6 +149,24 @@
   --pata-interaction-800: color-mix(in srgb, var(--pata-accent-source) 42%, var(--pata-surface));
   --pata-interaction-900: color-mix(in srgb, var(--pata-accent-source) 22%, var(--pata-surface));
   --pata-interaction-950: color-mix(in srgb, var(--pata-accent-source) 12%, var(--pata-surface));
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --pata-muted-foreground: #44403c;
+    --pata-border: #78716c;
+    --pata-border-subtle: #78716c;
+  }
+
+  :root.dark, :where(.dark, .dark *) {
+    --pata-muted-foreground: #d6d3d1;
+    --pata-border: #a8a29e;
+    --pata-border-subtle: #a8a29e;
+  }
+
+  :is([aria-current="page"], [aria-selected="true"], [data-selected="true"]) {
+    box-shadow: inset 0 0 0 1px var(--pata-foreground);
+  }
 }
 
 .drag-region {
@@ -257,6 +281,18 @@ textarea.bg-transparent:focus-visible,
   margin: 0 !important;
 }
 
+.vditor-editor-wrapper.vditor,
+.vditor-editor-wrapper .vditor,
+.vditor .vditor-reset,
+.vditor .vditor-sv {
+  font-family: var(--pata-font-sans);
+}
+
+.vditor .vditor-reset code:not(.hljs):not(.highlight-chroma),
+.vditor .vditor-reset pre > code {
+  font-family: var(--pata-font-mono);
+}
+
 /* Ensure editor content is flush left with title and document container */
 .vditor-ir,
 .vditor-wysiwyg,
@@ -311,12 +347,7 @@ textarea.bg-transparent:focus-visible,
 
 .vditor-ir pre.vditor-reset:empty::before,
 .vditor-editor-wrapper .vditor-ir pre.vditor-reset:empty::before {
-  color: #a8a29e !important; /* stone-400 */
-}
-
-:where(.dark, .dark *) .vditor-ir pre.vditor-reset:empty::before,
-:where(.dark, .dark *) .vditor-editor-wrapper .vditor-ir pre.vditor-reset:empty::before {
-  color: #78716c !important; /* stone-500 */
+  color: var(--pata-muted-foreground) !important;
 }
 
 /* Hide Vditor default gutter markers (e.g. floated H1/H2 label badges) to ensure strict left alignment */
@@ -368,7 +399,6 @@ textarea.bg-transparent:focus-visible,
 .vditor-editor-wrapper .vditor-wysiwyg pre.vditor-reset {
   font-size: 15px !important;
   line-height: 1.68 !important;
-  letter-spacing: -0.01em;
 }
 
 /* Paragraphs: compact margin (8px instead of default 16px) */

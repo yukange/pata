@@ -24,19 +24,19 @@ function renderDueBadge(task: Task, todayStr: string): React.ReactNode {
   if (!task.due || task.status === TaskStatus.TaskStatusDone) return null;
   if (task.due < todayStr) {
     return (
-      <span className="text-[10px] px-1.5 rounded font-medium bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 shrink-0">
+      <span className="text-[11px] px-1.5 rounded font-medium bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 shrink-0">
         逾期 {task.due}
       </span>
     );
   }
   if (task.due === todayStr) {
     return (
-      <span className="text-[10px] px-1.5 rounded font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 shrink-0">
+      <span className="text-[11px] px-1.5 rounded font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 shrink-0">
         今日到期
       </span>
     );
   }
-  return <span className="text-[10px] text-stone-400 shrink-0">due {task.due}</span>;
+  return <span className="text-[11px] text-muted-foreground shrink-0">due {task.due}</span>;
 }
 
 interface SortableTaskItemProps {
@@ -82,6 +82,7 @@ function SortableTaskItem({
     <li
       ref={ref}
       data-plan-task-id={task.id}
+      data-selected={isSelected}
       onClick={() => {
         if (justDraggedRef.current) return;
         onOpenTask(task.id);
@@ -117,10 +118,10 @@ function SortableTaskItem({
         )}
       </button>
 
-      <div className="flex items-center gap-2 min-w-0 flex-1 text-xs">
+      <div className="flex items-center gap-2 min-w-0 flex-1 text-[13px]">
         <span
           className={`font-medium truncate ${
-            isDone ? 'line-through text-stone-400 dark:text-stone-500' : 'text-stone-900 dark:text-stone-100'
+            isDone ? 'line-through text-muted-foreground' : 'text-stone-900 dark:text-stone-100'
           }`}
         >
           {task.title}
@@ -129,7 +130,7 @@ function SortableTaskItem({
         {(task.tags ?? []).length > 0 && (
           <span className="hidden sm:inline-flex items-center gap-1 shrink-0">
             {(task.tags ?? []).map((tag) => (
-              <span key={tag} className="text-[10px] text-stone-400">
+              <span key={tag} className="text-[11px] text-muted-foreground">
                 #{tag}
               </span>
             ))}
@@ -167,10 +168,10 @@ function TaskOverlayPreview({ task, todayStr }: { task: Task; todayStr: string }
           <Circle className="w-4 h-4 text-stone-400" />
         )}
       </div>
-      <div className="flex items-center gap-2 min-w-0 flex-1 text-xs">
+      <div className="flex items-center gap-2 min-w-0 flex-1 text-[13px]">
         <span
           className={`font-medium truncate ${
-            isDone ? 'line-through text-stone-400 dark:text-stone-500' : 'text-stone-900 dark:text-stone-100'
+            isDone ? 'line-through text-muted-foreground' : 'text-stone-900 dark:text-stone-100'
           }`}
         >
           {task.title}
@@ -179,14 +180,14 @@ function TaskOverlayPreview({ task, todayStr }: { task: Task; todayStr: string }
         {(task.tags ?? []).length > 0 && (
           <span className="hidden sm:inline-flex items-center gap-1 shrink-0">
             {(task.tags ?? []).map((tag) => (
-              <span key={tag} className="text-[10px] text-stone-400">
+              <span key={tag} className="text-[11px] text-muted-foreground">
                 #{tag}
               </span>
             ))}
           </span>
         )}
       </div>
-      <div className="w-6 h-6 flex items-center justify-center shrink-0 text-stone-500 dark:text-stone-400">
+      <div className="w-6 h-6 flex items-center justify-center shrink-0 text-muted-foreground">
         <GripVertical className="w-3.5 h-3.5" />
       </div>
     </div>
@@ -272,7 +273,7 @@ export function TodayPlanList({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <ul className="divide-y divide-stone-200/70 dark:divide-stone-800 rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 relative">
+      <ul className="divide-y divide-stone-200/70 dark:divide-stone-800 rounded-xl border border-[var(--pata-border)] bg-white dark:bg-stone-950 relative">
         {planItems.map(({ id, task }, index) => {
           if (!task) {
             return (

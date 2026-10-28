@@ -47,7 +47,7 @@ export function ActivityComposer({
 }: ActivityComposerProps) {
   return (
     <div className={`space-y-1.5 ${className}`.trim()}>
-      <div className="rounded-xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 p-2.5 focus-within:border-[var(--pata-accent-focus)] focus-within:ring-0 transition shadow-2xs">
+      <div className="rounded-xl border border-[var(--pata-border)] bg-white dark:bg-stone-950 p-2.5 focus-within:border-[var(--pata-accent-focus)] focus-within:ring-0 transition shadow-2xs">
         <NoteRefTextarea
           value={value}
           onChange={onChange}
@@ -74,7 +74,7 @@ export function ActivityComposer({
               onSubmit();
             }
           }}
-          className="w-full text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 bg-transparent resize-none border-0 outline-none focus:outline-none focus:ring-0 leading-relaxed"
+          className="w-full text-sm text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground bg-transparent resize-none border-0 outline-none focus:outline-none focus:ring-0 leading-relaxed"
         />
         <div className="flex items-center justify-end pt-1.5">
           <button
@@ -92,14 +92,14 @@ export function ActivityComposer({
             )}
             <span>{submitting ? `${submitLabel}中` : submitLabel}</span>
             {!submitting && (
-              <span className="text-[11px] font-mono opacity-60 select-none">⌘↵</span>
+              <span className="text-[11px] font-mono select-none">⌘↵</span>
             )}
           </button>
         </div>
       </div>
 
       {helperText && (
-        <div className="text-[11px] text-stone-400 px-1">{helperText}</div>
+        <div className="text-[11px] text-muted-foreground px-1">{helperText}</div>
       )}
 
       {error && (
@@ -107,7 +107,7 @@ export function ActivityComposer({
           <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-0.5" />
           <div className="space-y-0.5 flex-1 min-w-0">
             <div className="font-semibold text-[11px]">记录保存失败</div>
-            <div className="font-mono text-[10px] break-all">{error}</div>
+            <div className="font-mono text-[11px] break-all">{error}</div>
           </div>
           {onClearError && (
             <button

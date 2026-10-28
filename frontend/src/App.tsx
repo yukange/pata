@@ -168,10 +168,14 @@ export default function App() {
     go();
   }, []);
 
-  const goNav = (nav: 'today' | 'tasks' | 'notes') => {
+  const goNav = (nav: 'today' | 'tasks' | 'notes' | 'tag') => {
     void guarded(() => {
       setIsSettingsOpen(false);
-      if (nav !== activeNav) setActiveNav(nav);
+      if (nav !== activeNav) {
+        setActiveNav(nav);
+      } else if (nav === 'tag' && selectedTag !== null) {
+        setSelectedTag(null);
+      }
     });
   };
 
@@ -488,7 +492,7 @@ export default function App() {
           title={progress_percent >= 0 ? `正在下载更新: ${progress_percent}%` : '正在下载更新...'}
         >
           <Download className="w-3.5 h-3.5 shrink-0 animate-bounce" />
-          <span className={collapsed ? 'text-[10px] font-mono ml-1' : undefined}>
+          <span className={collapsed ? 'text-[11px] font-mono ml-1' : undefined}>
             {progress_percent >= 0 ? `${progress_percent}%` : (collapsed ? '…' : '下载中')}
           </span>
         </button>
@@ -505,7 +509,7 @@ export default function App() {
           title="校验与暂存中..."
         >
           <RefreshCw className="w-3.5 h-3.5 shrink-0 animate-spin" />
-          <span className={collapsed ? 'text-[10px] font-mono ml-1' : undefined}>100%</span>
+          <span className={collapsed ? 'text-[11px] font-mono ml-1' : undefined}>100%</span>
         </button>
       );
     }
@@ -821,17 +825,18 @@ export default function App() {
             </button>
           </div>
 
-          {/* Center: Segmented Navigation Tabs (Today | Tasks | Notes) */}
+          {/* Center: Segmented Navigation Tabs (Today | Tasks | Notes | Tags) */}
           <nav
             aria-label="主导航"
-            className="no-drag-region flex items-center gap-1 text-xs"
+            className="no-drag-region flex items-center gap-1 text-[13px]"
           >
             <button
               id="pata-nav-today"
               onClick={() => goNav('today')}
               aria-label="Today"
+              aria-current={!isSettingsOpen && activeNav === 'today' ? 'page' : undefined}
               className={`h-7 flex items-center space-x-1.5 px-2.5 rounded-md font-medium transition cursor-pointer ${
-                activeNav === 'today'
+                !isSettingsOpen && activeNav === 'today'
                   ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-2xs'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
               }`}
@@ -843,8 +848,9 @@ export default function App() {
               id="pata-nav-tasks"
               onClick={() => goNav('tasks')}
               aria-label="Tasks"
+              aria-current={!isSettingsOpen && activeNav === 'tasks' ? 'page' : undefined}
               className={`h-7 flex items-center space-x-1.5 px-2.5 rounded-md font-medium transition cursor-pointer ${
-                activeNav === 'tasks'
+                !isSettingsOpen && activeNav === 'tasks'
                   ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-2xs'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
               }`}
@@ -856,14 +862,29 @@ export default function App() {
               id="pata-nav-notes"
               onClick={() => goNav('notes')}
               aria-label="Notes"
+              aria-current={!isSettingsOpen && activeNav === 'notes' ? 'page' : undefined}
               className={`h-7 flex items-center space-x-1.5 px-2.5 rounded-md font-medium transition cursor-pointer ${
-                activeNav === 'notes'
+                !isSettingsOpen && activeNav === 'notes'
                   ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-2xs'
                   : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
               }`}
             >
               <FileText className="w-3.5 h-3.5" />
               <span>Notes</span>
+            </button>
+            <button
+              id="pata-nav-tags"
+              onClick={() => goNav('tag')}
+              aria-label="Tags"
+              aria-current={!isSettingsOpen && activeNav === 'tag' ? 'page' : undefined}
+              className={`h-7 flex items-center space-x-1.5 px-2.5 rounded-md font-medium transition cursor-pointer ${
+                !isSettingsOpen && activeNav === 'tag'
+                  ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-2xs'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
+              }`}
+            >
+              <Hash className="w-3.5 h-3.5" />
+              <span>Tags</span>
             </button>
           </nav>
 
@@ -880,7 +901,7 @@ export default function App() {
                 <Search className="w-3.5 h-3.5 shrink-0 opacity-70 group-hover:opacity-100" />
                 <span>搜索</span>
               </div>
-              <kbd className="text-[9px] font-mono opacity-60 bg-stone-200/80 dark:bg-stone-800 px-1 py-0.2 rounded shrink-0">
+              <kbd className="text-[11px] font-mono text-muted-foreground bg-stone-200/80 dark:bg-stone-800 px-1 py-0.2 rounded shrink-0">
                 ⌘K
               </kbd>
             </button>
@@ -996,7 +1017,7 @@ export default function App() {
                       <Search className="w-3.5 h-3.5 shrink-0 opacity-70 group-hover:opacity-100" />
                       <span>搜索</span>
                     </div>
-                    <kbd className="text-[10px] font-mono opacity-60 bg-stone-200/80 dark:bg-stone-800 px-1 py-0.2 rounded shrink-0">
+                    <kbd className="text-[11px] font-mono text-muted-foreground bg-stone-200/80 dark:bg-stone-800 px-1 py-0.2 rounded shrink-0">
                       ⌘K
                     </kbd>
                   </button>
@@ -1006,8 +1027,9 @@ export default function App() {
                   id="pata-nav-today"
                   onClick={() => goNav('today')}
                   aria-label="Today"
-                  className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                    activeNav === 'today'
+                  aria-current={!isSettingsOpen && activeNav === 'today' ? 'page' : undefined}
+                  className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${
+                    !isSettingsOpen && activeNav === 'today'
                       ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-2xs'
                       : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
                   }`}
@@ -1021,8 +1043,9 @@ export default function App() {
                   id="pata-nav-tasks"
                   onClick={() => goNav('tasks')}
                   aria-label="Tasks"
-                  className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                    activeNav === 'tasks'
+                  aria-current={!isSettingsOpen && activeNav === 'tasks' ? 'page' : undefined}
+                  className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${
+                    !isSettingsOpen && activeNav === 'tasks'
                       ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-2xs'
                       : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
                   }`}
@@ -1036,8 +1059,9 @@ export default function App() {
                   id="pata-nav-notes"
                   onClick={() => goNav('notes')}
                   aria-label="Notes"
-                  className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-xs font-medium transition-colors cursor-pointer ${
-                    activeNav === 'notes'
+                  aria-current={!isSettingsOpen && activeNav === 'notes' ? 'page' : undefined}
+                  className={`w-full flex items-center space-x-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium transition-colors cursor-pointer ${
+                    !isSettingsOpen && activeNav === 'notes'
                       ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-100 shadow-2xs'
                       : 'text-stone-700 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800/60'
                   }`}
@@ -1049,21 +1073,21 @@ export default function App() {
 
                 {/* Tags section */}
                 <div className="pt-3">
-                  <div className="text-[10px] uppercase font-semibold text-stone-400 px-2 mb-1 flex items-center justify-between">
+                  <div className="text-[11px] uppercase font-semibold text-muted-foreground px-2 mb-1 flex items-center justify-between">
                     <span>全局标签</span>
                     {vaultStatus?.open && (
-                      <span className="text-[9px] text-stone-400 font-mono">{tags.length}</span>
+                      <span className="text-[11px] text-muted-foreground font-mono">{tags.length}</span>
                     )}
                   </div>
                   <div className="space-y-0.5 px-1">
                     {!vaultStatus?.open ? (
-                      <div className="px-2 py-1.5 text-xs text-stone-400 italic">Vault 尚未打开</div>
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground italic">Vault 尚未打开</div>
                     ) : (
                       <>
                         <button
                           onClick={handleSelectAllTags}
-                          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors min-h-[32px] text-left cursor-pointer ${
-                            activeNav === 'tag' && isVirtualAllTag(selectedTag)
+                          className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-[13px] transition-colors min-h-[32px] text-left cursor-pointer ${
+                            !isSettingsOpen && activeNav === 'tag' && isVirtualAllTag(selectedTag)
                               ? 'bg-stone-200/90 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-semibold ring-1 ring-[var(--pata-border)]'
                               : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50'
                           }`}
@@ -1076,16 +1100,16 @@ export default function App() {
                         </button>
 
                         {tagsLoading && tags.length === 0 ? (
-                          <div className="px-2 py-1.5 text-xs text-stone-400">加载标签...</div>
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground">加载标签...</div>
                         ) : tags.length === 0 ? (
-                          <div className="px-2 py-1.5 text-xs text-stone-400 italic">暂无标签</div>
+                          <div className="px-2 py-1.5 text-xs text-muted-foreground italic">暂无标签</div>
                         ) : (
                           tags.map((item) => (
                             <button
                               key={item.tag}
                               onClick={() => handleSelectTag(item.tag)}
-                              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-xs transition-colors min-h-[32px] text-left cursor-pointer ${
-                                activeNav === 'tag' && selectedTag === item.tag
+                              className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-[13px] transition-colors min-h-[32px] text-left cursor-pointer ${
+                                !isSettingsOpen && activeNav === 'tag' && selectedTag === item.tag
                                   ? 'bg-stone-200/90 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-semibold ring-1 ring-[var(--pata-border)]'
                                   : 'text-stone-600 dark:text-stone-400 hover:bg-stone-200/50 dark:hover:bg-stone-800/50'
                               }`}
@@ -1095,7 +1119,7 @@ export default function App() {
                                 <Hash className="w-3.5 h-3.5 shrink-0 opacity-60" />
                                 <span className="truncate">{item.tag}</span>
                               </div>
-                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-stone-200/70 dark:bg-stone-800 text-stone-500 dark:text-stone-400 shrink-0">
+                              <span className="text-[11px] font-mono px-1.5 py-0.5 rounded-full bg-stone-200/70 dark:bg-stone-800 text-muted-foreground shrink-0">
                                 {item.total}
                               </span>
                             </button>
@@ -1161,7 +1185,7 @@ export default function App() {
         )}
 
         {/* Main Content Area */}
-        <main className={`flex-1 flex flex-col min-w-0 overflow-hidden rounded-2xl border border-stone-200/70 dark:border-stone-800/70 shadow-xs bg-stone-50 dark:bg-stone-900 ${
+        <main className={`flex-1 flex flex-col min-w-0 overflow-hidden rounded-2xl border border-[var(--pata-border)] shadow-xs bg-stone-50 dark:bg-stone-900 ${
           sidebarCollapsed ? 'mx-2 mb-2' : 'mr-2 my-2'
         }`}>
 
@@ -1367,7 +1391,7 @@ export default function App() {
                           [{dr.source_type}:{dr.source_id}] 关联缺失的 {dr.target_type} ({dr.target_id})
                         </span>
                       </div>
-                      <div className="font-mono text-[10px] text-stone-400 mt-0.5 break-all">
+                      <div className="font-mono text-[11px] text-muted-foreground mt-0.5 break-all">
                         来源文件: {dr.source_path}
                       </div>
                       <div className="text-stone-600 dark:text-stone-400 mt-1">
