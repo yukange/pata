@@ -148,7 +148,7 @@ export function TagChipEditor({
               setInputValue('');
               setError(null);
             }}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-stone-400 hover:text-stone-700 dark:hover:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer select-none"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-muted-foreground hover:text-stone-700 dark:hover:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer select-none"
             title="添加标签"
           >
             <Plus className="w-3 h-3" />
@@ -168,7 +168,7 @@ export function TagChipEditor({
                 onKeyDown={handleKeyDown}
                 placeholder="输入标签名称..."
                 autoFocus
-                className="w-full px-2 py-1 text-xs rounded border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-hidden focus:border-stone-400 dark:focus:border-stone-600"
+                className="w-full px-2 py-1 text-xs rounded border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground focus:outline-hidden focus:border-stone-400 dark:focus:border-stone-600"
               />
 
               {error && (
@@ -179,7 +179,7 @@ export function TagChipEditor({
 
               {availableSuggestions.length > 0 && (
                 <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                  <div className="text-[10px] text-stone-400 px-1">已有标签</div>
+                  <div className="text-[11px] text-muted-foreground px-1">已有标签</div>
                   {availableSuggestions.map((t) => (
                     <button
                       key={t}

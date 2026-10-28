@@ -231,12 +231,12 @@ export function SearchOverlay({
         role="dialog"
         aria-modal="true"
         aria-label="全局快速搜索"
-        className="w-full max-w-xl bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[72vh] text-stone-900 dark:text-stone-100"
+        className="w-full max-w-xl bg-stone-50 dark:bg-stone-900 border border-[var(--pata-border)] rounded-xl shadow-2xl overflow-hidden flex flex-col max-h-[72vh] text-stone-900 dark:text-stone-100"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         {/* Search Input Bar */}
-        <div className="flex items-center px-4 py-3 border-b border-stone-200 dark:border-stone-800 gap-2.5">
+        <div className="flex items-center px-4 py-3 border-b border-[var(--pata-border)] gap-2.5">
           <Search className="w-4 h-4 text-stone-400 shrink-0" />
           <input
             ref={inputRef}
@@ -269,7 +269,7 @@ export function SearchOverlay({
               <X className="w-3 h-3" />
             </button>
           )}
-          <kbd className="text-[10px] font-mono bg-stone-200/70 dark:bg-stone-800 text-stone-500 dark:text-stone-400 px-1.5 py-0.5 rounded shrink-0">
+          <kbd className="text-[11px] font-mono bg-stone-200/70 dark:bg-stone-800 text-muted-foreground px-1.5 py-0.5 rounded shrink-0">
             ESC
           </kbd>
         </div>
@@ -277,25 +277,25 @@ export function SearchOverlay({
         {/* Results Body */}
         <div className="flex-1 overflow-y-auto min-h-[140px] max-h-[52vh]">
           {!vaultOpen ? (
-            <div className="py-12 text-center text-stone-400 dark:text-stone-500">
+            <div className="py-12 text-center text-muted-foreground">
               <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-50 text-amber-500" />
               <p className="text-xs">Vault 尚未打开，请先选择工作区目录</p>
             </div>
           ) : !query.trim() ? (
-            <div className="py-12 text-center text-stone-400 dark:text-stone-500">
+            <div className="py-12 text-center text-muted-foreground">
               <Search className="w-6 h-6 mx-auto mb-2 opacity-40" />
               <p className="text-xs">输入关键词跨类型快速搜索</p>
-              <p className="text-[11px] mt-1 text-stone-400/80">
+              <p className="text-[11px] mt-1 text-muted-foreground">
                 覆盖任务标题与描述、笔记内容、以及任务记录
               </p>
             </div>
           ) : loading && results.length === 0 ? (
-            <div className="py-12 text-center text-stone-400 dark:text-stone-500">
+            <div className="py-12 text-center text-muted-foreground">
               <Loader2 className="w-5 h-5 mx-auto mb-2 animate-spin text-stone-400" />
               <p className="text-xs">正在搜索...</p>
             </div>
           ) : results.length === 0 ? (
-            <div className="py-12 text-center text-stone-400 dark:text-stone-500">
+            <div className="py-12 text-center text-muted-foreground">
               <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-40" />
               <p className="text-xs">未找到与 “{query.trim()}” 相关的结果</p>
             </div>
@@ -304,12 +304,12 @@ export function SearchOverlay({
               {/* 1. Tasks Section */}
               {displayedTasks.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-stone-500 dark:text-stone-400 bg-stone-100/60 dark:bg-stone-800/40">
+                  <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-muted-foreground bg-stone-100/60 dark:bg-stone-800/40">
                     <div className="flex items-center space-x-1.5">
                       <CheckSquare className="w-3.5 h-3.5 text-interaction-600 dark:text-interaction-400" />
                       <span>任务</span>
                     </div>
-                    <span className="font-mono text-[10px] text-stone-400">
+                    <span className="font-mono text-[11px] text-muted-foreground">
                       {tasks.length > 5 ? `显示前 5 条 / 共 ${tasks.length} 条` : `共 ${tasks.length} 条`}
                     </span>
                   </div>
@@ -328,7 +328,7 @@ export function SearchOverlay({
                           }}
                           onMouseEnter={() => setSelectedIndex(globalIndex)}
                           onClick={() => handleItemSelect(task)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] cursor-pointer transition-colors ${
                             isSelected
                               ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-50'
                               : 'text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800/50'
@@ -339,14 +339,14 @@ export function SearchOverlay({
                             <div className="min-w-0 flex-1">
                               <div className="font-medium truncate">{task.title || '(无标题任务)'}</div>
                               {task.snippet && (
-                                <div className="text-[11px] text-stone-500 dark:text-stone-400 truncate mt-0.5 opacity-90">
+                                <div className="text-xs text-muted-foreground truncate mt-0.5">
                                   {task.snippet}
                                 </div>
                               )}
                             </div>
                           </div>
                           {isSelected && (
-                            <span className="text-[10px] font-mono text-stone-400 dark:text-stone-500 shrink-0">
+                            <span className="text-[11px] font-mono text-muted-foreground shrink-0">
                               ↵ 打开
                             </span>
                           )}
@@ -360,12 +360,12 @@ export function SearchOverlay({
               {/* 2. Notes Section */}
               {displayedNotes.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-stone-500 dark:text-stone-400 bg-stone-100/60 dark:bg-stone-800/40">
+                  <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-muted-foreground bg-stone-100/60 dark:bg-stone-800/40">
                     <div className="flex items-center space-x-1.5">
                       <FileText className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                       <span>笔记</span>
                     </div>
-                    <span className="font-mono text-[10px] text-stone-400">
+                    <span className="font-mono text-[11px] text-muted-foreground">
                       {notes.length > 5 ? `显示前 5 条 / 共 ${notes.length} 条` : `共 ${notes.length} 条`}
                     </span>
                   </div>
@@ -384,7 +384,7 @@ export function SearchOverlay({
                           }}
                           onMouseEnter={() => setSelectedIndex(globalIndex)}
                           onClick={() => handleItemSelect(note)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] cursor-pointer transition-colors ${
                             isSelected
                               ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-50'
                               : 'text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800/50'
@@ -401,7 +401,7 @@ export function SearchOverlay({
                                 <>
                                   <div className="font-medium truncate">{note.title}</div>
                                   {note.snippet && (
-                                    <div className="text-[11px] text-stone-500 dark:text-stone-400 truncate mt-0.5 opacity-90">
+                                    <div className="text-xs text-muted-foreground truncate mt-0.5">
                                       {note.snippet}
                                     </div>
                                   )}
@@ -410,7 +410,7 @@ export function SearchOverlay({
                             </div>
                           </div>
                           {isSelected && (
-                            <span className="text-[10px] font-mono text-stone-400 dark:text-stone-500 shrink-0">
+                            <span className="text-[11px] font-mono text-muted-foreground shrink-0">
                               ↵ 打开
                             </span>
                           )}
@@ -424,12 +424,12 @@ export function SearchOverlay({
               {/* 3. Activities Section */}
               {displayedActivities.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-stone-500 dark:text-stone-400 bg-stone-100/60 dark:bg-stone-800/40">
+                  <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-muted-foreground bg-stone-100/60 dark:bg-stone-800/40">
                     <div className="flex items-center space-x-1.5">
                       <MessageSquare className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                       <span>记录</span>
                     </div>
-                    <span className="font-mono text-[10px] text-stone-400">
+                    <span className="font-mono text-[11px] text-muted-foreground">
                       {activities.length > 5 ? `显示前 5 条 / 共 ${activities.length} 条` : `共 ${activities.length} 条`}
                     </span>
                   </div>
@@ -457,7 +457,7 @@ export function SearchOverlay({
                               handleItemSelect(act);
                             }
                           }}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] transition-colors ${
                             isClickable ? 'cursor-pointer' : 'cursor-default opacity-85'
                           } ${
                             isSelected
@@ -473,15 +473,15 @@ export function SearchOverlay({
                               </div>
                               <div className="flex items-center space-x-1.5 mt-0.5">
                                 {hasTaskId ? (
-                                  <span className="text-[10px] text-interaction-600 dark:text-interaction-400 font-mono">
+                                  <span className="text-[11px] text-interaction-700 dark:text-interaction-400 font-mono">
                                     关联任务评论
                                   </span>
                                 ) : hasDate ? (
-                                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-mono">
+                                  <span className="text-[11px] text-blue-600 dark:text-blue-400 font-mono">
                                     日计划活动 ({act.title})
                                   </span>
                                 ) : (
-                                  <span className="text-[10px] text-stone-400 font-mono">
+                                  <span className="text-[11px] text-muted-foreground font-mono">
                                     独立记录 (仅展示)
                                   </span>
                                 )}
@@ -489,13 +489,13 @@ export function SearchOverlay({
                             </div>
                           </div>
                           {isSelected && hasTaskId && (
-                            <span className="text-[10px] font-mono text-stone-400 dark:text-stone-500 shrink-0 flex items-center space-x-1">
+                            <span className="text-[11px] font-mono text-muted-foreground shrink-0 flex items-center space-x-1">
                               <span>↵ 跳父任务</span>
                               <ExternalLink className="w-2.5 h-2.5" />
                             </span>
                           )}
                           {isSelected && !hasTaskId && hasDate && (
-                            <span className="text-[10px] font-mono text-stone-400 dark:text-stone-500 shrink-0 flex items-center space-x-1">
+                            <span className="text-[11px] font-mono text-muted-foreground shrink-0 flex items-center space-x-1">
                               <span>↵ 打开日计划</span>
                               <ExternalLink className="w-2.5 h-2.5" />
                             </span>
@@ -510,12 +510,12 @@ export function SearchOverlay({
               {/* 4. Files Section */}
               {displayedFiles.length > 0 && (
                 <div>
-                  <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-stone-500 dark:text-stone-400 bg-stone-100/60 dark:bg-stone-800/40">
+                  <div className="flex items-center justify-between px-3.5 py-1.5 text-[11px] font-semibold text-muted-foreground bg-stone-100/60 dark:bg-stone-800/40">
                     <div className="flex items-center space-x-1.5">
                       <Paperclip className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                       <span>文件资源</span>
                     </div>
-                    <span className="font-mono text-[10px] text-stone-400">
+                    <span className="font-mono text-[11px] text-muted-foreground">
                       {files.length > 5 ? `显示前 5 条 / 共 ${files.length} 条` : `共 ${files.length} 条`}
                     </span>
                   </div>
@@ -535,7 +535,7 @@ export function SearchOverlay({
                           }}
                           onMouseEnter={() => setSelectedIndex(globalIndex)}
                           onClick={() => handleItemSelect(file)}
-                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                          className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[13px] cursor-pointer transition-colors ${
                             isSelected
                               ? 'bg-stone-200/80 dark:bg-stone-800 text-stone-900 dark:text-stone-50'
                               : 'text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800/50'
@@ -545,7 +545,7 @@ export function SearchOverlay({
                             <Paperclip className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 opacity-80" />
                             <div className="min-w-0 flex-1">
                               <div className="font-medium truncate">{file.title}</div>
-                              <div className="text-[11px] text-stone-500 dark:text-stone-400 truncate mt-0.5 opacity-90">
+                              <div className="text-xs text-muted-foreground truncate mt-0.5">
                                 {file.snippet || file.id}
                               </div>
                             </div>
@@ -563,7 +563,7 @@ export function SearchOverlay({
                               <ExternalLink className="w-3 h-3" />
                             </button>
                             {isSelected && (
-                              <span className="text-[10px] font-mono text-stone-400 dark:text-stone-500">
+                              <span className="text-[11px] font-mono text-muted-foreground">
                                 ↵ 预览
                               </span>
                             )}
@@ -579,31 +579,31 @@ export function SearchOverlay({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-4 py-2 bg-stone-100/70 dark:bg-stone-950/70 border-t border-stone-200/60 dark:border-stone-800/60 flex items-center justify-between text-[11px] text-stone-400 select-none">
+        <div className="px-4 py-2 bg-stone-100/70 dark:bg-stone-950/70 border-t border-stone-200/60 dark:border-stone-800/60 flex items-center justify-between text-[11px] text-muted-foreground select-none">
           <div className="flex items-center space-x-3">
             <span>
-              <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[10px]">
+              <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
                 ↑
               </kbd>{' '}
-              <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[10px]">
+              <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
                 ↓
               </kbd>{' '}
               选择
             </span>
             <span>
-              <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[10px]">
+              <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
                 ↵
               </kbd>{' '}
               打开
             </span>
             <span>
-              <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[10px]">
+              <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
                 ESC
               </kbd>{' '}
               关闭
             </span>
           </div>
-          <span className="font-mono text-[10px]">⌘K / ⌘P</span>
+          <span className="font-mono text-[11px]">⌘K / ⌘P</span>
         </div>
       </div>
     </div>

@@ -85,6 +85,20 @@ test('侧栏收起交互规范：避让交通灯、Logo 右侧按钮一致性、
       appContent.includes('text-stone-900'),
     '导航项在 active 时应使用克制的中性高对比底色与文字'
   );
+
+  // 收起态顶栏应承接完整的 4 个主导航项：Today、Tasks、Notes、Tags
+  assert.ok(
+    appContent.includes('id="pata-nav-today"') &&
+      appContent.includes('id="pata-nav-tasks"') &&
+      appContent.includes('id="pata-nav-notes"') &&
+      appContent.includes('id="pata-nav-tags"'),
+    '收起态顶栏应包含完整的 Today、Tasks、Notes、Tags 导航入口'
+  );
+  assert.ok(
+    appContent.includes("goNav('tag')") &&
+      appContent.includes("activeNav === 'tag'"),
+    '收起态顶栏 Tags 入口应支持切换至 tag 视图并具备高亮状态'
+  );
 });
 
 test('工作区页面顶部工具栏支持原生窗口拖拽', () => {

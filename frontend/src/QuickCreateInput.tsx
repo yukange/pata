@@ -129,12 +129,12 @@ export function QuickCreateInput({ placeholder, submitLabel, tagNames, onSubmit,
             onBlur={() => setFocused(false)}
             placeholder={placeholder}
             disabled={busy || disabled}
-            className="w-full px-3 py-2 text-xs rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder-stone-400 quick-entry shadow-2xs"
+            className="w-full px-3 py-2 text-[13px] leading-4 rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground quick-entry shadow-2xs"
           />
           {open && (
             <ul
               role="listbox"
-              className="pata-pop absolute left-0 right-0 top-full mt-1 z-20 max-h-56 overflow-y-auto rounded-lg border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-lg py-1 text-xs"
+              className="pata-pop absolute left-0 right-0 top-full mt-1 z-20 max-h-56 overflow-y-auto rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-900 shadow-lg py-1 text-xs"
             >
               {suggestions.map((s, i) => (
                 <li

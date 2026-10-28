@@ -186,7 +186,7 @@ export function TasksView({
         />
 
         {/* Status Filters */}
-        <div className="flex items-center space-x-1 p-0.5 rounded-lg bg-stone-200/60 dark:bg-stone-800/80 text-xs w-fit">
+        <div className="flex items-center space-x-1 p-0.5 rounded-lg bg-stone-200/60 dark:bg-stone-800/80 text-[13px] w-fit">
           <button
             onClick={() => setStatusFilter('all')}
             className={`px-2.5 py-1 rounded-md font-medium transition cursor-pointer ${
@@ -229,7 +229,7 @@ export function TasksView({
 
         {/* Task List */}
         {filteredTasks.length === 0 ? (
-          <div className="py-12 text-center text-xs text-stone-500 dark:text-stone-400 space-y-1">
+          <div className="py-12 text-center text-xs text-muted-foreground space-y-1">
             {listError ? (
               <div className="text-rose-600 dark:text-rose-400 font-mono text-[11px]">
                 列表加载失败: {listError}
@@ -237,7 +237,7 @@ export function TasksView({
             ) : tasks.length === 0 ? (
               <>
                 <div>Vault 中暂无任务</div>
-                <div className="text-[11px] text-stone-400">输入上方标题快速创建第一条任务吧</div>
+                <div className="text-[11px] text-muted-foreground">输入上方标题快速创建第一条任务吧</div>
               </>
             ) : (
               <div>当前分类下暂无任务</div>
@@ -260,10 +260,11 @@ export function TasksView({
                   }}
                   tabIndex={0}
                   role="button"
+                  data-selected={t.id === selectedTaskId}
                   className={`group p-3.5 rounded-xl border bg-white dark:bg-stone-950 hover:border-stone-300 dark:hover:border-stone-700 hover:shadow-2xs transition cursor-pointer select-none focus:outline-none focus:ring-0 ${
                     t.id === selectedTaskId
                       ? 'border-stone-400 dark:border-stone-600 bg-stone-50/70 dark:bg-stone-900/50'
-                      : 'border-stone-200 dark:border-stone-800'
+                      : 'border-[var(--pata-border)]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -283,9 +284,9 @@ export function TasksView({
                       </button>
 
                       <span
-                        className={`text-xs font-medium truncate ${
+                        className={`text-[13px] font-medium truncate ${
                           isDone
-                            ? 'line-through text-stone-400 dark:text-stone-500'
+                            ? 'line-through text-muted-foreground'
                             : 'text-stone-900 dark:text-stone-100'
                         }`}
                       >
@@ -296,7 +297,7 @@ export function TasksView({
                     <div className="flex items-center space-x-1.5 shrink-0">
                       {/* Status Badge */}
                       <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                        className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${
                           isDone
                             ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300'
                             : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400'
@@ -308,9 +309,9 @@ export function TasksView({
                   </div>
 
                   {/* Sub row: Due date, Tags, Updated At */}
-                  <div className="flex items-center gap-3 mt-2 text-[11px] text-stone-400">
+                  <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
                     {t.due && (
-                      <span className="flex items-center space-x-1 text-stone-500 dark:text-stone-400">
+                      <span className="flex items-center space-x-1 text-muted-foreground">
                         <Calendar className="w-3 h-3" />
                         <span>due {t.due}</span>
                       </span>
@@ -321,7 +322,7 @@ export function TasksView({
                         {t.tags.map((tag) => (
                           <span
                             key={tag}
-                            className="inline-flex items-center text-[10px] px-1.5 py-0.2 rounded bg-stone-100 dark:bg-stone-800 text-interaction-700 dark:text-interaction-300"
+                            className="inline-flex items-center text-[11px] px-1.5 py-0.2 rounded bg-stone-100 dark:bg-stone-800 text-interaction-700 dark:text-interaction-300"
                           >
                             #{tag}
                           </span>
@@ -329,7 +330,7 @@ export function TasksView({
                       </span>
                     )}
 
-                    <span className="ml-auto font-mono text-[10px] text-stone-400">
+                    <span className="ml-auto font-mono text-[11px] text-muted-foreground">
                       {t.updated_at ? t.updated_at.slice(0, 10) : ''}
                     </span>
                   </div>

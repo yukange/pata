@@ -705,7 +705,7 @@ export function TodayView({
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-baseline gap-2">
                 <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">{planWord}计划</h2>
-                <span className="font-mono text-stone-400">
+                <span className="font-mono text-muted-foreground">
                   {completedCount} / {dayPlanTaskIds.length}
                 </span>
               </div>
@@ -767,7 +767,7 @@ export function TodayView({
               onReorder={handlePlanReorder}
             />
 
-            <p className="text-[11px] text-stone-400">
+            <p className="text-[11px] text-muted-foreground">
               计划只是当天的执行安排，不改变截止日期（due）。
               {!isToday && '此处显示任务的当前状态与属性。'}
             </p>
@@ -777,7 +777,7 @@ export function TodayView({
           <section className="space-y-3 pt-4 border-t border-stone-200/80 dark:border-stone-800">
             <div className="flex items-baseline gap-2">
               <h2 className="text-sm font-semibold text-stone-900 dark:text-stone-100">{isToday ? '今日记录' : '当日记录'}</h2>
-              <span className="text-xs font-mono text-stone-400">{timelineItems.length}</span>
+              <span className="text-xs font-mono text-muted-foreground">{timelineItems.length}</span>
             </div>
 
             <ActivityComposer
@@ -797,7 +797,7 @@ export function TodayView({
             />
 
             {timelineItems.length === 0 ? (
-              <p className="text-xs text-stone-400 py-1">该日期暂无记录。</p>
+              <p className="text-xs text-muted-foreground py-1">该日期暂无记录。</p>
             ) : (
               <div className="divide-y divide-stone-200/70 dark:divide-stone-800">
                 {timelineItems.map((item) => {
@@ -919,13 +919,13 @@ export function TodayView({
                 onChange={(e) => setAddSearch(e.target.value)}
                 placeholder="搜索任务标题或标签..."
                 autoFocus
-                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-0 focus:border-stone-400 dark:focus:border-stone-600"
+                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-lg border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground focus:outline-none focus:ring-0 focus:border-stone-400 dark:focus:border-stone-600"
               />
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-4 pr-1">
               {totalAvailableCount === 0 ? (
-                <div className="py-8 text-center text-xs text-stone-400">
+                <div className="py-8 text-center text-xs text-muted-foreground">
                   {tasks.length === 0 ? '任务池为空' : '没有可添加的任务（已全部加入或无匹配项）'}
                 </div>
               ) : (
@@ -933,12 +933,12 @@ export function TodayView({
                   {/* 第一块：未完成 */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between px-1">
-                      <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400">
+                      <span className="text-[11px] font-semibold text-muted-foreground">
                         未完成 ({uncompletedTasks.length})
                       </span>
                     </div>
                     {uncompletedTasks.length === 0 ? (
-                      <div className="py-3 text-center text-xs text-stone-400 dark:text-stone-500 rounded-lg bg-stone-50/60 dark:bg-stone-800/30">
+                      <div className="py-3 text-center text-xs text-muted-foreground rounded-lg bg-stone-50/60 dark:bg-stone-800/30">
                         暂无未完成任务
                       </div>
                     ) : (
@@ -956,11 +956,11 @@ export function TodayView({
                           >
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               <Circle className="w-3.5 h-3.5 text-stone-400 shrink-0" />
-                              <span className="text-xs truncate text-stone-900 dark:text-stone-100">{t.title}</span>
+                              <span className="text-[13px] truncate text-stone-900 dark:text-stone-100">{t.title}</span>
                               {(t.tags ?? []).length > 0 && (
                                 <span className="hidden sm:inline-flex items-center gap-1 shrink-0">
                                   {(t.tags ?? []).map((tag) => (
-                                    <span key={tag} className="text-[10px] text-stone-400">
+                                    <span key={tag} className="text-[11px] text-muted-foreground">
                                       #{tag}
                                     </span>
                                   ))}
@@ -969,7 +969,7 @@ export function TodayView({
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               {t.created_at && (
-                                <span className="text-[10px] font-mono text-stone-400">
+                                <span className="text-[11px] font-mono text-muted-foreground">
                                   {formatActivityTimestamp(t.created_at)}
                                 </span>
                               )}
@@ -984,12 +984,12 @@ export function TodayView({
                   {/* 第二块：已完成 */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between px-1 pt-1">
-                      <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400">
+                      <span className="text-[11px] font-semibold text-muted-foreground">
                         已完成 ({completedTasks.length})
                       </span>
                     </div>
                     {completedTasks.length === 0 ? (
-                      <div className="py-3 text-center text-xs text-stone-400 dark:text-stone-500 rounded-lg bg-stone-50/60 dark:bg-stone-800/30">
+                      <div className="py-3 text-center text-xs text-muted-foreground rounded-lg bg-stone-50/60 dark:bg-stone-800/30">
                         暂无已完成任务
                       </div>
                     ) : (
@@ -1003,15 +1003,15 @@ export function TodayView({
                               await handleAddExisting(t.id);
                               setAddModalOpen(false);
                             }}
-                            className="w-full text-left p-2.5 rounded-lg border border-stone-100 dark:border-stone-800/80 bg-stone-50/40 dark:bg-stone-900/40 hover:border-interaction-500/60 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition flex items-center justify-between gap-2 group opacity-85 hover:opacity-100"
+                            className="w-full text-left p-2.5 rounded-lg border border-stone-100 dark:border-stone-800/80 bg-stone-50/40 dark:bg-stone-900/40 hover:border-interaction-500/60 hover:bg-stone-50 dark:hover:bg-stone-800/50 transition flex items-center justify-between gap-2 group"
                           >
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-500 shrink-0" />
-                              <span className="text-xs truncate line-through text-stone-400 dark:text-stone-500">{t.title}</span>
+                              <span className="text-[13px] truncate line-through text-muted-foreground">{t.title}</span>
                               {(t.tags ?? []).length > 0 && (
-                                <span className="hidden sm:inline-flex items-center gap-1 shrink-0 opacity-60">
+                                <span className="hidden sm:inline-flex items-center gap-1 shrink-0">
                                   {(t.tags ?? []).map((tag) => (
-                                    <span key={tag} className="text-[10px] text-stone-400">
+                                    <span key={tag} className="text-[11px] text-muted-foreground">
                                       #{tag}
                                     </span>
                                   ))}
@@ -1020,7 +1020,7 @@ export function TodayView({
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                               {t.created_at && (
-                                <span className="text-[10px] font-mono text-stone-400">
+                                <span className="text-[11px] font-mono text-muted-foreground">
                                   {formatActivityTimestamp(t.created_at)}
                                 </span>
                               )}

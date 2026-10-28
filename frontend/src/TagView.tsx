@@ -141,7 +141,7 @@ export function TagView({
     <WorkspacePage>
       <div className="space-y-4">
         {/* Header with Tag Chip & Counts */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-stone-200/80 dark:border-stone-800 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-[var(--pata-border)] pb-3">
           <div className="flex items-center space-x-2">
             <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded-md bg-interaction-50 dark:bg-interaction-950/50 border border-interaction-200/60 dark:border-interaction-800/60 text-interaction-800 dark:text-interaction-300 font-medium text-sm">
               <Hash className="w-4 h-4" />
@@ -155,7 +155,7 @@ export function TagView({
 
         {/* Chronological Timeline Feed */}
         {items.length === 0 ? (
-          <div className="py-16 flex flex-col items-center justify-center text-stone-400 text-xs bg-white dark:bg-stone-900/60 rounded-xl border border-stone-200/80 dark:border-stone-800">
+          <div className="py-16 flex flex-col items-center justify-center text-stone-400 text-xs bg-white dark:bg-stone-900/60 rounded-xl border border-[var(--pata-border)]">
             <Hash className="w-8 h-8 mb-2 opacity-30 text-stone-400" />
             <p>{formatTagEmptyMessage(selectedTag)}</p>
           </div>
@@ -167,6 +167,7 @@ export function TagView({
                 return (
                   <div
                     key={`task-${item.id}`}
+                    data-selected={isSelected}
                     role="button"
                     tabIndex={0}
                     onClick={() => void openTask(item.id)}
@@ -179,39 +180,39 @@ export function TagView({
                     className={`w-full p-3.5 rounded-xl border transition text-left cursor-pointer group bg-white dark:bg-stone-900/90 ${
                       isSelected
                         ? 'border-interaction-500 ring-1 ring-interaction-500/30'
-                        : 'border-stone-200/80 dark:border-stone-800 hover:border-interaction-500/50 hover:bg-stone-50/80 dark:hover:bg-stone-800/50'
+                        : 'border-[var(--pata-border)] hover:border-interaction-500/50 hover:bg-stone-50/80 dark:hover:bg-stone-800/50'
                     }`}
                     title={`在右栏查看任务: ${item.title || item.id}`}
                   >
                     <div className="flex items-center justify-between text-xs mb-1.5">
                       <div className="flex items-center space-x-1.5">
-                        <span className="inline-flex items-center space-x-1 text-[10px] px-1.5 py-0.5 rounded bg-interaction-50 dark:bg-interaction-950/40 text-interaction-700 dark:text-interaction-400 border border-interaction-200/60 dark:border-interaction-800/60 font-medium">
+                        <span className="inline-flex items-center space-x-1 text-[11px] px-1.5 py-0.5 rounded bg-interaction-50 dark:bg-interaction-950/40 text-interaction-700 dark:text-interaction-400 border border-interaction-200/60 dark:border-interaction-800/60 font-medium">
                           <CheckSquare className="w-3 h-3" />
                           <span>任务</span>
                         </span>
                         {item.status === 'done' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800 text-stone-500 font-medium">
+                          <span className="text-[11px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800 text-muted-foreground font-medium">
                             已完成
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] text-stone-400 font-mono">
+                      <span className="text-[11px] text-muted-foreground font-mono">
                         {formatItemTime(item.time)}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium text-stone-800 dark:text-stone-200 group-hover:text-interaction-700 dark:group-hover:text-interaction-400 truncate">
+                        <div className="text-[13px] font-medium text-stone-800 dark:text-stone-200 group-hover:text-interaction-700 dark:group-hover:text-interaction-400 truncate">
                           {item.title || item.id}
                         </div>
                         {item.snippet && (
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400 line-clamp-2 mt-1">
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                             {item.snippet}
                           </p>
                         )}
                       </div>
-                      <span className="text-[10px] text-stone-400 flex items-center space-x-0.5 shrink-0 group-hover:text-interaction-600 transition">
+                      <span className="text-[11px] text-muted-foreground flex items-center space-x-0.5 shrink-0 group-hover:text-interaction-600 transition">
                         <span>查看任务</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </span>
@@ -233,33 +234,33 @@ export function TagView({
                         onOpenNote(item.id);
                       }
                     }}
-                    className="w-full p-3.5 rounded-xl border border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/90 hover:border-blue-500/50 hover:bg-stone-50/80 dark:hover:bg-stone-800/50 transition text-left cursor-pointer group"
+                    className="w-full p-3.5 rounded-xl border border-[var(--pata-border)] bg-white dark:bg-stone-900/90 hover:border-blue-500/50 hover:bg-stone-50/80 dark:hover:bg-stone-800/50 transition text-left cursor-pointer group"
                     title={`打开笔记: ${item.title || item.id}`}
                   >
                     <div className="flex items-center justify-between text-xs mb-1.5">
                       <div className="flex items-center space-x-1.5">
-                        <span className="inline-flex items-center space-x-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60 font-medium">
+                        <span className="inline-flex items-center space-x-1 text-[11px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60 font-medium">
                           <FileText className="w-3 h-3" />
                           <span>笔记</span>
                         </span>
                       </div>
-                      <span className="text-[11px] text-stone-400 font-mono">
+                      <span className="text-[11px] text-muted-foreground font-mono">
                         {formatItemTime(item.time)}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium text-stone-800 dark:text-stone-200 group-hover:text-blue-700 dark:group-hover:text-blue-400 truncate">
+                        <div className="text-[13px] font-medium text-stone-800 dark:text-stone-200 group-hover:text-blue-700 dark:group-hover:text-blue-400 truncate">
                           {item.title || item.id}
                         </div>
                         {item.snippet && (
-                          <p className="text-[11px] text-stone-500 dark:text-stone-400 line-clamp-2 mt-1">
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                             {item.snippet}
                           </p>
                         )}
                       </div>
-                      <span className="text-[10px] text-stone-400 flex items-center space-x-0.5 shrink-0 group-hover:text-blue-600 transition">
+                      <span className="text-[11px] text-muted-foreground flex items-center space-x-0.5 shrink-0 group-hover:text-blue-600 transition">
                         <span>打开笔记</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </span>
@@ -273,39 +274,40 @@ export function TagView({
               return (
                 <div
                   key={`activity-${item.id}`}
+                  data-selected={isTaskSelected}
                   className={`w-full p-3.5 rounded-xl border transition text-left bg-white dark:bg-stone-900/90 space-y-2 ${
                     isTaskSelected
                       ? 'border-interaction-500/70 ring-1 ring-interaction-500/20'
-                      : 'border-stone-200/80 dark:border-stone-800'
+                      : 'border-[var(--pata-border)]'
                   }`}
                 >
                   <div className="flex items-center justify-between text-xs">
                     <div className="flex items-center space-x-2 truncate mr-2">
-                      <span className="inline-flex items-center space-x-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60 font-medium shrink-0">
+                      <span className="inline-flex items-center space-x-1 text-[11px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60 font-medium shrink-0">
                         <MessageSquare className="w-3 h-3" />
                         <span>记录</span>
                       </span>
                       {item.inherited && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100/70 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900 font-medium shrink-0">
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100/70 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900 font-medium shrink-0">
                           经父任务
                         </span>
                       )}
                       {item.task_id ? (
-                        <span className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                        <span className="text-[11px] text-muted-foreground truncate">
                           所属任务: {item.title}
                         </span>
                       ) : (
-                        <span className="text-[11px] text-stone-500 dark:text-stone-400 truncate">
+                        <span className="text-[11px] text-muted-foreground truncate">
                           今日计划: {item.title}
                         </span>
                       )}
                     </div>
-                    <span className="text-[11px] text-stone-400 font-mono shrink-0">
+                    <span className="text-[11px] text-muted-foreground font-mono shrink-0">
                       {formatItemTime(item.time)}
                     </span>
                   </div>
 
-                  <p className="text-xs text-stone-700 dark:text-stone-300 leading-relaxed whitespace-pre-wrap line-clamp-3">
+                  <p className="text-sm text-stone-700 dark:text-stone-300 leading-relaxed whitespace-pre-wrap line-clamp-3">
                     {item.snippet?.trim() || '（无正文内容）'}
                   </p>
 

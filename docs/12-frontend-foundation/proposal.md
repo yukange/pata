@@ -81,6 +81,22 @@
 - 统一 Dialog / AlertDialog / Popover / DropdownMenu 的焦点进入、Tab 循环、Esc、取消、恢复触发位置、外部点击与 Portal 层级；不可在未保存或破坏性确认中因外部点击直接丢弃数据。
 - 通用入口优先已有 `src/components/ui/` 组件，不允许业务页面再次复制基础弹窗的键盘/遮罩/关闭实现。
 
+### 4.5 后续维护：HIG 可读性校准
+
+本轮代码与自动化检查已完成，Wails/WKWebView 实机走查待完成。依据 Apple [Typography](https://developer.apple.com/design/human-interface-guidelines/typography)、[Color](https://developer.apple.com/design/human-interface-guidelines/color) 与 [Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility)。
+
+- 导航、任务/笔记列表及搜索结果标题采用 13px；Activity 展示、编辑与输入采用 14px，记录头部元信息与紧凑的生命周期事件（含任务上下文链接）统一保持 11–12px；本轮涉及的时间、标签、计数和快捷键为 11–12px。
+- Notes 正文保持 15px / 1.68 行高，使用系统默认字距；界面与 Vditor 正文统一 SF / 苹方字体栈，代码使用系统等宽字体；笔记标题保持 24px，字重改为 600。
+- 可读辅助信息复用 `--pata-muted-foreground`，浅色为 `#6b6560`、深色为 `#a8a29e`。常用工作区背景上的对比度分别约为 5.50:1、6.93:1；不通过额外透明度淡化这些文字。
+- 默认蓝与自选强调色均生成独立的链接字色，校验普通背景、暖灰背景及淡色强调背景上的 4.5:1 对比度；默认按钮继续使用系统填充色与前景色。
+- `prefers-contrast: more` 提高辅助文字和已接入语义变量的边框对比度，为导航/列表选中项增加内边界，同时保留键盘焦点。
+
+本轮完成标准：
+
+- [x] 修改文件的主动 LSP 检查通过，前端 116 项测试及生产构建通过；强调色测试覆盖背景对比度与从自选色恢复默认色。
+- [x] 基于生产 CSS 与实际 Vditor 的 Chrome 样张检查覆盖浅/深色 × 普通/增强对比度；验证字号、行高、默认字距、SF/苹方实际渲染、默认/自选链接色、鼠标选中与键盘焦点。
+- [ ] 在真实 Wails/WKWebView 中走查窄窗口、中文编辑，以及系统「增强对比度」的实际响应。
+
 ## 5. 交互反馈与跨页面统一
 
 1. **成功安静、失败明确**：保存成功尽量就地反馈；错误就地可见、保留输入/草稿；不把所有反馈做成 Toast 系统。
