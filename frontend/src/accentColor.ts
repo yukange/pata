@@ -15,7 +15,6 @@ const WHITE: RGB = [255, 255, 255];
 const BLACK: RGB = [0, 0, 0];
 const LIGHT_SURFACE: RGB = [255, 255, 255];
 const DARK_SURFACE: RGB = [28, 25, 23];
-const DARK_INK: RGB = [28, 25, 23];
 
 export function validAccent(value: unknown): value is string {
   return typeof value === 'string' && (value === '' || /^#[0-9a-f]{6}$/i.test(value));
@@ -76,11 +75,13 @@ export function deriveAccentRoles(color: string, dark: boolean): AccentRoles {
     const adjustment = Math.max(...solid.map((channel, index) => Math.abs(channel - candidate[index])));
     if (adjustment <= 32) solid = candidate;
   }
-  const onSolid = accentContrast(solid, WHITE) >= 4.5 ? WHITE : DARK_INK;
+  const onSolid = accentContrast(solid, WHITE) >= 4.5 ? WHITE : BLACK;
   const text = ensureContrast(rgb, surface, 4.5, againstSurface);
   const focus = ensureContrast(rgb, surface, 3, againstSurface);
   const subtle = mix(surface, rgb, dark ? 0.16 : 0.10);
-  const hover = ensureContrast(mix(solid, onSolid, 0.08), surface, 3, againstSurface);
+  const hoverCandidate = mix(solid, onSolid, 0.08);
+  const hover = accentContrast(hoverCandidate, surface) >= 3 && accentContrast(hoverCandidate, onSolid) >= 4.5
+    ? hoverCandidate : solid;
 
   return {
     source: accentHex(rgb),
@@ -101,7 +102,7 @@ export function applyAccent(color: string): void {
   document.documentElement.toggleAttribute('data-pata-custom-accent', custom);
   if (!custom) {
     for (const mode of ['light', 'dark']) {
-      for (const role of roleNames) style.removeProperty(`--pata-${mode}-${role}`);
+      for (const role of roleNames) style.removeProperty(`--pata-${mode}-${role.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase())}`);
     }
     return;
   }
@@ -110,7 +111,7 @@ export function applyAccent(color: string): void {
   for (const mode of ['light', 'dark'] as const) {
     const roles = deriveAccentRoles(color, mode === 'dark');
     for (const role of roleNames) {
-      style.setProperty(`--pata-${mode}-${role}`, roles[role]);
+      style.setProperty(`--pata-${mode}-${role.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase())}`, roles[role]);
     }
   }
 }
