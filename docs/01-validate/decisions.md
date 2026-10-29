@@ -57,6 +57,8 @@
 
 | D50 | **阶段 16（已实现，待 macOS 实机走查）**：Notes 工作区由单列浏览/全区编辑改为左列表 + 右侧唯一编辑器，列表上「草稿」下「笔记」，无 VS Code 式 Tab；草稿是显式 `draft: true` 的无标题、无标签 Note，默认 `+` 创建，正文预览两行且隐藏时间/创建来源 UI；正式笔记列表只显示标题。两组分别按修改时间倒序，编辑中不跳位；搜索可命中草稿且统一进入 Notes 右编辑器、左侧定位。草稿只可**原地、单向**转正式笔记：点击「转为笔记」直接出现正式 Note UI 并聚焦标题，非空标题成功保存后移动分组，标签可选，ID/路径/正文/创建元数据不变；无反向转草稿、无弹窗。草稿可链接正式笔记但不作为 `[[` 候选目标；底层时间/来源仍保留。**本项取代 D09/D23 中旧 Notes 展示布局** | 保持 Today/Tasks/Notes 三入口、唯一 Task Inspector、Record Once 与已有数据兼容；完整取舍与实施见 [阶段 16](../16-notes-drafts/idea.md)、[proposal](../16-notes-drafts/proposal.md) |
 
+| D51 | **阶段 17（规划中，未实施）**：Pata 2.0 以纯 SwiftUI/AppKit + Swift Core 原生 macOS App 替代 Go/Wails/React/Vditor 最终运行时；Markdown IR 编辑优先验证 SwiftMarkdownEngine，不满足需求时在编辑器适配层更换 | 保留现有 Today/Tasks/Notes、Vault Schema、Note 标准 Markdown 相对链接、Task/Activity 纯文本 `[[名称]]` + `note_refs`、单一 Core 与已交付 MCP/ASR/更新；旧 Vault 直接打开，不因编辑器默认 `[[Name|id]]` 协议改变落盘格式。以 [阶段 17](../17-swift-native-rewrite/proposal.md) 的行为与 macOS 实机验收为准；D45 是阶段 12 的历史工程范围，不否定本阶段的独立重构决定 |
+
 ## 不轻易改变的设计约束
 
 侧栏补充决定（2026-10-20）：恢复用户可控制的收起/展开；收起后仅显示图标，保留各主导航、全局搜索、设置和异常诊断，标签入口用于展开侧栏。收起状态保存为本机界面偏好，不改变当前页面、编辑内容或 Vault 数据。行为与验收见 [阶段 5 方案](../05-release/proposal.md#侧栏收起2026-10-20-补充)。
