@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
-import { CheckCircle2, Circle, Plus } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Circle, Plus, RefreshCw } from 'lucide-react';
 import type { Task } from '../bindings/pata/internal/storage/markdown/models.js';
-import { getInlineTaskCandidates } from './taskPicker';
+import { getInlineTaskCandidates, getInlineTaskFooterHint } from './taskPicker';
 import { activeTagQuery, parseQuickTask } from './quickCreate';
 
 interface QuickCreateInputProps {
@@ -39,12 +39,20 @@ export function QuickCreateInput({
   const [caretAtEnd, setCaretAtEnd] = useState(true);
   const [focused, setFocused] = useState(false);
   const [dismissedFor, setDismissedFor] = useState<string | null>(null);
+  const [tab, setTab] = useState<'uncompleted' | 'completed'>('uncompleted');
   const [active, setActive] = useState(0);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const busyRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const activeItemRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    if (activeTaskId && activeItemRef.current) {
+      activeItemRef.current.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeTaskId]);
 
   const tagQuery = caretAtEnd ? activeTagQuery(value) : null;
 
@@ -62,12 +70,27 @@ export function QuickCreateInput({
   const open = focused && suggestions.length > 0 && dismissedFor !== value;
   const activeIdx = Math.min(active, Math.max(suggestions.length - 1, 0));
 
+  const parsedTitle = parseQuickTask(value).title;
+  const hasQuery = Boolean(parsedTitle.trim());
+
   const taskSections = useMemo(() => {
-    if (!existingTasks || !onSelectExisting) return { uncompletedTasks: [] as Task[], completedTasks: [] as Task[] };
-    return getInlineTaskCandidates(existingTasks, planTaskIds ?? [], parseQuickTask(value).title);
-  }, [existingTasks, planTaskIds, onSelectExisting, value]);
-  const taskOptions = [...taskSections.uncompletedTasks, ...taskSections.completedTasks];
-  const taskOpen = Boolean(onSelectExisting) && focused && !busy && !tagQuery && dismissedFor !== value && taskOptions.length > 0;
+    if (!existingTasks || !onSelectExisting) {
+      return { uncompletedTasks: [] as Task[], completedTasks: [] as Task[], searchResults: [] as Task[] };
+    }
+    return getInlineTaskCandidates(existingTasks, planTaskIds ?? [], parsedTitle);
+  }, [existingTasks, planTaskIds, onSelectExisting, parsedTitle]);
+
+  const taskOptions = hasQuery
+    ? taskSections.searchResults
+    : tab === 'uncompleted'
+    ? taskSections.uncompletedTasks
+    : taskSections.completedTasks;
+
+  const hasAvailableTasks = hasQuery
+    ? taskSections.searchResults.length > 0
+    : taskSections.uncompletedTasks.length > 0 || taskSections.completedTasks.length > 0;
+
+  const taskOpen = Boolean(onSelectExisting) && focused && !busy && !tagQuery && dismissedFor !== value && hasAvailableTasks;
   // No default selection: typing and pressing Enter must still CREATE a task.
   const activeTaskIndex = taskOptions.findIndex((task) => task.id === activeTaskId);
 
@@ -83,8 +106,13 @@ export function QuickCreateInput({
 
   const selectExisting = async (taskId: string) => {
     if (!onSelectExisting || busyRef.current || disabled) return;
+    const currentIndex = taskOptions.findIndex((t) => t.id === taskId);
+    const targetIndex = currentIndex >= 0 ? currentIndex : 0;
+    const remaining = taskOptions.filter((t) => t.id !== taskId);
+    const nextTaskId =
+      remaining.length > 0 ? remaining[Math.min(targetIndex, remaining.length - 1)].id : null;
+
     busyRef.current = true;
-    setBusy(true);
     setError(null);
     try {
       if (!(await onSelectExisting(taskId))) {
@@ -92,13 +120,13 @@ export function QuickCreateInput({
         return;
       }
       setValue('');
-      setActiveTaskId(null);
+      setActiveTaskId(nextTaskId);
+      setDismissedFor(null);
     } catch (err: any) {
       setError(`加入计划失败: ${err?.message || err}`);
     } finally {
       busyRef.current = false;
-      setBusy(false);
-      setTimeout(() => inputRef.current?.focus(), 0);
+      inputRef.current?.focus();
     }
   };
 
@@ -116,6 +144,8 @@ export function QuickCreateInput({
       await onSubmit(title, tags);
       setValue('');
       setActiveTaskId(null);
+      setDismissedFor(null);
+      setTab('uncompleted');
     } catch (err: any) {
       setError(`创建失败: ${err?.message || err}`);
     } finally {
@@ -128,6 +158,14 @@ export function QuickCreateInput({
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     // 输入法组合期间 Enter 只确认文字（keyCode 229 兼容 WebKit 在 compositionend 之后触发的 keydown）。
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setActiveTaskId(null);
+      setDismissedFor(null);
+      inputRef.current?.blur();
+      return;
+    }
     if (open) {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
@@ -140,19 +178,39 @@ export function QuickCreateInput({
         pick(suggestions[activeIdx]);
         return;
       }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        setDismissedFor(value);
-        return;
-      }
     }
     if (taskOpen) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!hasQuery) {
+        if (e.key === 'ArrowRight' && tab === 'uncompleted') {
+          e.preventDefault();
+          setTab('completed');
+          const nextTasks = taskSections.completedTasks;
+          if (nextTasks.length > 0 && activeTaskIndex >= 0) {
+            const nextIdx = Math.min(activeTaskIndex, nextTasks.length - 1);
+            setActiveTaskId(nextTasks[nextIdx].id);
+          } else {
+            setActiveTaskId(null);
+          }
+          return;
+        }
+        if (e.key === 'ArrowLeft' && tab === 'completed') {
+          e.preventDefault();
+          setTab('uncompleted');
+          const nextTasks = taskSections.uncompletedTasks;
+          if (nextTasks.length > 0 && activeTaskIndex >= 0) {
+            const nextIdx = Math.min(activeTaskIndex, nextTasks.length - 1);
+            setActiveTaskId(nextTasks[nextIdx].id);
+          } else {
+            setActiveTaskId(null);
+          }
+          return;
+        }
+      }
+      if (taskOptions.length > 0 && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
         e.preventDefault();
         const next = e.key === 'ArrowDown'
-          ? (activeTaskIndex + 1) % taskOptions.length
-          : activeTaskIndex < 0 ? taskOptions.length - 1 : (activeTaskIndex + taskOptions.length - 1) % taskOptions.length;
+          ? (activeTaskIndex < 0 ? 0 : Math.min(activeTaskIndex + 1, taskOptions.length - 1))
+          : Math.max(activeTaskIndex - 1, 0);
         setActiveTaskId(taskOptions[next].id);
         return;
       }
@@ -161,11 +219,9 @@ export function QuickCreateInput({
         void selectExisting(taskOptions[activeTaskIndex].id);
         return;
       }
-      if (e.key === 'Escape') {
+      if (e.key === 'Enter' && !hasQuery && taskOptions.length > 0) {
         e.preventDefault();
-        e.stopPropagation();
-        setActiveTaskId(null);
-        setDismissedFor(value);
+        void selectExisting(taskOptions[0].id);
         return;
       }
     }
@@ -177,8 +233,11 @@ export function QuickCreateInput({
 
   return (
     <div className="space-y-1">
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1">
+      <div className="relative">
+        <div
+          onClick={() => inputRef.current?.focus()}
+          className="flex items-center rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-950 pl-3 pr-1.5 py-1 focus-within:border-[var(--pata-accent-focus)] focus-within:ring-0 transition shadow-2xs cursor-text"
+        >
           <input
             ref={inputRef}
             type="text"
@@ -199,105 +258,157 @@ export function QuickCreateInput({
             onBlur={() => {
               setFocused(false);
               setActiveTaskId(null);
+              setDismissedFor(null);
             }}
             placeholder={placeholder}
             disabled={busy || disabled}
-            className="w-full px-3 py-2 text-[13px] leading-4 rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground quick-entry shadow-2xs"
+            className="flex-1 min-w-0 bg-transparent border-0 outline-none focus:outline-none focus:ring-0 text-[13px] leading-4 text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground quick-entry py-1"
           />
-          {open && (
-            <ul
-              role="listbox"
-              className="pata-pop absolute left-0 right-0 top-full mt-1 z-20 max-h-56 overflow-y-auto rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-900 shadow-lg py-1 text-xs"
-            >
-              {suggestions.map((s, i) => (
-                <li
-                  key={`${s.isNew ? 'new' : 'tag'}-${s.name}`}
-                  role="option"
-                  aria-selected={i === activeIdx}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    pick(s);
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+            }}
+            onClick={() => void submit()}
+            disabled={busy || disabled || !value.trim()}
+            className="flex items-center space-x-1 px-2.5 py-1 rounded-md bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] text-xs font-medium transition disabled:opacity-40 shadow-2xs shrink-0 cursor-pointer disabled:cursor-not-allowed"
+          >
+            {busy ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />
+            ) : (
+              <Plus className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span>{busy ? '创建中' : submitLabel}</span>
+          </button>
+        </div>
+        {open && (
+          <ul
+            role="listbox"
+            className="pata-pop absolute left-0 right-0 top-full mt-1 z-20 max-h-56 overflow-y-auto rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-900 shadow-lg py-1 text-xs"
+          >
+            {suggestions.map((s, i) => (
+              <li
+                key={`${s.isNew ? 'new' : 'tag'}-${s.name}`}
+                role="option"
+                aria-selected={i === activeIdx}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pick(s);
+                }}
+                onMouseEnter={() => setActive(i)}
+                className={`px-3 py-1.5 cursor-pointer ${
+                  i === activeIdx
+                    ? 'bg-interaction-100/70 dark:bg-interaction-950/60 text-interaction-900 dark:text-interaction-200'
+                    : 'text-stone-700 dark:text-stone-300'
+                }`}
+              >
+                {s.isNew ? `使用新标签「${s.name}」` : `#${s.name}`}
+              </li>
+            ))}
+          </ul>
+        )}
+        {taskOpen && (
+          <div
+            onMouseDown={(e) => {
+              // 防止点击下拉内部（空白处、滚动条、Tab 栏等）导致 input 失焦
+              e.preventDefault();
+            }}
+            className="pata-pop absolute left-0 right-0 top-full mt-1 z-20 rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-900 shadow-lg text-xs overflow-hidden"
+          >
+            {!hasQuery && (
+              <div
+                role="tablist"
+                aria-label="任务状态分类"
+                className="flex items-center gap-1 px-2 pt-1.5 pb-0.5"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'uncompleted'}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setTab('uncompleted');
+                    setActiveTaskId(null);
                   }}
-                  onMouseEnter={() => setActive(i)}
-                  className={`px-3 py-1.5 cursor-pointer ${
-                    i === activeIdx
-                      ? 'bg-interaction-100/70 dark:bg-interaction-950/60 text-interaction-900 dark:text-interaction-200'
-                      : 'text-stone-700 dark:text-stone-300'
-                  }`}
+                  className={
+                    'px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer select-none ' +
+                    (tab === 'uncompleted'
+                      ? 'bg-stone-100 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-semibold'
+                      : 'text-muted-foreground hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800/40')
+                  }
                 >
-                  {s.isNew ? `使用新标签「${s.name}」` : `#${s.name}`}
-                </li>
-              ))}
-            </ul>
-          )}
-          {taskOpen && (
+                  未完成
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tab === 'completed'}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setTab('completed');
+                    setActiveTaskId(null);
+                  }}
+                  className={
+                    'px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer select-none ' +
+                    (tab === 'completed'
+                      ? 'bg-stone-100 dark:bg-stone-800 text-stone-900 dark:text-stone-100 font-semibold'
+                      : 'text-muted-foreground hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-50 dark:hover:bg-stone-800/40')
+                  }
+                >
+                  已完成
+                </button>
+              </div>
+            )}
             <ul
               role="listbox"
               aria-label="已有任务"
-              className="pata-pop absolute left-0 right-0 top-full mt-1 z-20 max-h-56 overflow-y-auto rounded-lg border border-[var(--pata-border)] bg-white dark:bg-stone-900 shadow-lg py-1 text-xs"
+              className="max-h-56 overflow-y-auto py-1"
             >
-              {taskSections.uncompletedTasks.length > 0 && (
-                <li role="presentation" className="px-3 pt-1.5 pb-1 text-[11px] text-muted-foreground">未完成</li>
-              )}
-              {taskSections.uncompletedTasks.map((task) => (
-                <li
-                  key={task.id}
-                  role="option"
-                  aria-selected={activeTaskId === task.id}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => void selectExisting(task.id)}
-                  className={
-                    'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-stone-100 dark:hover:bg-stone-800 ' +
-                    (activeTaskId === task.id ? 'bg-interaction-100/70 dark:bg-interaction-950/60' : '')
-                  }
-                >
-                  <Circle className="w-3.5 h-3.5 shrink-0 text-stone-400" />
-                  <span className="truncate min-w-0 flex-1 text-stone-800 dark:text-stone-200">{task.title}</span>
-                  {(task.tags ?? []).slice(0, 2).map((tag) => (
-                    <span key={tag} className="shrink-0 text-[11px] text-muted-foreground">#{tag}</span>
-                  ))}
+              {taskOptions.length === 0 ? (
+                <li role="presentation" className="px-3 py-3 text-center text-xs text-muted-foreground">
+                  {tab === 'uncompleted' ? '暂无未完成任务' : '暂无已完成任务'}
                 </li>
-              ))}
-              {taskSections.completedTasks.length > 0 && (
-                <li role="presentation" className="px-3 pt-2 pb-1 text-[11px] text-muted-foreground border-t border-[var(--pata-border)]">已完成</li>
+              ) : (
+                taskOptions.map((task) => (
+                  <li
+                    key={task.id}
+                    ref={activeTaskId === task.id ? activeItemRef : undefined}
+                    role="option"
+                    aria-selected={activeTaskId === task.id}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => void selectExisting(task.id)}
+                    className={
+                      'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-stone-100 dark:hover:bg-stone-800 ' +
+                      (activeTaskId === task.id ? 'bg-interaction-100/70 dark:bg-interaction-950/60' : '')
+                    }
+                  >
+                    {task.status === 'done' ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-stone-400" />
+                    ) : (
+                      <Circle className="w-3.5 h-3.5 shrink-0 text-stone-400" />
+                    )}
+                    <span
+                      className={
+                        'truncate min-w-0 flex-1 ' +
+                        (task.status === 'done'
+                          ? 'line-through text-muted-foreground'
+                          : 'text-stone-800 dark:text-stone-200')
+                      }
+                    >
+                      {task.title}
+                    </span>
+                    {(task.tags ?? []).slice(0, 2).map((tag) => (
+                      <span key={tag} className="shrink-0 text-[11px] text-muted-foreground">#{tag}</span>
+                    ))}
+                  </li>
+                ))
               )}
-              {taskSections.completedTasks.map((task) => (
-                <li
-                  key={task.id}
-                  role="option"
-                  aria-selected={activeTaskId === task.id}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => void selectExisting(task.id)}
-                  className={
-                    'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-stone-100 dark:hover:bg-stone-800 ' +
-                    (activeTaskId === task.id ? 'bg-interaction-100/70 dark:bg-interaction-950/60' : '')
-                  }
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-stone-400" />
-                  <span className="truncate min-w-0 flex-1 line-through text-muted-foreground">{task.title}</span>
-                  {(task.tags ?? []).slice(0, 2).map((tag) => (
-                    <span key={tag} className="shrink-0 text-[11px] text-muted-foreground">#{tag}</span>
-                  ))}
-                </li>
-              ))}
-              <li role="presentation" className="px-3 py-1.5 text-[11px] text-muted-foreground border-t border-[var(--pata-border)]">
-                {value.trim() ? '↵ 创建新任务 · ↑↓ 选择已有任务' : '↑↓ 选择任务 · ↵ 加入今日'}
-              </li>
             </ul>
-          )}
-        </div>
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-          }}
-          onClick={() => void submit()}
-          disabled={busy || disabled || !value.trim()}
-          className="flex items-center space-x-1 px-3 py-2 h-[34px] rounded-lg bg-[var(--pata-accent-solid)] hover:bg-[var(--pata-accent-solid-hover)] text-[var(--pata-accent-on-solid)] text-xs font-medium transition disabled:opacity-40 shadow-2xs shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>{busy ? '创建中' : submitLabel}</span>
-        </button>
+            <div className="px-3 py-1.5 text-[11px] text-muted-foreground border-t border-[var(--pata-border)] bg-stone-50/50 dark:bg-stone-950/20">
+              {getInlineTaskFooterHint(activeTaskIndex >= 0, hasQuery)}
+            </div>
+          </div>
+        )}
       </div>
       {error && <div className="text-[11px] text-rose-600 dark:text-rose-400 px-1 break-all">{error}</div>}
     </div>

@@ -17,14 +17,14 @@ export function sortTasksChronologically(tasks: Task[]): Task[] {
     const timeA = parseTimestamp(a.created_at);
     const timeB = parseTimestamp(b.created_at);
     if (timeA !== timeB) {
-      return timeA - timeB;
+      return timeB - timeA;
     }
     return a.id.localeCompare(b.id);
   });
 }
 
 /**
- * 将可选任务区分为「未完成」与「已完成」两块，并按时间正向排序（由早到晚）。
+ * 将可选任务区分为「未完成」与「已完成」两块，并按时间倒序排序（由新到旧 / 最新创建在前）。
  * 过滤掉当前已在日计划中的任务，并支持标题和标签搜索。
  */
 export function splitAndSortTasksForPicker(
@@ -60,15 +60,33 @@ export function splitAndSortTasksForPicker(
   };
 }
 
-/** Inline Today suggestions: show a few unfinished tasks on focus; completed ones only when searching. */
+export interface InlineTaskCandidates {
+  uncompletedTasks: Task[];
+  completedTasks: Task[];
+  searchResults: Task[];
+}
+
+/** Inline Today suggestions: show uncompleted/completed in tabs on focus; unified results when searching. */
 export function getInlineTaskCandidates(
   tasks: Task[],
   dayPlanTaskIds: string[],
   titleQuery: string
-): Pick<TaskPickerSections, 'uncompletedTasks' | 'completedTasks'> {
+): InlineTaskCandidates {
   const sections = splitAndSortTasksForPicker(tasks, dayPlanTaskIds, titleQuery);
+  const isSearch = Boolean(titleQuery.trim());
   return {
-    uncompletedTasks: sections.uncompletedTasks.slice(0, 5),
-    completedTasks: titleQuery.trim() ? sections.completedTasks.slice(0, 5) : [],
+    uncompletedTasks: sections.uncompletedTasks,
+    completedTasks: sections.completedTasks,
+    searchResults: isSearch
+      ? [...sections.uncompletedTasks, ...sections.completedTasks]
+      : [],
   };
+}
+
+/** Footer guide for inline suggestions depending on selection and input presence. */
+export function getInlineTaskFooterHint(hasActiveSelection: boolean, hasInput: boolean): string {
+  if (hasInput) {
+    return hasActiveSelection ? '↵ 加入已有任务 · ↑↓ 切换' : '↵ 创建新任务 · ↑↓ 选择已有任务';
+  }
+  return '↵ 加入今日 · ↑↓ 选择任务 · ←→ 切换分类';
 }

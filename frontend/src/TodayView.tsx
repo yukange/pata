@@ -148,6 +148,8 @@ export function TodayView({
   const [editRefs, setEditRefs] = useState<NoteRefMap>({});
   const [editSaving, setEditSaving] = useState(false);
   const [leavePrompt, setLeavePrompt] = useState<((r: boolean) => void) | null>(null);
+  const [dismissedYesterdayForDate, setDismissedYesterdayForDate] = useState<string | null>(null);
+  const isYesterdayDismissed = dismissedYesterdayForDate === selectedDate;
 
   useEffect(() => { onDateSelected(selectedDate); }, [selectedDate, onDateSelected]);
 
@@ -707,14 +709,23 @@ export function TodayView({
               existingTasks={tasks}
               planTaskIds={dayPlanTaskIds}
               onSelectExisting={handleAddExisting}
-              disabled={saving}
             />
 
-            {isToday && yesterdayCandidates.length > 0 && (
-              <div className="rounded-lg bg-amber-50/60 dark:bg-amber-950/20 px-3 py-2 space-y-1 text-xs">
-                <div className="text-amber-800 dark:text-amber-300 font-medium">
-                  昨日未完成 ({yesterdayCandidates.length})
-                  <span className="ml-2 font-normal text-amber-700/70 dark:text-amber-400/80">不会自动顺延，由你确认</span>
+            {isToday && !isYesterdayDismissed && yesterdayCandidates.length > 0 && (
+              <div className="rounded-lg bg-amber-50/60 dark:bg-amber-950/20 px-3 py-2 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between text-amber-800 dark:text-amber-300 font-medium">
+                  <div className="flex items-baseline gap-2 min-w-0">
+                    <span className="shrink-0">昨日未完成 ({yesterdayCandidates.length})</span>
+                    <span className="font-normal text-amber-700/70 dark:text-amber-400/80 truncate">不会自动顺延，由你确认</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDismissedYesterdayForDate(selectedDate)}
+                    aria-label="关闭昨日未完成提醒"
+                    className="p-0.5 -mr-1 rounded hover:bg-amber-100/80 dark:hover:bg-amber-900/40 text-amber-700/70 dark:text-amber-400/80 hover:text-amber-900 dark:hover:text-amber-200 transition cursor-pointer shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 {yesterdayCandidates.map((cand) => (
                   <div key={cand.id} className="flex items-center justify-between gap-3">
@@ -723,7 +734,7 @@ export function TodayView({
                       type="button"
                       onClick={() => void handleAddExisting(cand.id)}
                       disabled={saving}
-                      className="flex items-center gap-1 px-2 py-0.5 rounded text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 font-medium shrink-0 disabled:opacity-50"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 font-medium shrink-0 disabled:opacity-50 cursor-pointer"
                     >
                       <Plus className="w-3 h-3" />
                       <span>加入今天</span>
@@ -746,11 +757,6 @@ export function TodayView({
               onRemoveTask={(tId) => void handleRemove(tId)}
               onReorder={handlePlanReorder}
             />
-
-            <p className="text-[11px] text-muted-foreground">
-              计划只是当天的执行安排，不改变截止日期（due）。
-              {!isToday && '此处显示任务的当前状态与属性。'}
-            </p>
           </section>
 
           {/* Section B: timeline */}

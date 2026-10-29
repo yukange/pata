@@ -6,18 +6,42 @@ test('Today uses inline existing-task suggestions without removing yesterday car
   const today = readFileSync(new URL('./TodayView.tsx', import.meta.url), 'utf8');
   const tasks = readFileSync(new URL('./TasksView.tsx', import.meta.url), 'utf8');
 
-  assert.ok(today.includes('existingTasks={tasks}') && today.includes('onSelectExisting={handleAddExisting}'));
-  assert.ok(!today.includes('从已有任务中选择') && !today.includes('addModalOpen'));
-  assert.ok(today.includes('昨日未完成') && today.includes('加入今天'));
-  assert.ok(tasks.includes('<QuickCreateInput') && !tasks.includes('onSelectExisting='));
+  assert.match(today, /existingTasks=\{tasks\}[\s\S]*?onSelectExisting=\{handleAddExisting\}/);
+  assert.doesNotMatch(today, /从已有任务中选择|addModalOpen/);
+  assert.match(today, /昨日未完成/);
+  assert.match(today, /加入今天/);
+  assert.match(today, /关闭昨日未完成提醒/);
+  assert.match(today, /dismissedYesterdayForDate/);
+  assert.match(tasks, /<QuickCreateInput/);
+  assert.doesNotMatch(tasks, /onSelectExisting=/);
 });
 
 test('QuickCreateInput keeps Enter-to-create unless an existing task is explicitly selected', () => {
   const input = readFileSync(new URL('./QuickCreateInput.tsx', import.meta.url), 'utf8');
 
-  assert.ok(input.includes('useState<string | null>(null)'), 'existing task must have no initial selection');
-  assert.ok(input.includes("e.key === 'Enter' && activeTaskIndex >= 0"), 'explicit arrow selection adds an existing task');
-  assert.ok(input.includes("if (e.key === 'Enter') {\n      e.preventDefault();\n      void submit();"), 'plain Enter still creates a task');
-  assert.ok(input.includes('e.nativeEvent.isComposing || e.keyCode === 229'), 'Chinese IME must not submit');
-  assert.ok(input.includes('if (open) {'), 'original tag autocomplete remains available');
+  // No initial active selection so normal typing is not hijacked
+  assert.match(input, /useState<string\s*\|\s*null>\(null\)/);
+  // Arrow key selection explicitly binds Enter to adding the selected existing task
+  assert.match(input, /e\.key\s*===\s*['"]Enter['"]\s*&&\s*activeTaskIndex\s*>=\s*0/);
+  // Plain Enter still creates a task
+  assert.match(input, /if\s*\(\s*e\.key\s*===\s*['"]Enter['"]\s*\)\s*\{[\s\S]*?submit\(\)/);
+  // Chinese IME composition protects Enter from submitting early
+  assert.match(input, /isComposing\s*\|\|\s*e\.keyCode\s*===\s*229/);
+  // Tag autocomplete remains available
+  assert.match(input, /if\s*\(\s*open\s*\)\s*\{/);
+  // Selecting keeps the dropdown open and maintains selection on the next item; Escape blurs the input
+  assert.match(input, /selectExisting[\s\S]*?setActiveTaskId\(nextTaskId\)/);
+  assert.match(input, /selectExisting[\s\S]*?setDismissedFor\(null\)/);
+  assert.match(input, /e\.key\s*===\s*['"]Escape['"][\s\S]*?inputRef\.current\?\.blur\(\)/);
+  assert.match(input, /onBlur[\s\S]*?setDismissedFor\(null\)/);
+
+  // Tabs for uncompleted and completed tasks when browsing without search
+  assert.match(input, /useState<'uncompleted'\s*\|\s*'completed'>\('uncompleted'\)/);
+  assert.match(input, /!hasQuery\s*&&[\s\S]*?role="tablist"/);
+  assert.match(input, /e\.key\s*===\s*['"]ArrowRight['"][\s\S]*?setTab\('completed'\)/);
+  assert.match(input, /e\.key\s*===\s*['"]ArrowLeft['"][\s\S]*?setTab\('uncompleted'\)/);
+  // Arrow keys clamp at boundaries without cycling/wrapping
+  assert.match(input, /Math\.min\(activeTaskIndex\s*\+\s*1,\s*taskOptions\.length\s*-\s*1\)/);
+  assert.match(input, /Math\.max\(activeTaskIndex\s*-\s*1,\s*0\)/);
+  assert.doesNotMatch(input, /% taskOptions\.length/);
 });
