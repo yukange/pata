@@ -67,17 +67,19 @@ vault/
 
 ### 从源码运行
 
-按 [开发指南](CONTRIBUTING.md#prerequisites) 准备 Go、Node.js、Xcode Command Line Tools 和匹配的 Wails v3 CLI，然后运行：
+需要 macOS 14.0+ 与 Xcode / Swift 6。
 
 ```bash
 git clone https://github.com/yukange/pata.git
 cd pata
-go mod download
-npm --prefix frontend ci
-wails3 task dev
+./scripts/build_swift_app.sh
 ```
 
-使用 `wails3 task package` 构建本地 macOS 应用。
+运行单元测试：
+
+```bash
+swift test
+```
 
 ### 文档
 

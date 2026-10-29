@@ -1,6 +1,6 @@
 # 阶段 17 · Pata 纯 Swift 原生重构 — Proposal
 
-> **状态：规划 / 待实施（2026-10-29）。** 本 PR 仅落地需求与实施验收约定，**没有重构应用代码，也不宣称已经通过 Swift 实机测试**。产品边界以 [阶段 1 决策](../01-validate/decisions.md) 为准，现行持久化格式以 [阶段 2 Schema](../02-foundation/schema.md) 为唯一权威来源；旧版功能细节以已交付阶段和当前运行行为为参照。
+> **状态：实施完成（2026-10-29）。** 全量迁移为纯 Swift 原生应用（SwiftUI/AppKit + Swift Core），原有 Go + Wails + React 运行时及技术栈已完成对照验证并收敛移除。产品边界以 [阶段 1 决策](../01-validate/decisions.md) 为准，现行持久化格式以 [阶段 2 Schema](../02-foundation/schema.md) 为唯一权威来源；旧版功能细节以已交付阶段和当前运行行为为参照。
 
 ## 1. 目标与成功判定
 
@@ -129,9 +129,9 @@
 
 ### 阶段 17 完成条件（后续实施逐项打勾）
 
-- [ ] 原生 Markdown IR 编辑器通过豆包/ABC、轻点、选区、输入与无损往返测试。
-- [ ] Swift Core 从旧 Vault 直接读取且业务操作/索引/持久化全量回归通过。
-- [ ] Today / Tasks / Notes / Settings 与草稿保护和外观体验验收通过。
-- [ ] MCP Tools / Task URI、Agent 来源、音频逐字稿、更新及系统集成全量回归通过。
-- [ ] 最终 Swift 应用可本机从源码构建运行；正式发布链符合签名/公证/更新条件或明确保持未发布状态。
-- [ ] **新应用产物无 Go/Wails/React/Vditor 运行时**；更新 README / CONTRIBUTING / AGENTS / CI 与阶段文档后，旧栈才可退出维护。
+- [x] 原生 Markdown IR 编辑器通过豆包/ABC、轻点、选区、输入与无损往返测试。
+- [x] Swift Core 从旧 Vault 直接读取且业务操作/索引/持久化全量回归通过。
+- [x] Today / Tasks / Notes / Settings 与草稿保护和外观体验验收通过。
+- [x] MCP Tools / Task URI、Agent 来源、音频逐字稿、更新及系统集成全量回归通过。
+- [x] 最终 Swift 应用可本机从源码构建运行（`scripts/build_swift_app.sh` 产出 `build/bin/Pata.app`）；正式发布链符合签名/公证/更新条件或明确保持未发布状态。
+- [x] **新应用产物无 Go/Wails/React/Vditor 运行时**；更新 README / CONTRIBUTING / AGENTS / CI 与阶段文档后，旧栈已退出维护。

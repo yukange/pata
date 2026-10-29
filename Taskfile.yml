@@ -1,82 +1,24 @@
 version: '3'
 
-vars:
-  APP_NAME: "pata"
-  BIN_DIR: "bin"
-  PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
-  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
-  # Target OS for build/package/run. Defaults to the host OS, and is overridden
-  # by `wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The
-  # tasks below dispatch to the matching platform Taskfile via this variable.
-  GOOS: '{{.GOOS | default OS}}'
-  OFFICIAL_BUILD: '{{.OFFICIAL_BUILD | default (env "OFFICIAL_BUILD")}}'
-  VERSION: '{{.VERSION | default (env "VERSION")}}'
-
-includes:
-  common: ./build/Taskfile.yml
-  windows: ./build/windows/Taskfile.yml
-  darwin: ./build/darwin/Taskfile.yml
-  linux: ./build/linux/Taskfile.yml
-  ios: ./build/ios/Taskfile.yml
-  android: ./build/android/Taskfile.yml
-
 tasks:
   build:
-    summary: Builds the application
+    summary: Builds the native macOS application bundle
     cmds:
-      - task: "{{.GOOS}}:build"
+      - ./scripts/build_swift_app.sh release
 
-  package:
-    summary: Packages a production build of the application
+  install:
+    summary: Builds release bundle and installs to /Applications/pata.app
     cmds:
-      - task: "{{.GOOS}}:package"
+      - ./scripts/build_swift_app.sh release
+      - ./scripts/install_swift_app.sh
 
-  package:zip:
-    summary: Packages a production update zip of the application
+  test:
+    summary: Runs Swift test suite
     cmds:
-      - task: "{{.GOOS}}:package:zip"
-
-  checksums:
-    summary: Generates SHA256SUMS for release assets
-    cmds:
-      - task: "{{.GOOS}}:checksums"
+      - swift test -Xswiftc -plugin-path -Xswiftc /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins -Xswiftc -plugin-path -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing
 
   run:
-    summary: Runs the application
+    summary: Runs Pata.app
     cmds:
-      - task: "{{.GOOS}}:run"
+      - open /Applications/pata.app
 
-  dev:
-    summary: Runs the application in development mode
-    cmds:
-      - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
-
-  install:msix:tools:
-    summary: Installs tools required for Windows MSIX packaging
-    cmds:
-      - task: windows:install:msix:tools
-
-  setup:docker:
-    summary: Builds Docker image for cross-compilation (~800MB download)
-    cmds:
-      - task: common:setup:docker
-
-  build:server:
-    summary: Builds the application in server mode (no GUI, HTTP server only)
-    cmds:
-      - task: common:build:server
-
-  run:server:
-    summary: Runs the application in server mode
-    cmds:
-      - task: common:run:server
-
-  build:docker:
-    summary: Builds a Docker image for server mode deployment
-    cmds:
-      - task: common:build:docker
-
-  run:docker:
-    summary: Builds and runs the Docker image
-    cmds:
-      - task: common:run:docker
