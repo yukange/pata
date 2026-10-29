@@ -269,9 +269,6 @@ export function SearchOverlay({
               <X className="w-3 h-3" />
             </button>
           )}
-          <kbd className="text-[11px] font-mono bg-stone-200/70 dark:bg-stone-800 text-muted-foreground px-1.5 py-0.5 rounded shrink-0">
-            ESC
-          </kbd>
         </div>
 
         {/* Results Body */}
@@ -603,7 +600,6 @@ export function SearchOverlay({
               关闭
             </span>
           </div>
-          <span className="font-mono text-[11px]">⌘K / ⌘P</span>
         </div>
       </div>
     </div>

@@ -902,7 +902,7 @@ export default function App() {
                 <span>搜索</span>
               </div>
               <kbd className="text-[11px] font-mono text-muted-foreground bg-stone-200/80 dark:bg-stone-800 px-1 py-0.2 rounded shrink-0">
-                ⌘K
+                ⌘K/⌘P
               </kbd>
             </button>
 
@@ -1018,7 +1018,7 @@ export default function App() {
                       <span>搜索</span>
                     </div>
                     <kbd className="text-[11px] font-mono text-muted-foreground bg-stone-200/80 dark:bg-stone-800 px-1 py-0.2 rounded shrink-0">
-                      ⌘K
+                      ⌘K/⌘P
                     </kbd>
                   </button>
                 </div>
