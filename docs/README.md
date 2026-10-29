@@ -24,7 +24,6 @@
 | 14 | [`14-activity-attribution`](14-activity-attribution/) · Agent 操作来源与任务生命周期记录 | Task 创建/完成/重开、普通 Activity、Note 的人/Agent 来源；MCP 任务状态操作（**代码与自动化已完成，界面人工验收待完成**） | [idea](14-activity-attribution/idea.md) · [proposal](14-activity-attribution/proposal.md) |
 | 15 | [`15-app-updater`](15-app-updater/) · 应用内更新与原生菜单 | 可关闭的后台检查、开发构建更新隔离、设置旁下载进度与等待安装、签名发布/重启、macOS Pata 应用菜单（**代码与自动化已完成，实机发布待验证**） | [idea](15-app-updater/idea.md) · [proposal](15-app-updater/proposal.md) |
 | 16 | [`16-notes-drafts`](16-notes-drafts/) · Notes 左右分栏与草稿体验 | Notes 内部左列表右编辑器、无标题草稿、原地命名转正式笔记、统一搜索定位与排序（**代码与自动化已完成，待 macOS 实机走查**） | [idea](16-notes-drafts/idea.md) · [proposal](16-notes-drafts/proposal.md) |
-
 | 17 | [`17-swift-native-rewrite`](17-swift-native-rewrite/) · Pata 2.0 纯 Swift 原生重构 | 保持 Vault/MCP 与既有功能兼容，迁移 SwiftUI/AppKit、Swift Core 和 IR 编辑器（**规划中，尚未实施**） | [idea](17-swift-native-rewrite/idea.md) · [proposal](17-swift-native-rewrite/proposal.md) |
 
 ## 阅读与维护约定
