@@ -86,7 +86,8 @@ func validateAndCleanNoteIDs(v *markdown.Vault, noteIDs []string) ([]string, err
 	return cleaned, nil
 }
 
-// ListNotes returns all notes from the vault index, newest updated first.
+// ListNotes returns all notes from the vault index, newest updated first,
+// with Body replaced by a lightweight excerpt.
 func (s *VaultService) ListNotes() ([]*markdown.Note, error) {
 	s.mu.Lock()
 	v := s.vault

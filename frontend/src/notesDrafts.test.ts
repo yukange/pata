@@ -217,3 +217,93 @@ test('响应式笔记列表折叠：隐藏状态（width === 0）不应误折叠
     'ResizeObserver 应严格判断 width > 0，避免容器因隐藏（display: none）导致 width 为 0 时误收起列表'
   );
 });
+
+test('保存后局部更新：编辑、新建、转换与删除均使用内存局部更新，不触发全量 ListNotes', () => {
+  const notesSrc = fs.readFileSync(new URL('./NotesView.tsx', import.meta.url), 'utf-8');
+
+  // 1. 源码保证：保存后调用 onNoteUpdated 传入实体，handleNoteUpdated 采用局部更新
+  assert.ok(
+    notesSrc.includes('onNoteUpdatedRef.current(updated)'),
+    'UpdateNote 保存成功后应向 onNoteUpdated 传递更新后的实体'
+  );
+  assert.ok(
+    notesSrc.includes('onNoteUpdatedRef.current(created)'),
+    'CreateNote 保存成功后应向 onNoteUpdated 传递新建的实体'
+  );
+  assert.ok(
+    notesSrc.includes('// 局部更新：无需重新拉取全量 ListNotes()，保留既有列表位置并更新内存实体'),
+    'handleNoteUpdated 应包含内存局部更新注释'
+  );
+  assert.ok(
+    !notesSrc.includes('handleNoteCreated = useCallback((newId: string, isDraft: boolean) => {\n    setSelectedNoteId(newId);\n    setIsNewDraft(false);\n    setIsDraftType(false);\n    // Keep editorKey as-is so React does not unmount NoteEditor while user is typing\n    if (isDraft) {\n      setFrozenDraftIds((prev) => [newId, ...prev.filter((x) => x !== newId)]);\n      setIsDraftsCollapsed(false);\n    } else {\n      setFrozenFormalIds((prev) => [newId, ...prev.filter((x) => x !== newId)]);\n      setIsNotesCollapsed(false);\n    }\n    try {\n      localStorage.setItem(LAST_NOTE_ID_KEY, newId);\n    } catch {}\n    loadNotes(false);'),
+    'handleNoteCreated 不应在保存后无条件调用 loadNotes(false)'
+  );
+  assert.ok(
+    !notesSrc.includes('handleNoteConverted = useCallback((convertedId: string) => {\n    setFrozenDraftIds((prev) => prev.filter((id) => id !== convertedId));\n    setFrozenFormalIds((prev) => [convertedId, ...prev.filter((id) => id !== convertedId)]);\n    setIsNotesCollapsed(false);\n    loadNotes(false);'),
+    'handleNoteConverted 不应在转换后调用 loadNotes(false)'
+  );
+
+  // 2. 局部更新逻辑验证：更新已有项原地替换，新项插入，列表顺序不发生跳变
+  const initialNotes: Note[] = [
+    { id: 'note-1', title: 'Note 1', draft: false, updated_at: '2026-10-29T10:00:00Z' } as Note,
+    { id: 'note-2', title: 'Note 2', draft: false, updated_at: '2026-10-29T09:00:00Z' } as Note,
+  ];
+
+  const updateInPlace = (prev: Note[], updatedNote: Note) => {
+    const idx = prev.findIndex((n) => n.id === updatedNote.id);
+    if (idx >= 0) {
+      const next = [...prev];
+      next[idx] = updatedNote;
+      return next;
+    }
+    return [updatedNote, ...prev];
+  };
+
+  // 编辑 note-2：原地替换，索引仍为 1，不跳至顶部
+  const editedNote2: Note = { ...initialNotes[1], title: 'Note 2 (edited)', updated_at: '2026-10-29T12:00:00Z' };
+  const updatedList = updateInPlace(initialNotes, editedNote2);
+  assert.equal(updatedList.length, 2);
+  assert.equal(updatedList[0].id, 'note-1');
+  assert.equal(updatedList[1].id, 'note-2');
+  assert.equal(updatedList[1].title, 'Note 2 (edited)');
+
+  // 新建 note-3：插入列表
+  const newNote3: Note = { id: 'note-3', title: 'Note 3', draft: false, updated_at: '2026-10-29T12:05:00Z' } as Note;
+  const createdList = updateInPlace(updatedList, newNote3);
+  assert.equal(createdList.length, 3);
+  assert.equal(createdList[0].id, 'note-3');
+});
+
+test('普通正文保存不刷新全局 Vault，仅在标签等必要元数据变更时刷新', () => {
+  const notesSrc = fs.readFileSync(new URL('./NotesView.tsx', import.meta.url), 'utf-8');
+
+  // 1. handleNoteUpdated 不包含无条件的 onVaultDataChanged?.()
+  const handleNoteUpdatedMatch = notesSrc.match(/const handleNoteUpdated = useCallback\([\s\S]*?\n  \}, \[loadNotes\]\);/);
+  assert.ok(handleNoteUpdatedMatch, 'handleNoteUpdated 依赖项应仅为 [loadNotes]');
+  assert.ok(
+    !handleNoteUpdatedMatch[0].includes('onVaultDataChanged'),
+    'handleNoteUpdated 不应在每次保存更新时无条件触发 onVaultDataChanged'
+  );
+
+  // 2. 正式笔记保存：对比 tagsChanged，仅标签变更时刷新
+  assert.ok(
+    notesSrc.includes('const tagsChanged = !sameTags(prevTags, currentTags);'),
+    '正式笔记保存应比对标签是否发生实质变更'
+  );
+  assert.ok(
+    notesSrc.includes('if (tagsChanged) {\n          onVaultDataChangedRef.current?.();\n        }'),
+    '仅在标签发生变更时调用 onVaultDataChangedRef'
+  );
+
+  // 3. 草稿转正式笔记：明确的元数据变更时触发刷新
+  assert.ok(
+    notesSrc.includes('// 草稿转为正式笔记属于元数据变更，刷新全局 Vault\n          onVaultDataChangedRef.current?.();'),
+    '草稿转为正式笔记时应触发全局元数据刷新'
+  );
+
+  // 4. 删除带有标签的笔记时刷新，无标签时不产生冗余刷新
+  assert.ok(
+    notesSrc.includes('if (target?.tags && target.tags.length > 0) {\n      onVaultDataChanged?.();\n    }'),
+    '删除包含标签的笔记时应触发 onVaultDataChanged'
+  );
+});

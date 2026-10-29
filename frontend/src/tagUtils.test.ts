@@ -4,6 +4,7 @@ import {
   cleanTag,
   validateTag,
   hasTag,
+  sameTags,
   dedupeTags,
   filterSuggestedTags,
   formatDraftText,
@@ -46,6 +47,14 @@ test('hasTag: case-insensitive check and leading # normalization', () => {
   assert.equal(hasTag(current, '研发,平台'), true);
   assert.equal(hasTag(current, 'go'), true);
   assert.equal(hasTag(current, 'Rust'), false);
+});
+
+test('sameTags: compares tag arrays case-insensitively and handles leading #', () => {
+  assert.equal(sameTags([], []), true);
+  assert.equal(sameTags(['a', 'b'], ['#A', 'B']), true);
+  assert.equal(sameTags(['a', 'b'], ['a']), false);
+  assert.equal(sameTags(['a'], ['b']), false);
+  assert.equal(sameTags(['#Pata'], ['pata']), true);
 });
 
 test('dedupeTags: deduplicates case-insensitively and preserves FIRST adopted casing', () => {

@@ -329,7 +329,10 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
   // External vault file change listener
   useEffect(() => {
     const unsubscribe = Events.On('vault:changed', (ev) => {
-      const data = ev.data as { entity_id?: string } | undefined;
+      const data = ev?.data as { entity_id?: string; type?: string; op?: string } | undefined;
+      if (data?.type && data.type !== 'task' && data.type !== 'activity' && data.type !== 'error' && data.op !== 'error') {
+        return;
+      }
       if (data?.entity_id === taskId) {
         externalChangeVersionRef.current += 1;
         externalModifiedRef.current = true;

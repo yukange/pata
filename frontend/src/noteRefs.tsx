@@ -22,6 +22,7 @@ import {
   resolveRef,
   textRefRe,
 } from './noteRefsCore';
+import { matchesVaultEventType } from './vaultEvents';
 
 export * from './noteRefsCore';
 
@@ -35,7 +36,11 @@ export function useNoteRefs(): NoteRef[] {
   }, []);
   useEffect(() => {
     load();
-    const off = Events.On('vault:changed', load);
+    const off = Events.On('vault:changed', (ev: any) => {
+      if (matchesVaultEventType(ev, ['note'])) {
+        load();
+      }
+    });
     return () => {
       off();
     };
@@ -65,7 +70,11 @@ export function useFileRefs(): FileRef[] {
   }, []);
   useEffect(() => {
     load();
-    const off = Events.On('vault:changed', load);
+    const off = Events.On('vault:changed', (ev: any) => {
+      if (matchesVaultEventType(ev, ['file']) || Boolean((ev as any)?.data?.path?.includes('files/'))) {
+        load();
+      }
+    });
     return () => {
       off();
     };

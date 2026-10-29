@@ -30,8 +30,9 @@ import { AudioPlayer } from './AudioPlayer';
 import { formatStatusAction } from './activityUtils';
 import { TranscriptViewer, TranscriptViewerRef } from './TranscriptViewer';
 import { TagChipEditor } from './TagChipEditor';
-import { validateTag, hasTag, dedupeTags, formatDraftText } from './tagUtils';
+import { validateTag, hasTag, dedupeTags, sameTags, formatDraftText } from './tagUtils';
 import { copyToClipboard } from './clipboardUtils';
+import { matchesVaultEventType } from './vaultEvents';
 import {
   CandidateItem,
   FileRef,
@@ -154,9 +155,9 @@ interface NoteEditorProps {
   returnToTask?: { label: string; go: () => void } | null;
   onOpenNote: (id: string) => void;
   onOpenTask?: (id: string) => void;
-  onNoteUpdated: () => void;
-  onNoteCreated?: (newId: string, isDraft: boolean) => void;
-  onNoteConverted?: (id: string) => void;
+  onNoteUpdated: (updatedNote?: Note) => void;
+  onNoteCreated?: (newId: string, isDraft: boolean, createdNote?: Note) => void;
+  onNoteConverted?: (id: string, convertedNote?: Note) => void;
   onDeleteCurrentNote?: (id: string) => void;
   leaveGuardRef?: React.MutableRefObject<(() => Promise<boolean>) | null>;
   onDraftCheck?: (checker: () => boolean) => () => void;
@@ -305,6 +306,8 @@ function NoteEditor({
   onOpenNoteRef.current = onOpenNote;
   const onOpenTaskRef = useRef(onOpenTask);
   onOpenTaskRef.current = onOpenTask;
+  const onVaultDataChangedRef = useRef(onVaultDataChanged);
+  onVaultDataChangedRef.current = onVaultDataChanged;
 
   const isDraftNote = isNewDraftRef.current ? isDraftType : Boolean(initialNote?.draft);
 
@@ -408,9 +411,13 @@ function NoteEditor({
           setConflictError(null);
           setSaveStatus('saved');
           setSaveError(null);
-          onNoteCreatedRef.current?.(created.id, isDraftType);
-          onNoteUpdatedRef.current();
+          onNoteCreatedRef.current?.(created.id, isDraftType, created);
+          onNoteUpdatedRef.current(created);
           createdNote = true;
+          // 仅在新建正式笔记且包含标签等必要元数据时刷新全局 Vault
+          if (!isDraftType && currentTags.length > 0) {
+            onVaultDataChangedRef.current?.();
+          }
         }
         return createdNote;
       } catch (err: any) {
@@ -469,7 +476,7 @@ function NoteEditor({
             };
             setSaveStatus('saved');
             setSaveError(null);
-            onNoteUpdatedRef.current();
+            onNoteUpdatedRef.current(updated);
           }
           return true;
         } catch (err: any) {
@@ -513,9 +520,11 @@ function NoteEditor({
           setConflictError(null);
           setSaveStatus('saved');
           setSaveError(null);
-          onNoteConvertedRef.current?.(updated.id);
-          onNoteUpdatedRef.current();
+          onNoteConvertedRef.current?.(updated.id, updated);
+          onNoteUpdatedRef.current(updated);
           converted = true;
+          // 草稿转为正式笔记属于元数据变更，刷新全局 Vault
+          onVaultDataChangedRef.current?.();
         }
         return converted;
       } catch (err: any) {
@@ -565,7 +574,7 @@ function NoteEditor({
           setConflictError(null);
           setSaveStatus('saved');
           setSaveError(null);
-          onNoteUpdatedRef.current();
+          onNoteUpdatedRef.current(updated);
           savedDraft = true;
         }
         return savedDraft;
@@ -615,6 +624,9 @@ function NoteEditor({
       return false;
     }
 
+    const prevTags = lastSavedStateRef.current?.tags ?? [];
+    const tagsChanged = !sameTags(prevTags, currentTags);
+
     inFlightSaveRef.current = {
       title: currentTitle,
       tags: currentTags,
@@ -645,8 +657,12 @@ function NoteEditor({
         setConflictError(null);
         setSaveStatus('saved');
         setSaveError(null);
-        onNoteUpdatedRef.current();
+        onNoteUpdatedRef.current(updated);
         saved = true;
+        // 仅在标签等必要元数据变更时刷新全局 Vault，普通正文保存不刷新
+        if (tagsChanged) {
+          onVaultDataChangedRef.current?.();
+        }
       }
       return saved;
     } catch (err: any) {
@@ -745,7 +761,7 @@ function NoteEditor({
     });
   };
 
-  // Load note details on mount
+  // Note switches remount via editorKey; the first save must keep this editor mounted.
   useEffect(() => {
     if (isNewDraftRef.current) {
       setInitialNote({
@@ -798,7 +814,7 @@ function NoteEditor({
     return () => {
       mounted = false;
     };
-  }, [isDraftType]);
+  }, []);
 
   // Listen to ASR status events and task updates
   useEffect(() => {
@@ -882,6 +898,7 @@ function NoteEditor({
   useEffect(() => {
     const unsubscribe = Events.On('vault:changed', (ev: any) => {
       if (isNewDraftRef.current) return;
+      if (!matchesVaultEventType(ev, ['note', 'file'])) return;
       const data = ev?.data as { op?: string; path?: string; entity_id?: string; type?: string } | undefined;
       if (data?.entity_id === currentNoteIdRef.current) {
         const bodyNow = vditorRef.current ? vditorRef.current.getValue() : (initialNoteRef.current?.body ?? '');
@@ -1069,7 +1086,7 @@ function NoteEditor({
           body: updated.body || '',
         };
         setShowReplaceConfirm(false);
-        onNoteUpdatedRef.current();
+        onNoteUpdatedRef.current(updated);
         onVaultDataChanged?.();
       }
     } catch (err: any) {
@@ -1120,7 +1137,6 @@ function NoteEditor({
       cache: {
         enable: false,
       },
-      toolbar: [],
       toolbarConfig: {
         hide: true,
       },
@@ -1130,6 +1146,8 @@ function NoteEditor({
         syncPickerRef.current();
       },
       after: () => {
+        // shortcut: Vditor 4 has no emoji-hint switch; use the official option when available.
+        vditor.vditor.options.hint!.extend = [];
         // 如果是新建草稿，直接聚焦编辑器正文
         if (isNewDraftRef.current && isDraftType) {
           vditor.focus();
@@ -1421,7 +1439,7 @@ function NoteEditor({
 
       setConflictError(null);
       setSaveStatus('saved');
-      onNoteUpdatedRef.current();
+      onNoteUpdatedRef.current(diskNote);
       showToast('已载入外部版本（原未保存草稿已备份至剪贴板）');
     } catch (err: any) {
       console.error('Failed to reload note:', err);
@@ -2181,8 +2199,10 @@ export function NotesView({
   }, [loadNotes]);
 
   useEffect(() => {
-    const unsubscribe = Events.On('vault:changed', () => {
-      loadNotes(true);
+    const unsubscribe = Events.On('vault:changed', (ev: any) => {
+      if (matchesVaultEventType(ev, ['note'])) {
+        loadNotes(true);
+      }
     });
     return () => {
       unsubscribe();
@@ -2409,7 +2429,7 @@ export function NotesView({
     }
   };
 
-  const handleNoteCreated = useCallback((newId: string, isDraft: boolean) => {
+  const handleNoteCreated = useCallback((newId: string, isDraft: boolean, createdNote?: Note) => {
     setSelectedNoteId(newId);
     setIsNewDraft(false);
     setIsDraftType(false);
@@ -2424,33 +2444,80 @@ export function NotesView({
     try {
       localStorage.setItem(LAST_NOTE_ID_KEY, newId);
     } catch {}
-    loadNotes(false);
-  }, [loadNotes]);
+    if (createdNote) {
+      const noteForList: Note = {
+        ...createdNote,
+        body: getDraftExcerpt(createdNote.body),
+      };
+      setNotes((prev) => {
+        const idx = prev.findIndex((n) => n.id === noteForList.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = noteForList;
+          return next;
+        }
+        return [noteForList, ...prev];
+      });
+    }
+  }, []);
 
-  const handleNoteConverted = useCallback((convertedId: string) => {
+  const handleNoteConverted = useCallback((convertedId: string, convertedNote?: Note) => {
     setFrozenDraftIds((prev) => prev.filter((id) => id !== convertedId));
     setFrozenFormalIds((prev) => [convertedId, ...prev.filter((id) => id !== convertedId)]);
     setIsNotesCollapsed(false);
-    loadNotes(false);
+    if (convertedNote) {
+      const noteForList: Note = {
+        ...convertedNote,
+        body: getDraftExcerpt(convertedNote.body),
+      };
+      setNotes((prev) => {
+        const idx = prev.findIndex((n) => n.id === noteForList.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = noteForList;
+          return next;
+        }
+        return [noteForList, ...prev];
+      });
+    }
+  }, []);
+
+  const handleNoteUpdated = useCallback((updatedNote?: Note) => {
+    if (updatedNote) {
+      // 局部更新：无需重新拉取全量 ListNotes()，保留既有列表位置并更新内存实体
+      const noteForList: Note = {
+        ...updatedNote,
+        body: getDraftExcerpt(updatedNote.body),
+      };
+      setNotes((prev) => {
+        const idx = prev.findIndex((n) => n.id === noteForList.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = noteForList;
+          return next;
+        }
+        return [noteForList, ...prev];
+      });
+    } else {
+      loadNotes(false);
+    }
   }, [loadNotes]);
 
-  const handleNoteUpdated = useCallback(() => {
-    // Silently refresh notes content without re-sorting position
-    loadNotes(false);
-    onVaultDataChanged?.();
-  }, [loadNotes, onVaultDataChanged]);
-
   const handleDeleteCurrentNote = useCallback((deletedId: string) => {
+    const target = notes.find((n) => n.id === deletedId);
     setSelectedNoteId(null);
     setEditorKey('');
     setIsNewDraft(false);
     setFrozenDraftIds((prev) => prev.filter((id) => id !== deletedId));
     setFrozenFormalIds((prev) => prev.filter((id) => id !== deletedId));
+    setNotes((prev) => prev.filter((n) => n.id !== deletedId));
     try {
       localStorage.removeItem(LAST_NOTE_ID_KEY);
     } catch {}
-    loadNotes(false);
-  }, [loadNotes]);
+    if (target?.tags && target.tags.length > 0) {
+      onVaultDataChanged?.();
+    }
+  }, [notes, onVaultDataChanged]);
 
   const handleConfirmDeleteFromList = async () => {
     if (!noteToDelete) return;
@@ -2467,10 +2534,14 @@ export function NotesView({
         } catch {}
       }
       const deletedId = noteToDelete.id;
+      const hadTags = Boolean(noteToDelete.tags && noteToDelete.tags.length > 0);
       setNoteToDelete(null);
       setFrozenDraftIds((prev) => prev.filter((id) => id !== deletedId));
       setFrozenFormalIds((prev) => prev.filter((id) => id !== deletedId));
-      await loadNotes(false);
+      setNotes((prev) => prev.filter((n) => n.id !== deletedId));
+      if (hadTags) {
+        onVaultDataChanged?.();
+      }
     } catch (err: any) {
       console.error('DeleteNote failed:', err);
       setDeleteListError(`删除失败: ${err?.message || err}`);

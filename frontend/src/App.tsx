@@ -32,6 +32,7 @@ import { isVirtualAllTag } from './tagAll';
 import { DetailSplit, useDetailOrigin } from './DetailSplit';
 import { TaskDetailPanel, TaskDetailHandle } from './TaskDetailPanel';
 import { useAccentColor } from './useAccentColor';
+import { matchesVaultEventType } from './vaultEvents';
 
 function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
   return (
@@ -331,8 +332,10 @@ export default function App() {
 
   // Subscribe to vault:changed application events
   useEffect(() => {
-    const unsubscribe = Events.On('vault:changed', () => {
-      refreshVault();
+    const unsubscribe = Events.On('vault:changed', (ev: any) => {
+      if (matchesVaultEventType(ev, ['task', 'note', 'day_plan', 'activity'])) {
+        refreshVault();
+      }
     });
 
     return () => {

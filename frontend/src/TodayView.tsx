@@ -20,6 +20,7 @@ import { ActivityComposer } from './ActivityComposer';
 import { ActivityItem } from './ActivityItem';
 import { NoteRefMap, pruneRefs, sameRefs, useNoteRefs } from './noteRefs';
 import { getLocalDateStr, followTodayOnDateChange } from './todayDate';
+import { matchesVaultEventType } from './vaultEvents';
 
 interface TodayViewProps {
   vaultStatus: VaultStatus | null;
@@ -268,7 +269,10 @@ export function TodayView({
   const pendingVaultChangeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    const unsubscribe = Events.On('vault:changed', () => {
+    const unsubscribe = Events.On('vault:changed', (ev: any) => {
+      if (!matchesVaultEventType(ev, ['day_plan', 'task', 'activity'])) {
+        return;
+      }
       const remaining = ignoreVaultChangedUntilRef.current - Date.now();
       if (remaining > 0) {
         if (pendingVaultChangeTimerRef.current === null) {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -252,12 +253,15 @@ func (idx *MemoryIndex) GetNote(id string) (*Note, bool) {
 	return n.Clone().(*Note), true
 }
 
-// ListNotes returns clones of all notes sorted by UpdatedAt descending.
+// ListNotes returns clones of all notes sorted by UpdatedAt descending,
+// with Body replaced by a lightweight excerpt.
 func (idx *MemoryIndex) ListNotes() []*Note {
 	idx.mu.RLock()
 	notes := make([]*Note, 0, len(idx.notes))
 	for _, n := range idx.notes {
-		notes = append(notes, n.Clone().(*Note))
+		cp := n.Clone().(*Note)
+		cp.Body = ExtractNoteExcerpt(cp.Title, cp.Body)
+		notes = append(notes, cp)
 	}
 	idx.mu.RUnlock()
 	sort.Slice(notes, func(i, j int) bool {
@@ -851,6 +855,85 @@ func truncateSnippet(s string, maxRunes int) string {
 		return s
 	}
 	return string(runes[:maxRunes]) + "..."
+}
+
+var (
+	headingRegex   = regexp.MustCompile(`^#{1,6}\s+`)
+	quoteRegex     = regexp.MustCompile(`^>\s+`)
+	listRegex      = regexp.MustCompile(`^([-*+](\s+\[[ xX]\])?|\d+\.)\s+`)
+	linkRegex      = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
+	wikiLinkRegex  = regexp.MustCompile(`\[\[([^\]|]+)(?:\|[^\]]+)?\]\]`)
+	styleCharRegex = regexp.MustCompile("[`*_~=]")
+)
+
+// CleanMarkdownLine removes common markdown formatting tokens from a line.
+func CleanMarkdownLine(line string) string {
+	line = strings.TrimSpace(line)
+	if strings.HasPrefix(line, "```") || strings.HasPrefix(line, "~~~") {
+		return ""
+	}
+	line = headingRegex.ReplaceAllString(line, "")
+	line = quoteRegex.ReplaceAllString(line, "")
+	line = listRegex.ReplaceAllString(line, "")
+	line = linkRegex.ReplaceAllString(line, "$1")
+	line = wikiLinkRegex.ReplaceAllString(line, "$1")
+	line = styleCharRegex.ReplaceAllString(line, "")
+	return strings.TrimSpace(line)
+}
+
+// ExtractNoteExcerpt extracts a lightweight excerpt (up to 2 non-empty lines, capped at maxRunes)
+// from a note's title and markdown body.
+func ExtractNoteExcerpt(title, body string) string {
+	if strings.TrimSpace(body) == "" {
+		return ""
+	}
+	normalized := strings.ReplaceAll(body, "\r\n", "\n")
+	rawLines := strings.Split(normalized, "\n")
+
+	startIdx := 0
+	trimmedTitle := strings.TrimSpace(title)
+	if trimmedTitle != "" {
+		for i, raw := range rawLines {
+			t := strings.TrimSpace(raw)
+			if t == "" {
+				continue
+			}
+			if strings.HasPrefix(t, "#") {
+				headingText := strings.TrimSpace(strings.TrimLeft(t, "# \t"))
+				if strings.EqualFold(headingText, trimmedTitle) {
+					startIdx = i + 1
+				}
+			}
+			break
+		}
+	}
+
+	var excerptLines []string
+	totalRunes := 0
+	const maxRunes = 200
+
+	for i := startIdx; i < len(rawLines); i++ {
+		cleaned := CleanMarkdownLine(rawLines[i])
+		if cleaned == "" {
+			continue
+		}
+
+		runes := []rune(cleaned)
+		if totalRunes+len(runes) > maxRunes {
+			remaining := maxRunes - totalRunes
+			if remaining > 0 {
+				excerptLines = append(excerptLines, string(runes[:remaining])+"…")
+			}
+			break
+		}
+		excerptLines = append(excerptLines, cleaned)
+		totalRunes += len(runes)
+		if len(excerptLines) >= 2 {
+			break
+		}
+	}
+
+	return strings.Join(excerptLines, "\n")
 }
 
 // ClearPendingMove removes any pending move candidate for an entity ID.

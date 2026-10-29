@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 import { componentCallbacks } from '../scripts/componentCallbacks.ts';
+import { filterCandidates, pickerKey } from './noteRefsCore.ts';
 
 const callback = componentCallbacks(new URL('./NotesView.tsx', import.meta.url));
 const isAudioTranscriptNote = callback('isAudioTranscriptNote');
@@ -60,6 +61,34 @@ test('getDraftExcerpt: returns up to 2 clean lines without markdown syntax', () 
     getDraftExcerpt(body3),
     '第一行实际内容\n第二行实际内容'
   );
+});
+
+test('没有 [[ 候选时保留 Vditor 原生键盘处理', () => {
+  callback('onKey', { pickerRef: { current: null } })({
+    key: 'ArrowDown', isComposing: false, keyCode: 0,
+    preventDefault: () => assert.fail('无笔记候选时应保留原生按键处理'),
+    stopPropagation: () => assert.fail('无笔记候选时不应拦截按键'),
+  });
+});
+
+test('[[ 笔记候选仍可用方向键选择', () => {
+  let picker = { start: 0, query: '', index: 0 };
+  let prevented = false;
+  let stopped = false;
+  callback('onKey', {
+    pickerRef: { current: picker },
+    allNotesRef: { current: [{ id: 'n-1', title: 'One' }, { id: 'n-2', title: 'Two' }] },
+    allFilesRef: { current: [] },
+    filterCandidates, pickerKey,
+    setPicker: (next: typeof picker) => { picker = next; },
+  })({
+    key: 'ArrowDown', isComposing: false, keyCode: 0,
+    preventDefault: () => { prevented = true; },
+    stopPropagation: () => { stopped = true; },
+  });
+  assert.equal(picker.index, 1);
+  assert.ok(prevented);
+  assert.ok(stopped);
 });
 
 test('笔记右上角更多菜单包含复制绝对路径与在 Finder 中打开操作', () => {

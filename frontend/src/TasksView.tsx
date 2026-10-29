@@ -12,6 +12,7 @@ import { Task, TaskStatus } from '../bindings/pata/internal/storage/markdown/mod
 import { VaultStatus, CreateTaskInput } from '../bindings/pata/internal/app/models';
 import { QuickCreateInput } from './QuickCreateInput';
 import { WorkspacePage } from './DetailSplit';
+import { matchesVaultEventType } from './vaultEvents';
 
 interface TasksViewProps {
   vaultStatus: VaultStatus | null;
@@ -65,8 +66,10 @@ export function TasksView({
   }, [loadTasks]);
 
   useEffect(() => {
-    const unsubscribe = Events.On('vault:changed', () => {
-      void loadTasks();
+    const unsubscribe = Events.On('vault:changed', (ev: any) => {
+      if (matchesVaultEventType(ev, ['task'])) {
+        void loadTasks();
+      }
     });
     return () => {
       unsubscribe();

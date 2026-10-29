@@ -20,6 +20,7 @@ import {
   formatTagErrorSubject,
   formatTagEmptyMessage,
 } from './tagAll';
+import { matchesVaultEventType } from './vaultEvents';
 
 interface TagViewProps {
   selectedTag: string | null;
@@ -98,8 +99,10 @@ export function TagView({
 
   // Subscribe to vault:changed events
   useEffect(() => {
-    const unsubscribe = Events.On('vault:changed', () => {
-      loadTagData(selectedTag);
+    const unsubscribe = Events.On('vault:changed', (ev: any) => {
+      if (matchesVaultEventType(ev, ['task', 'note', 'day_plan', 'activity'])) {
+        loadTagData(selectedTag);
+      }
     });
 
     return () => {

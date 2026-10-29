@@ -1568,6 +1568,50 @@ func TestVaultService_ListNotes_OrderingAndCloneIsolation(t *testing.T) {
 	}
 }
 
+func TestVaultService_ListNotes_ReturnsLightweightExcerpt(t *testing.T) {
+	vaultDir := t.TempDir()
+	s := &VaultService{}
+	if _, err := s.openVault(vaultDir); err != nil {
+		t.Fatalf("openVault failed: %v", err)
+	}
+	defer func() {
+		if s.stopWatcher != nil {
+			s.stopWatcher()
+		}
+	}()
+
+	longBody := "# 超长笔记\n第一行核心摘要。\n第二行重要结论。\n" + strings.Repeat("大量的冗余详细正文，不应在全量 ListNotes 响应中传递。\n", 300)
+	created, err := s.CreateNote(CreateNoteInput{
+		Title: "超长笔记",
+		Body:  longBody,
+	})
+	if err != nil {
+		t.Fatalf("CreateNote failed: %v", err)
+	}
+
+	// 1. ListNotes returns lightweight excerpt (duplicate title heading stripped, up to 2 lines)
+	list, err := s.ListNotes()
+	if err != nil {
+		t.Fatalf("ListNotes failed: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 note, got %d", len(list))
+	}
+	expectedExcerpt := "第一行核心摘要。\n第二行重要结论。"
+	if list[0].Body != expectedExcerpt {
+		t.Fatalf("ListNotes must return lightweight excerpt %q, got %q", expectedExcerpt, list[0].Body)
+	}
+
+	// 2. GetNote returns complete full body
+	fetched, err := s.GetNote(created.ID)
+	if err != nil {
+		t.Fatalf("GetNote failed: %v", err)
+	}
+	if fetched.Body != longBody {
+		t.Fatalf("GetNote must return full body, got length %d vs original length %d", len(fetched.Body), len(longBody))
+	}
+}
+
 func TestVaultService_UpdateNote_UnknownFieldsPreserved(t *testing.T) {
 	vaultDir := t.TempDir()
 	notesDir := filepath.Join(vaultDir, "notes")

@@ -44,6 +44,14 @@ export function hasTag(tags: string[], candidate: string): boolean {
 }
 
 /**
+ * Case-insensitive comparison of two tag lists.
+ */
+export function sameTags(a: string[] = [], b: string[] = []): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((t, i) => cleanTag(t).toLowerCase() === cleanTag(b[i] ?? '').toLowerCase());
+}
+
+/**
  * Case-insensitive deduplication, preserving the display casing of the FIRST encountered tag.
  * Commas are preserved intact.
  */

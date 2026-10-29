@@ -184,6 +184,93 @@ func TestListNotes(t *testing.T) {
 	}
 }
 
+func TestExtractNoteExcerpt(t *testing.T) {
+	// 1. Empty or whitespace
+	if got := ExtractNoteExcerpt("标题", ""); got != "" {
+		t.Fatalf("expected empty, got %q", got)
+	}
+	if got := ExtractNoteExcerpt("标题", "   \n\n  "); got != "" {
+		t.Fatalf("expected empty, got %q", got)
+	}
+
+	// 2. Heading matching title is stripped
+	body1 := "# 系统架构\n这是核心架构设计的正文，包含**重点**与`代码`。\n第二行说明\n第三行内容"
+	expected1 := "这是核心架构设计的正文，包含重点与代码。\n第二行说明"
+	if got := ExtractNoteExcerpt("系统架构", body1); got != expected1 {
+		t.Fatalf("expected %q, got %q", expected1, got)
+	}
+
+	// 3. Heading NOT matching title is preserved as cleaned text
+	body2 := "# 另一部分\n这是其他内容。"
+	expected2 := "另一部分\n这是其他内容。"
+	if got := ExtractNoteExcerpt("系统架构", body2); got != expected2 {
+		t.Fatalf("expected %q, got %q", expected2, got)
+	}
+
+	// 4. Draft note (empty title) with complex markdown tokens and links
+	draftBody := "# 第一行思考\n- [x] 完成任务项 [链接](http://example.com)\n> 第三行引用"
+	expectedDraft := "第一行思考\n完成任务项 链接"
+	if got := ExtractNoteExcerpt("", draftBody); got != expectedDraft {
+		t.Fatalf("expected %q, got %q", expectedDraft, got)
+	}
+
+	// 5. Wikilink and inline code / bold style stripping
+	wikiBody := "这是包含 [[WikiNote|别名]] 和 `code` 与 **加粗** 的正文\n第二行内容\n第三行被忽略"
+	expectedWiki := "这是包含 WikiNote 和 code 与 加粗 的正文\n第二行内容"
+	if got := ExtractNoteExcerpt("", wikiBody); got != expectedWiki {
+		t.Fatalf("expected %q, got %q", expectedWiki, got)
+	}
+
+	// 6. Audio transcript timestamp link
+	asrBody := "[00:01:05.230](#t=00:01:05.230) 说话人 1\n大家下午好，今天开会。\n第三行内容"
+	expectedASR := "00:01:05.230 说话人 1\n大家下午好，今天开会。"
+	if got := ExtractNoteExcerpt("会议记录", asrBody); got != expectedASR {
+		t.Fatalf("expected %q, got %q", expectedASR, got)
+	}
+
+	// 7. Rune length truncation
+	longLine := strings.Repeat("长", 300)
+	gotLong := ExtractNoteExcerpt("", longLine)
+	if runes := []rune(gotLong); len(runes) > 205 || !strings.HasSuffix(gotLong, "…") {
+		t.Fatalf("expected truncated excerpt with '…', got len %d, val %q", len(runes), gotLong)
+	}
+}
+
+func TestListNotes_LightweightExcerpt(t *testing.T) {
+	idx := NewMemoryIndex()
+
+	longBody := "# 庞大文档\n这是正文第一行，简要说明核心思想。\n这是正文第二行，介绍主要细节。\n" + strings.Repeat("这里是成千上万字的详细正文段落，不应当在列表接口中传输。\n", 500)
+	note := &Note{
+		Type:      EntityTypeNote,
+		ID:        "n-huge",
+		Title:     "庞大文档",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+		Body:      longBody,
+	}
+
+	idx.PutEntity("/vault/notes/n-huge.md", note, FileBaseline{})
+
+	// ListNotes returns lightweight excerpt
+	list := idx.ListNotes()
+	if len(list) != 1 {
+		t.Fatalf("expected 1 note, got %d", len(list))
+	}
+	expectedExcerpt := "这是正文第一行，简要说明核心思想。\n这是正文第二行，介绍主要细节。"
+	if list[0].Body != expectedExcerpt {
+		t.Fatalf("expected lightweight excerpt %q, got %q", expectedExcerpt, list[0].Body)
+	}
+
+	// GetNote still returns full untruncated body
+	reloaded, ok := idx.GetNote("n-huge")
+	if !ok {
+		t.Fatalf("GetNote failed")
+	}
+	if reloaded.Body != longBody {
+		t.Fatalf("GetNote must return complete full body, got len %d vs original len %d", len(reloaded.Body), len(longBody))
+	}
+}
+
 func TestTagOverview(t *testing.T) {
 	idx := NewMemoryIndex()
 
