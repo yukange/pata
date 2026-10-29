@@ -1033,7 +1033,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
                   setIsEditingBody(false);
                 }
               }}
-              placeholder="添加描述… (输入 [[ 引用笔记)"
+              placeholder="添加描述…"
               rows={1}
               className="w-full text-sm text-stone-800 dark:text-stone-200 placeholder:text-muted-foreground bg-transparent border-0 outline-none focus:outline-none focus:ring-0 resize-none overflow-hidden leading-relaxed p-0 min-h-[22px] transition-none"
             />
@@ -1151,7 +1151,7 @@ export const TaskDetailPanel = forwardRef<TaskDetailHandle, TaskDetailPanelProps
             refs={newActivityRefs}
             onRefsChange={setNewActivityRefs}
             notes={noteRefs}
-            placeholder="记录进展… (输入 [[ 引用笔记)"
+            placeholder="记录进展…"
             minRows={2}
             submitting={submittingActivity}
             onSubmit={() => void handleAddActivity()}

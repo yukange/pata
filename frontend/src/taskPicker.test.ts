@@ -112,11 +112,11 @@ test('getInlineTaskCandidates: typed query matches title/tags and provides unifi
 
 test('getInlineTaskFooterHint: reports correct Enter behavior depending on selection and input presence', () => {
   // Empty input (browsing): always shows unified hint for Enter, Up/Down, and Left/Right
-  assert.strictEqual(getInlineTaskFooterHint(false, false), '↵ 加入今日 · ↑↓ 选择任务 · ←→ 切换分类');
-  assert.strictEqual(getInlineTaskFooterHint(true, false), '↵ 加入今日 · ↑↓ 选择任务 · ←→ 切换分类');
+  assert.strictEqual(getInlineTaskFooterHint(false, false), '↵ 加入今日 · ↑↓ 移动 · ←→ 分类');
+  assert.strictEqual(getInlineTaskFooterHint(true, false), '↵ 加入今日 · ↑↓ 移动 · ←→ 分类');
 
   // Typed input with no active arrow selection: Enter creates new task
-  assert.strictEqual(getInlineTaskFooterHint(false, true), '↵ 创建新任务 · ↑↓ 选择已有任务');
+  assert.strictEqual(getInlineTaskFooterHint(false, true), '↵ 创建新任务 · ↑↓ 选择');
   // Typed input with active arrow selection: Enter adds selected existing task
-  assert.strictEqual(getInlineTaskFooterHint(true, true), '↵ 加入已有任务 · ↑↓ 切换');
+  assert.strictEqual(getInlineTaskFooterHint(true, true), '↵ 加入已有任务 · ↑↓ 移动');
 });

@@ -179,7 +179,7 @@ export function TasksView({
       <div className="space-y-5">
         {/* Quick Create Bar */}
         <QuickCreateInput
-          placeholder="添加任务…  末尾可加 #标签，如：完成设计 #工作"
+          placeholder="添加任务…"
           submitLabel="快速创建"
           tagNames={tagNames}
           onSubmit={handleQuickCreate}

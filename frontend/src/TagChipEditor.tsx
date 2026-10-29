@@ -166,7 +166,7 @@ export function TagChipEditor({
                   if (error) setError(null);
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder="输入标签名称..."
+                placeholder="新标签…"
                 autoFocus
                 className="w-full px-2 py-1 text-xs rounded border border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground focus:outline-hidden focus:border-stone-400 dark:focus:border-stone-600"
               />

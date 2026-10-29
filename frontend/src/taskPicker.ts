@@ -86,7 +86,7 @@ export function getInlineTaskCandidates(
 /** Footer guide for inline suggestions depending on selection and input presence. */
 export function getInlineTaskFooterHint(hasActiveSelection: boolean, hasInput: boolean): string {
   if (hasInput) {
-    return hasActiveSelection ? '↵ 加入已有任务 · ↑↓ 切换' : '↵ 创建新任务 · ↑↓ 选择已有任务';
+    return hasActiveSelection ? '↵ 加入已有任务 · ↑↓ 移动' : '↵ 创建新任务 · ↑↓ 选择';
   }
-  return '↵ 加入今日 · ↑↓ 选择任务 · ←→ 切换分类';
+  return '↵ 加入今日 · ↑↓ 移动 · ←→ 分类';
 }

@@ -702,7 +702,7 @@ export function TodayView({
             </div>
 
             <QuickCreateInput
-              placeholder={isToday ? '添加今天的任务或搜索已有任务…' : '添加当日任务或搜索已有任务…'}
+              placeholder="添加任务或搜索…"
               submitLabel="添加"
               tagNames={tagNames}
               onSubmit={handleQuickCreate}
@@ -773,7 +773,7 @@ export function TodayView({
               onRefsChange={setQuickActivityRefs}
               notes={noteRefs}
               ariaLabel="今日记录"
-              placeholder="记录一句话（输入 [[ 引用笔记，⌘+Enter 发送）…"
+              placeholder="记录进展…"
               minRows={2}
               submitting={creatingActivity}
               onSubmit={() => void handleCreateQuickActivity()}

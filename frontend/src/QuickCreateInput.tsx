@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Circle, Plus, RefreshCw } from 'lucide-react';
 import type { Task } from '../bindings/pata/internal/storage/markdown/models.js';
-import { getInlineTaskCandidates, getInlineTaskFooterHint } from './taskPicker';
+import { getInlineTaskCandidates } from './taskPicker';
 import { activeTagQuery, parseQuickTask } from './quickCreate';
 
 interface QuickCreateInputProps {
@@ -404,8 +404,41 @@ export function QuickCreateInput({
                 ))
               )}
             </ul>
-            <div className="px-3 py-1.5 text-[11px] text-muted-foreground border-t border-[var(--pata-border)] bg-stone-50/50 dark:bg-stone-950/20">
-              {getInlineTaskFooterHint(activeTaskIndex >= 0, hasQuery)}
+            <div className="px-3 py-1.5 bg-stone-100/70 dark:bg-stone-950/70 border-t border-[var(--pata-border)] flex items-center justify-between text-[11px] text-muted-foreground select-none">
+              <span>
+                <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
+                  ↵
+                </kbd>{' '}
+                {hasQuery ? (activeTaskIndex >= 0 ? '加入已有' : '创建新任务') : '加入今日'}
+              </span>
+              <div className="flex items-center space-x-3">
+                <span>
+                  <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
+                    ↑
+                  </kbd>{' '}
+                  <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
+                    ↓
+                  </kbd>{' '}
+                  {hasQuery && activeTaskIndex < 0 ? '选择' : '移动'}
+                </span>
+                {!hasQuery && (
+                  <span>
+                    <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
+                      ←
+                    </kbd>{' '}
+                    <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
+                      →
+                    </kbd>{' '}
+                    分类
+                  </span>
+                )}
+                <span>
+                  <kbd className="font-mono bg-stone-200/60 dark:bg-stone-800 px-1 py-0.5 rounded text-[11px]">
+                    ESC
+                  </kbd>{' '}
+                  关闭
+                </span>
+              </div>
             </div>
           </div>
         )}

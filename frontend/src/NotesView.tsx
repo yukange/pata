@@ -1101,7 +1101,7 @@ function NoteEditor({
       undoDelay: 100,
       value: currentNote.body ?? '',
       height: '100%',
-      placeholder: isDraftNote ? '记录想法...（支持 Markdown 语法，随时可点击「转为笔记」）' : '开始记录内容...（支持 Markdown 语法、表格、代码块）',
+      placeholder: '',
       theme: isDark ? 'dark' : 'classic',
       preview: {
         theme: {
@@ -1628,7 +1628,7 @@ function NoteEditor({
                   vditorRef.current?.focus();
                 }
               }}
-              placeholder={isNaming ? '输入笔记标题以转为笔记...' : '无标题笔记'}
+              placeholder={isNaming ? '笔记标题…' : '无标题笔记'}
               className="w-full text-2xl font-semibold bg-transparent text-stone-900 dark:text-stone-100 placeholder:text-muted-foreground focus:outline-hidden border-none p-0 leading-tight tracking-tight"
             />
           )}

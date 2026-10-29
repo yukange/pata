@@ -34,7 +34,7 @@ export function ActivityComposer({
   refs,
   onRefsChange,
   notes,
-  placeholder = '记录进展… (输入 [[ 引用笔记)',
+  placeholder = '记录进展…',
   minRows = 2,
   submitting = false,
   submitLabel = '发送',
