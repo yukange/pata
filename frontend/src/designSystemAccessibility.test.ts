@@ -107,6 +107,12 @@ test('排版与正文可读性: Notes 编辑区与代码块字号校准', () => 
   assert.ok(cssContent.includes('font-size: 13px !important;'), '代码块字号应为 13px');
   assert.ok(cssContent.includes('line-height: 1.5 !important;'), '代码块行高应为 1.5');
 
+  // 代码块背景与边框：浅色与深色主题下拥有清晰视觉容器，避免与主背景无法区分
+  assert.ok(cssContent.includes('--pata-code-bg:'), '应定义代码块背景 token --pata-code-bg');
+  assert.ok(cssContent.includes('--pata-code-border:'), '应定义代码块边框 token --pata-code-border');
+  assert.ok(cssContent.includes('background-color: var(--pata-code-bg) !important;'), '代码块应使用语义背景');
+  assert.ok(cssContent.includes('border: 1px solid var(--pata-code-border) !important;'), '代码块应有清晰边框');
+
   // 列表项行高调整为 1.45，紧凑对齐，消除列表回车新行（如 2.）光标悬浮偏上问题
   assert.ok(cssContent.includes('line-height: 1.45 !important;'), '列表项应为紧凑行高 1.45');
 });

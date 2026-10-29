@@ -37,6 +37,10 @@
   --pata-border: #e7e5e4; /* stone-200 */
   --pata-border-subtle: #f5f5f4; /* stone-100 */
 
+  /* Code block & inline code surfaces (Light Theme) */
+  --pata-code-bg: #ede9e3;
+  --pata-code-border: #e0dcd5;
+
   /* Interaction Accent (Follows macOS System AccentColor, fallback to #007aff) */
   --pata-accent: AccentColor;
   --pata-accent-fallback: #007aff;
@@ -69,6 +73,10 @@
   --pata-muted-foreground: #a8a29e; /* stone-400 */
   --pata-border: #292524; /* stone-800 */
   --pata-border-subtle: #1c1917;
+
+  /* Code block & inline code surfaces (Dark Theme) */
+  --pata-code-bg: #141211;
+  --pata-code-border: #292524;
 
   /* Interaction Accent (Dark Mode) */
   --pata-accent: AccentColor;
@@ -156,12 +164,16 @@
     --pata-muted-foreground: #44403c;
     --pata-border: #78716c;
     --pata-border-subtle: #78716c;
+    --pata-code-bg: #e6e0d6;
+    --pata-code-border: #78716c;
   }
 
   :root.dark, :where(.dark, .dark *) {
     --pata-muted-foreground: #d6d3d1;
     --pata-border: #a8a29e;
     --pata-border-subtle: #a8a29e;
+    --pata-code-bg: #0c0b0a;
+    --pata-code-border: #a8a29e;
   }
 
   :is([aria-current="page"], [aria-selected="true"], [data-selected="true"]) {
@@ -289,6 +301,17 @@ textarea.bg-transparent:focus-visible,
 }
 
 .vditor .vditor-reset code:not(.hljs):not(.highlight-chroma),
+.vditor-editor-wrapper .vditor-reset code:not(.hljs):not(.highlight-chroma) {
+  font-family: var(--pata-font-mono);
+  padding: 1.5px 5px !important;
+  margin: 0 1px !important;
+  font-size: 0.9em !important;
+  border-radius: 4px !important;
+  background-color: var(--pata-code-bg) !important;
+  border: 1px solid var(--pata-code-border) !important;
+  color: var(--pata-foreground) !important;
+}
+
 .vditor .vditor-reset pre > code {
   font-family: var(--pata-font-mono);
 }
@@ -511,6 +534,18 @@ textarea.bg-transparent:focus-visible,
   font-size: 13px !important;
   line-height: 1.5 !important;
   border-radius: 6px !important;
+  background-color: var(--pata-code-bg) !important;
+  border: 1px solid var(--pata-code-border) !important;
+}
+
+.vditor-editor-wrapper .vditor-reset pre:not(.vditor-ir__marker) > code,
+.vditor-editor-wrapper .vditor-reset pre:not(.vditor-ir__marker) > code.hljs {
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
 }
 
 /* 编辑源码时隐藏重复预览；离开代码块后恢复语法高亮预览。 */
@@ -528,7 +563,9 @@ textarea.bg-transparent:focus-visible,
   font-size: 13px;
   line-height: 1.5;
   color: var(--pata-foreground);
-  background: var(--pata-surface-hover);
+  background-color: var(--pata-code-bg) !important;
+  border: 1px solid var(--pata-code-border) !important;
+  border-radius: 6px !important;
 }
 
 /* Tables: compact padding */

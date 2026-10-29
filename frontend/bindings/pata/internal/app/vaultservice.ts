@@ -273,7 +273,8 @@ export function ListNoteRefs(): $CancellablePromise<markdown$0.NoteRef[] | null>
 }
 
 /**
- * ListNotes returns all notes from the vault index, newest updated first.
+ * ListNotes returns all notes from the vault index, newest updated first,
+ * with Body replaced by a lightweight excerpt.
  */
 export function ListNotes(): $CancellablePromise<(markdown$0.Note | null)[] | null> {
     return $Call.ByID(58766227);
