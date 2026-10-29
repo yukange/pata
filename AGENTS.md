@@ -1,10 +1,10 @@
 # Pata · Agent 项目指引
 
-**项目名称：啪嗒 / Pata。** 阶段 1～13 的代码与 macOS 实机验收已完成；14～16 的验收状态以 [docs/README.md](docs/README.md) 为准。
+**项目名称：啪嗒 / Pata。** 阶段 1～13 的代码与 macOS 实机验收已完成；14～16 的验收状态以 [docs/README.md](docs/README.md) 为准。**阶段 17 为纯 Swift 原生重构规划，尚未实施；当前产品仍是 Go + Wails + React。**
 
 ## 开始阅读
 
-1. 阅读 [docs/README.md](docs/README.md)，按 01 → 16 了解已完成与规划中的阶段。
+1. 阅读 [docs/README.md](docs/README.md)，按 01 → 17 了解已完成与规划中的阶段。
 2. 阅读 [阶段 1 产品提案](docs/01-validate/proposal.md)、[已确认的取舍](docs/01-validate/decisions.md)、[UI 规范](docs/01-validate/ui.md)。
    - macOS 原生窗口细节和 Magpie 源码参考见 [macos-native.md](docs/01-validate/macos-native.md)；浏览器原型不等于真实 Liquid Glass 验证。
 3. 数据 Schema 的**单一来源**为 [阶段 2 schema.md](docs/02-foundation/schema.md)；旧 `docs/02-foundation/examples/` 为历史测试固件，不是生产数据。
@@ -37,6 +37,13 @@
 
 - **增加复杂度前先取得共识**：在为推测性或极低概率的竞态条件、安全边界情况增加复杂度之前，必须先向用户说明具体会出现什么问题、发生的可能性，以及新增实现和维护复杂度的成本，并取得用户明确同意。不得为了理论上的健壮性擅自扩大任务范围。
 
+## 阶段 17 · 纯 Swift 原生重构（仅规划）
+
+- 目标与验收单一入口：[017 idea](docs/17-swift-native-rewrite/idea.md) / [017 proposal](docs/17-swift-native-rewrite/proposal.md)。**本规划 PR 不改现有实现，阶段 12 的 React/Wails 前端约束在旧版仍然生效**；迁移到 Swift 后应以 017 的原生交互与兼容要求取代旧栈实现约束。
+- 目标产物只保留 SwiftUI/AppKit + Swift Core + 经验证的原生 Markdown IR 编辑器，不维持长期 Go/Swift 双业务栈；不可据此顺便重设计 Today/Tasks/Notes、Activity、Notes 草稿、Inspector。
+- [schema.md](docs/02-foundation/schema.md) 仍是唯一生效存储协议。**Note 正文**使用标准 Markdown 相对链接；**Task/Activity** 内 `[[名称]]` 为纯文本且通过本作用域 `note_refs` 绑定 ID。SwiftMarkdownEngine 默认 `[[Name|ID]]` 存储**不得擅自写入 Vault**。
+- 保留当前 MCP Tools/Task URI、Agent 来源、MP3 逐字稿/Keychain、应用内更新以及草稿/文件冲突保护；CLI 仍是未来范围，不能在重构中顺带创建第二写入器。
+- 优先验证豆包中文/英文 + ABC 输入法、触控板轻点、Undo/Redo、Markdown 往返保存，再迁移业务；AI 可分模块实现，但必须以旧 Vault Fixture、旧版行为和 macOS 实机测试为准。
 ## 前端工程约束（阶段 12）
 
 - **优先统一已有体验，不为统一而重构**：保留现有 Today / Tasks / Notes 视觉与交互，仅对真实重复、缺陷及可访问性问题做局部优化；不得整体套用 Nova 主题。
