@@ -811,45 +811,14 @@ public struct TodayView: View {
             }
 
             // Activity Composer Box
-            VStack(alignment: .trailing, spacing: 8) {
-                TextEditor(text: $quickActivityText)
-                    .font(.system(size: 13))
-                    .frame(height: 72)
-                    .scrollContentBackground(.hidden)
-                    .padding(8)
-                    .overlay(
-                        Group {
-                            if quickActivityText.isEmpty {
-                                Text("记录进展...")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.secondary.opacity(0.6))
-                                    .padding(.leading, 12)
-                                    .padding(.top, 14)
-                                    .allowsHitTesting(false)
-                            }
-                        },
-                        alignment: .topLeading
-                    )
-
-                Button(action: submitActivity) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 10))
-                        Text("发送 ⌘↵")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .foregroundColor(state.effectiveAccentOnColor)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(state.effectiveAccentColor))
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.return, modifiers: .command)
-                .padding(.trailing, 10)
-                .padding(.bottom, 8)
-            }
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.02)))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(borderColor, lineWidth: 1))
+            ActivityComposerBox(
+                text: $quickActivityText,
+                placeholder: "记录进展...",
+                fontSize: 13,
+                inputHeight: 64,
+                state: state,
+                onSubmit: { body in submitActivity(body) }
+            )
 
             // Timeline Items
             if timelineItems.isEmpty {
@@ -932,8 +901,9 @@ public struct TodayView: View {
         }
     }
 
-    private func submitActivity() {
-        let clean = quickActivityText.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func submitActivity(_ bodyText: String? = nil) {
+        let textToUse = bodyText ?? quickActivityText
+        let clean = textToUse.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, let v = state.vault else { return }
 
         do {

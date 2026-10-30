@@ -7,15 +7,31 @@ public struct TaskInspector: View {
     let taskId: String
 
     @State private var newActivityBody: String = ""
-    @State private var isEditingDesc: Bool = false
-    @State private var descDraft: String = ""
     @State private var showDeleteConfirm: Bool = false
+
+    // In-place title editing & auto-save
+    @State private var titleDraft: String = ""
+    @State private var isTitleFocused: Bool = false
+    @State private var titleAutoSaveWorkItem: DispatchWorkItem? = nil
+    @State private var titleSaveError: String? = nil
+
+    // In-place description editing & auto-save
+    @State private var descDraft: String = ""
+    @State private var isDescFocused: Bool = false
+    @State private var descAutoSaveWorkItem: DispatchWorkItem? = nil
+    @State private var descSaveError: String? = nil
+    @State private var currentEditingTaskId: String = ""
 
     // In-place tag editing
     @State private var isAddingTag: Bool = false
     @State private var newTagInput: String = ""
     @FocusState private var isTagInputFocused: Bool
     @State private var highlightedCandidateIndex: Int? = nil
+
+    // Activity editing & hover states
+    @State private var editingActivityId: String? = nil
+    @State private var editingActivityDraft: String = ""
+    @State private var hoveredActivityId: String? = nil
 
     public init(state: AppState, taskId: String) {
         self.state = state
@@ -71,38 +87,19 @@ public struct TaskInspector: View {
                 Divider()
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        // Title
-                        Text(t.title)
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.primary)
+                    VStack(alignment: .leading, spacing: 14) {
+                        // Title & Status (Unified Row)
+                        titleAndStatusRow(t)
 
-                        // Status & Due Date Row
-                        HStack(spacing: 12) {
-                            Button(action: { toggleStatus(t) }) {
-                                HStack(spacing: 6) {
-                                    Image(systemName: t.status == .done ? "checkmark.circle.fill" : "circle")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(t.status == .done ? Color.emeraldColor : .secondary)
-                                    Text(t.status == .done ? "已完成" : "待办")
-                                        .font(.system(size: 13))
-                                        .foregroundColor(.primary)
-                                }
-                            }
-                            .buttonStyle(.plain)
-
-                            if let due = t.due {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "calendar")
-                                        .font(.system(size: 11))
-                                    Text(isOverdue ? "\(due) (已逾期)" : "\(due) 截止")
-                                        .font(.system(size: 12, weight: isOverdue ? .medium : .regular))
-                                }
-                                .foregroundColor(isOverdue ? Color(red: 220/255, green: 38/255, blue: 38/255) : .secondary)
-                            }
+                        if let err = titleSaveError {
+                            Text(err)
+                                .font(.system(size: 10))
+                                .foregroundColor(.red)
+                                .lineLimit(1)
+                                .help(err)
                         }
 
-                        // Tags Row (In-place editing with focus & suggestions)
+                        // Tags & Due Row
                         tagsRow(t)
                             .zIndex(50)
 
@@ -120,54 +117,48 @@ public struct TaskInspector: View {
                 }
 
                 // Bottom Activity Composer
-                VStack(alignment: .trailing, spacing: 6) {
-                    TextEditor(text: $newActivityBody)
-                        .font(.system(size: 12))
-                        .frame(height: 52)
-                        .scrollContentBackground(.hidden)
-                        .padding(6)
-                        .overlay(
-                            Group {
-                                if newActivityBody.isEmpty {
-                                    Text("记录进展...")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.secondary.opacity(0.6))
-                                        .padding(.leading, 10)
-                                        .padding(.top, 10)
-                                        .allowsHitTesting(false)
-                                }
-                            },
-                            alignment: .topLeading
-                        )
-
-                    Button(action: submitActivity) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "paperplane.fill")
-                                .font(.system(size: 9))
-                            Text("发送 ⌘↵")
-                                .font(.system(size: 11, weight: .medium))
-                        }
-                        .foregroundColor(state.effectiveAccentOnColor)
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(state.effectiveAccentColor))
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .padding(.trailing, 8)
-                    .padding(.bottom, 6)
-                }
-                .background(Color.primary.opacity(0.02))
-                .overlay(
-                    Rectangle()
-                        .stroke(borderColor, lineWidth: 1)
+                ActivityComposerBox(
+                    text: $newActivityBody,
+                    placeholder: "记录进展...",
+                    fontSize: 12,
+                    inputHeight: 52,
+                    state: state,
+                    onSubmit: { body in submitActivity(body) }
                 )
                 .padding(12)
             }
-            .onChange(of: taskId) { _ in
-                isEditingDesc = false
-                descDraft = ""
+            .onAppear {
+                currentEditingTaskId = taskId
+                titleDraft = task?.title ?? ""
+                descDraft = task?.description ?? ""
+            }
+            .onChange(of: taskId) {
+                flushTitleAutoSave()
+                flushDescriptionAutoSave()
+                currentEditingTaskId = taskId
+                titleDraft = task?.title ?? ""
+                descDraft = task?.description ?? ""
+                titleSaveError = nil
+                descSaveError = nil
                 cancelAddTag()
+            }
+            .onChange(of: task?.title) {
+                if !isTitleFocused && titleAutoSaveWorkItem == nil {
+                    if let newTitle = task?.title, newTitle != titleDraft {
+                        titleDraft = newTitle
+                    }
+                }
+            }
+            .onChange(of: task?.description) {
+                if !isDescFocused && descAutoSaveWorkItem == nil {
+                    if let d = task?.description, d != descDraft {
+                        descDraft = d
+                    }
+                }
+            }
+            .onDisappear {
+                flushTitleAutoSave()
+                flushDescriptionAutoSave()
             }
             .alert("确认删除任务？", isPresented: $showDeleteConfirm) {
                 Button("删除", role: .destructive) {
@@ -233,6 +224,19 @@ public struct TaskInspector: View {
 
     private func tagsRow(_ t: Task) -> some View {
         HStack(spacing: 6) {
+            if let due = t.due {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 10))
+                    Text(isOverdue ? "\(due) (已逾期)" : "\(due) 截止")
+                        .font(.system(size: 11, weight: isOverdue ? .medium : .regular))
+                }
+                .foregroundColor(isOverdue ? Color(red: 220/255, green: 38/255, blue: 38/255) : .secondary)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(RoundedRectangle(cornerRadius: 4).fill(isOverdue ? Color.red.opacity(0.08) : Color.primary.opacity(0.04)))
+            }
+
             ForEach(t.tags, id: \.self) { tag in
                 HStack(spacing: 3) {
                     Text("#\(tag)")
@@ -385,6 +389,89 @@ public struct TaskInspector: View {
         isTagInputFocused = false
     }
 
+    // MARK: - Title & Status Row
+
+    private func titleAndStatusRow(_ t: Task) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button(action: { toggleStatus(t) }) {
+                Image(systemName: t.status == .done ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundColor(t.status == .done ? (state.customAccentColor ?? Color.emeraldColor) : .secondary)
+                    .contentShape(Rectangle())
+                    .padding(.top, 4)
+            }
+            .buttonStyle(.plain)
+            .help(t.status == .done ? "重新打开" : "标记完成")
+
+            InPlaceTitleEditor(
+                text: $titleDraft,
+                placeholder: "任务标题",
+                isDone: t.status == .done,
+                isFocused: $isTitleFocused,
+                onTextChange: { newText in
+                    scheduleTitleAutoSave(newText)
+                },
+                onCommit: {
+                    flushTitleAutoSave()
+                }
+            )
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isTitleFocused ? Color.primary.opacity(0.02) : Color.clear)
+            )
+        }
+    }
+
+    private func scheduleTitleAutoSave(_ newText: String) {
+        titleAutoSaveWorkItem?.cancel()
+        let clean = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return }
+        let targetTaskId = currentEditingTaskId.isEmpty ? taskId : currentEditingTaskId
+        let item = DispatchWorkItem { [weak state] in
+            guard let s = state, let v = s.vault else { return }
+            guard let t = v.index.getTask(targetTaskId) else { return }
+            if t.title != clean {
+                var updated = t
+                updated.title = clean
+                do {
+                    _ = try v.updateTask(updated)
+                    DispatchQueue.main.async {
+                        self.titleSaveError = nil
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.titleSaveError = "标题保存失败: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+        titleAutoSaveWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
+    }
+
+    private func flushTitleAutoSave() {
+        titleAutoSaveWorkItem?.cancel()
+        titleAutoSaveWorkItem = nil
+        let targetTaskId = currentEditingTaskId.isEmpty ? taskId : currentEditingTaskId
+        guard let v = state.vault, let t = v.index.getTask(targetTaskId) else { return }
+        let clean = titleDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.isEmpty {
+            titleDraft = t.title
+            return
+        }
+        if t.title != clean {
+            var updated = t
+            updated.title = clean
+            do {
+                _ = try v.updateTask(updated)
+                titleSaveError = nil
+            } catch {
+                titleSaveError = "标题保存失败: \(error.localizedDescription)"
+            }
+        }
+    }
+
     // MARK: - Description Section
 
     private func descriptionSection(_ t: Task) -> some View {
@@ -396,94 +483,76 @@ public struct TaskInspector: View {
 
                 Spacer()
 
-                if !isEditingDesc && !t.description.isEmpty {
-                    Button(action: {
-                        descDraft = t.description
-                        isEditingDesc = true
-                    }) {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .padding(4)
-                    }
-                    .buttonStyle(.plain)
-                    .help("编辑描述")
+                if let err = descSaveError {
+                    Text(err)
+                        .font(.system(size: 10))
+                        .foregroundColor(.red)
+                        .lineLimit(1)
+                        .help(err)
                 }
             }
 
-            if isEditingDesc {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextEditor(text: $descDraft)
-                        .font(.system(size: 13))
-                        .frame(minHeight: 68, maxHeight: 180)
-                        .scrollContentBackground(.hidden)
-                        .padding(6)
-                        .background(Color.primary.opacity(0.02))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(borderColor, lineWidth: 1)
-                        )
-
-                    HStack(spacing: 8) {
-                        Spacer()
-
-                        Button("取消") {
-                            isEditingDesc = false
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-
-                        Button(action: { saveDescription(t) }) {
-                            Text("保存")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(state.effectiveAccentOnColor)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
-                                .background(RoundedRectangle(cornerRadius: 5).fill(state.effectiveAccentColor))
-                        }
-                        .buttonStyle(.plain)
-                        .keyboardShortcut(.return, modifiers: .command)
-                    }
+            InPlaceDescriptionEditor(
+                text: $descDraft,
+                placeholder: "添加描述...",
+                isFocused: $isDescFocused,
+                minHeight: 22,
+                maxHeight: 180,
+                onTextChange: { newText in
+                    scheduleDescriptionAutoSave(newText)
+                },
+                onCommit: {
+                    flushDescriptionAutoSave()
                 }
-            } else {
-                if t.description.isEmpty {
-                    Button(action: {
-                        descDraft = ""
-                        isEditingDesc = true
-                    }) {
-                        Text("添加描述...")
-                            .font(.system(size: 13))
-                            .foregroundColor(.secondary.opacity(0.6))
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.vertical, 4)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                } else {
-                    Text(t.description)
-                        .font(.system(size: 13))
-                        .foregroundColor(.primary)
-                        .lineSpacing(3)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            descDraft = t.description
-                            isEditingDesc = true
-                        }
-                }
-            }
+            )
+            .padding(.vertical, 2)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isDescFocused ? Color.primary.opacity(0.02) : Color.clear)
+            )
         }
     }
 
-    private func saveDescription(_ t: Task) {
-        var updated = t
-        updated.description = descDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        try? state.vault?.updateTask(updated)
-        isEditingDesc = false
-        state.objectWillChange.send()
+    private func scheduleDescriptionAutoSave(_ newText: String) {
+        descAutoSaveWorkItem?.cancel()
+        let targetTaskId = currentEditingTaskId.isEmpty ? taskId : currentEditingTaskId
+        let item = DispatchWorkItem { [weak state] in
+            guard let s = state, let v = s.vault else { return }
+            guard let t = v.index.getTask(targetTaskId) else { return }
+            if t.description != newText {
+                var updated = t
+                updated.description = newText
+                do {
+                    _ = try v.updateTask(updated)
+                    DispatchQueue.main.async {
+                        self.descSaveError = nil
+                    }
+                } catch {
+                    DispatchQueue.main.async {
+                        self.descSaveError = "保存失败: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+        descAutoSaveWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
+    }
+
+    private func flushDescriptionAutoSave() {
+        descAutoSaveWorkItem?.cancel()
+        descAutoSaveWorkItem = nil
+        let targetTaskId = currentEditingTaskId.isEmpty ? taskId : currentEditingTaskId
+        guard let v = state.vault, let t = v.index.getTask(targetTaskId) else { return }
+        if t.description != descDraft {
+            var updated = t
+            updated.description = descDraft
+            do {
+                _ = try v.updateTask(updated)
+                descSaveError = nil
+            } catch {
+                descSaveError = "保存失败: \(error.localizedDescription)"
+            }
+        }
     }
 
     // MARK: - Activities & Status Events Section
@@ -591,7 +660,7 @@ public struct TaskInspector: View {
                 }
                 .padding(.vertical, 2)
             } else {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Text(formatTime(item.at))
                             .font(.system(size: 11, design: .monospaced))
@@ -602,11 +671,100 @@ public struct TaskInspector: View {
                         Text(item.author)
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
+
                         Spacer()
+
+                        if editingActivityId != item.id {
+                            HStack(spacing: 6) {
+                                Button(action: {
+                                    editingActivityDraft = item.text
+                                    editingActivityId = item.id
+                                }) {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .help("编辑评论")
+
+                                Button(action: {
+                                    deleteActivity(id: item.id)
+                                }) {
+                                    Image(systemName: "trash")
+                                        .font(.system(size: 10))
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .help("删除评论")
+                            }
+                            .opacity(hoveredActivityId == item.id ? 1.0 : 0.0)
+                        }
                     }
 
-                    ActivityTextView(text: item.text, state: state)
-                        .padding(.top, 1)
+                    if editingActivityId == item.id {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            TextEditor(text: $editingActivityDraft)
+                                .font(.system(size: 12))
+                                .frame(minHeight: 48, maxHeight: 120)
+                                .scrollContentBackground(.hidden)
+                                .padding(6)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.primary.opacity(0.03))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+
+                            HStack(spacing: 8) {
+                                Button("取消") {
+                                    editingActivityId = nil
+                                    editingActivityDraft = ""
+                                }
+                                .buttonStyle(.plain)
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+
+                                Button(action: {
+                                    updateActivity(id: item.id, body: editingActivityDraft)
+                                }) {
+                                    Text("保存")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(state.effectiveAccentOnColor)
+                                        .padding(.horizontal, 9)
+                                        .padding(.vertical, 3)
+                                        .background(RoundedRectangle(cornerRadius: 5).fill(state.effectiveAccentColor))
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(editingActivityDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            }
+                        }
+                        .padding(.top, 2)
+                    } else {
+                        ActivityTextView(text: item.text, state: state)
+                            .padding(.top, 1)
+                    }
+                }
+                .padding(.vertical, 3)
+                .padding(.horizontal, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(hoveredActivityId == item.id ? Color.primary.opacity(0.02) : Color.clear)
+                )
+                .onHover { h in
+                    hoveredActivityId = h ? item.id : nil
+                }
+                .contextMenu {
+                    Button("编辑") {
+                        editingActivityDraft = item.text
+                        editingActivityId = item.id
+                    }
+                    Button("删除", role: .destructive) {
+                        deleteActivity(id: item.id)
+                    }
                 }
                 .padding(.vertical, 2)
             }
@@ -627,6 +785,8 @@ public struct TaskInspector: View {
     }
 
     private func toggleStatus(_ t: Task) {
+        flushTitleAutoSave()
+        flushDescriptionAutoSave()
         let next: TaskStatus = t.status == .done ? .todo : .done
         try? state.vault?.setTaskStatus(id: t.id, status: next)
         state.objectWillChange.send()
@@ -639,8 +799,9 @@ public struct TaskInspector: View {
         state.objectWillChange.send()
     }
 
-    private func submitActivity() {
-        let clean = newActivityBody.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func submitActivity(_ bodyText: String? = nil) {
+        let textToUse = bodyText ?? newActivityBody
+        let clean = textToUse.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, let v = state.vault else { return }
 
         do {
@@ -649,6 +810,33 @@ public struct TaskInspector: View {
             state.objectWillChange.send()
         } catch {
             print("Failed to add activity:", error)
+        }
+    }
+
+    private func updateActivity(id: String, body: String) {
+        let clean = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, let v = state.vault else { return }
+        do {
+            _ = try v.updateActivity(id: id, body: clean)
+            editingActivityId = nil
+            editingActivityDraft = ""
+            state.objectWillChange.send()
+        } catch {
+            print("Failed to update activity:", error)
+        }
+    }
+
+    private func deleteActivity(id: String) {
+        guard let v = state.vault else { return }
+        do {
+            try v.deleteActivity(id: id)
+            if editingActivityId == id {
+                editingActivityId = nil
+                editingActivityDraft = ""
+            }
+            state.objectWillChange.send()
+        } catch {
+            print("Failed to delete activity:", error)
         }
     }
 
@@ -673,6 +861,10 @@ public struct TaskInspector: View {
     }
 
     private func deleteTask(_ t: Task) {
+        titleAutoSaveWorkItem?.cancel()
+        titleAutoSaveWorkItem = nil
+        descAutoSaveWorkItem?.cancel()
+        descAutoSaveWorkItem = nil
         try? state.vault?.deleteTask(id: t.id)
         state.closeTaskInspector()
         state.objectWillChange.send()
