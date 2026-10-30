@@ -717,9 +717,24 @@ public struct TodayView: View {
         guard let v = state.vault else { return }
         do {
             try v.addTaskToPlan(date: state.todayDateString, taskId: task.id)
-            quickCreateText = ""
-            highlightedCandidateIndex = nil
-            isDropdownVisible = false
+
+            // Adjust highlighted index so keyboard navigation smoothly moves to the next candidate
+            let remaining = filteredCandidates.filter { $0.id != task.id }
+            if let currentIdx = highlightedCandidateIndex {
+                if !remaining.isEmpty {
+                    highlightedCandidateIndex = min(currentIdx, remaining.count - 1)
+                } else {
+                    highlightedCandidateIndex = nil
+                }
+            } else if !remaining.isEmpty && !hasQuery {
+                highlightedCandidateIndex = 0
+            } else {
+                highlightedCandidateIndex = nil
+            }
+
+            // Keep dropdown visible and input focused for continuous multi-selection
+            isDropdownVisible = true
+            isInputFocused = true
             state.objectWillChange.send()
         } catch {
             print("Failed to add task to plan:", error)

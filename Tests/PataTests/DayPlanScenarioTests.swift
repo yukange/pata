@@ -206,4 +206,49 @@ struct DayPlanScenarioTests {
         let updatedPlan = vault.getDayPlan(date: dateStr)
         #expect(updatedPlan.taskIds == [task1.id, task2.id])
     }
+
+    @Test("Given multiple candidate tasks, when continuously selected into DayPlan, then all selected tasks are added in succession and candidates update continuously")
+    func continuousCandidateSelectionScenario() throws {
+        let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let vault = try Vault(rootPath: tmpDir.path)
+
+        let t1 = try vault.createTask(title: "任务 1", status: .todo)
+        let t2 = try vault.createTask(title: "任务 2", status: .todo)
+        let t3 = try vault.createTask(title: "任务 3", status: .todo)
+
+        let dateStr = "2026-10-30"
+
+        // Step 1: Initial available tasks count is 3
+        var currentPlanIds = Set(vault.getDayPlan(date: dateStr).taskIds)
+        var remaining = vault.index.listTasks().filter { !currentPlanIds.contains($0.id) }
+        #expect(remaining.count == 3)
+
+        // Step 2: Select t1 continuously without closing picker
+        try vault.addTaskToPlan(date: dateStr, taskId: t1.id)
+        currentPlanIds = Set(vault.getDayPlan(date: dateStr).taskIds)
+        remaining = vault.index.listTasks().filter { !currentPlanIds.contains($0.id) }
+        #expect(remaining.count == 2)
+        #expect(!remaining.contains { $0.id == t1.id })
+        #expect(remaining.contains { $0.id == t2.id })
+        #expect(remaining.contains { $0.id == t3.id })
+
+        // Step 3: Select t2 continuously
+        try vault.addTaskToPlan(date: dateStr, taskId: t2.id)
+        currentPlanIds = Set(vault.getDayPlan(date: dateStr).taskIds)
+        remaining = vault.index.listTasks().filter { !currentPlanIds.contains($0.id) }
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.id == t3.id)
+
+        // Step 4: Select t3 continuously
+        try vault.addTaskToPlan(date: dateStr, taskId: t3.id)
+        let finalPlan = vault.getDayPlan(date: dateStr)
+        #expect(finalPlan.taskIds == [t1.id, t2.id, t3.id])
+
+        currentPlanIds = Set(finalPlan.taskIds)
+        remaining = vault.index.listTasks().filter { !currentPlanIds.contains($0.id) }
+        #expect(remaining.isEmpty)
+    }
 }
