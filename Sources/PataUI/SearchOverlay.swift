@@ -54,6 +54,11 @@ public struct SearchOverlay: View {
                         .font(.system(size: 14))
                         .textFieldStyle(.plain)
                         .focused($isFieldFocused)
+                        .onSubmit {
+                            if let first = allResults.first {
+                                openItem(first)
+                            }
+                        }
 
                     if !query.isEmpty {
                         Button(action: { query = "" }) {
@@ -65,7 +70,7 @@ public struct SearchOverlay: View {
                     }
 
                     Button("取消") {
-                        state.showSearch = false
+                        state.toggleSearch()
                     }
                     .buttonStyle(.plain)
                     .font(.system(size: 12))
@@ -117,8 +122,7 @@ public struct SearchOverlay: View {
                                 resultSection(title: "任务", count: tasks.count, icon: "checkmark.square", iconColor: Color(red: 4/255, green: 120/255, blue: 87/255)) {
                                     ForEach(tasks.prefix(5), id: \.id) { task in
                                         resultRow(task, icon: "checkmark.square", iconColor: Color(red: 4/255, green: 120/255, blue: 87/255)) {
-                                            state.showSearch = false
-                                            state.selectedTaskId = task.id
+                                            openItem(task)
                                         }
                                     }
                                 }
@@ -129,9 +133,7 @@ public struct SearchOverlay: View {
                                 resultSection(title: "笔记", count: notes.count, icon: "doc.text", iconColor: .blue) {
                                     ForEach(notes.prefix(5), id: \.id) { note in
                                         resultRow(note, icon: "doc.text", iconColor: .blue) {
-                                            state.showSearch = false
-                                            state.currentNav = .notes
-                                            state.selectedNoteId = note.id
+                                            openItem(note)
                                         }
                                     }
                                 }
@@ -142,10 +144,7 @@ public struct SearchOverlay: View {
                                 resultSection(title: "记录", count: activities.count, icon: "bubble.left", iconColor: .orange) {
                                     ForEach(activities.prefix(5), id: \.id) { act in
                                         resultRow(act, icon: "bubble.left", iconColor: .orange) {
-                                            state.showSearch = false
-                                            if let tid = act.taskId {
-                                                state.selectedTaskId = tid
-                                            }
+                                            openItem(act)
                                         }
                                     }
                                 }
@@ -156,11 +155,7 @@ public struct SearchOverlay: View {
                                 resultSection(title: "文件资源", count: files.count, icon: "paperclip", iconColor: .blue) {
                                     ForEach(files.prefix(5), id: \.id) { file in
                                         resultRow(file, icon: "paperclip", iconColor: .blue) {
-                                            state.showSearch = false
-                                            if let root = state.vault?.rootPath {
-                                                let fullPath = (root as NSString).appendingPathComponent(file.path)
-                                                NSWorkspace.shared.selectFile(fullPath, inFileViewerRootedAtPath: root)
-                                            }
+                                            openItem(file)
                                         }
                                     }
                                 }
@@ -223,7 +218,35 @@ public struct SearchOverlay: View {
             .shadow(color: Color.black.opacity(0.2), radius: 24, x: 0, y: 12)
         }
         .onAppear {
-            isFieldFocused = true
+            DispatchQueue.main.async {
+                isFieldFocused = true
+            }
+        }
+        .onExitCommand {
+            state.toggleSearch()
+        }
+    }
+
+    private func openItem(_ item: EntityRef) {
+        state.toggleSearch()
+        switch item.type {
+        case .task:
+            state.selectedTaskId = item.id
+        case .note:
+            state.currentNav = .notes
+            state.selectedNoteId = item.id
+        case .activity:
+            if let tid = item.taskId {
+                state.selectedTaskId = tid
+            }
+        case .dayPlan:
+            state.currentNav = .today
+            state.todayDateString = item.id
+        case .file:
+            if let root = state.vault?.rootPath {
+                let fullPath = (root as NSString).appendingPathComponent(item.path)
+                NSWorkspace.shared.selectFile(fullPath, inFileViewerRootedAtPath: root)
+            }
         }
     }
 

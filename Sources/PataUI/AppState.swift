@@ -131,6 +131,12 @@ public final class AppState: ObservableObject {
         self.savePreferences()
     }
 
+    public func toggleSearch() {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            self.showSearch.toggle()
+        }
+    }
+
     public func openVault(path: String) {
         do {
             let v = try Vault(rootPath: path)

@@ -42,6 +42,17 @@ struct PataApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
             }
+            CommandMenu("查找") {
+                Button("全局搜索与快速跳转") {
+                    AppState.shared.toggleSearch()
+                }
+                .keyboardShortcut("k", modifiers: .command)
+
+                Button("快速打开...") {
+                    AppState.shared.toggleSearch()
+                }
+                .keyboardShortcut("p", modifiers: .command)
+            }
         }
     }
 }
@@ -96,9 +107,12 @@ final class TitlebarCustomizer {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var keyEventMonitor: Any?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         TitlebarCustomizer.install()
+        installKeyMonitor()
         NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeKeyNotification,
             object: nil,
@@ -114,6 +128,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             for window in NSApp.windows {
                 Self.configureWindow(window)
             }
+        }
+    }
+
+    private func installKeyMonitor() {
+        keyEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let keyModifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+            if keyModifiers == .command {
+                if let chars = event.charactersIgnoringModifiers?.lowercased(),
+                   chars == "k" || chars == "p" {
+                    MainActor.assumeIsolated {
+                        AppState.shared.toggleSearch()
+                    }
+                    return nil
+                }
+            } else if keyModifiers == [] && event.keyCode == 53 { // ESC key
+                let isSearchOpen = MainActor.assumeIsolated { AppState.shared.showSearch }
+                if isSearchOpen {
+                    MainActor.assumeIsolated {
+                        AppState.shared.showSearch = false
+                    }
+                    return nil
+                }
+            }
+            return event
         }
     }
 

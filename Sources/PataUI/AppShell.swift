@@ -185,6 +185,22 @@ public struct AppShell: View {
             if state.showSearch {
                 SearchOverlay(state: state)
             }
+
+            // Keyboard shortcut fallback for ⌘K and ⌘P
+            Group {
+                Button(action: { state.toggleSearch() }) {
+                    EmptyView()
+                }
+                .keyboardShortcut("k", modifiers: .command)
+
+                Button(action: { state.toggleSearch() }) {
+                    EmptyView()
+                }
+                .keyboardShortcut("p", modifiers: .command)
+            }
+            .opacity(0)
+            .allowsHitTesting(false)
+            .frame(width: 0, height: 0)
         }
         .preferredColorScheme(preferredColorScheme)
         .frame(minWidth: 1000, minHeight: 650)
@@ -281,7 +297,7 @@ public struct AppShell: View {
             // Right: Search & Settings
             HStack(spacing: 8) {
                 SearchHeaderButton(borderColor: borderColor) {
-                    state.showSearch = true
+                    state.toggleSearch()
                 }
 
                 SettingsHeaderButton(showSettings: state.showSettings) {
@@ -323,7 +339,7 @@ public struct AppShell: View {
             .background(WindowDragArea())
 
             // Search Bar Button in sidebar
-            Button(action: { state.showSearch = true }) {
+            Button(action: { state.toggleSearch() }) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 12))
