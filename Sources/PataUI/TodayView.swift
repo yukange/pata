@@ -2,13 +2,76 @@ import SwiftUI
 import PataCore
 
 public struct TodayView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var state: AppState
     @State private var quickCreateText: String = ""
+    @FocusState private var isInputFocused: Bool
+    @State private var isDropdownVisible: Bool = false
+    @State private var candidateTab: CandidateTab = .uncompleted
+    @State private var highlightedCandidateIndex: Int? = nil
+    @State private var inputWidth: CGFloat = 0
+
     @State private var quickActivityText: String = ""
     @State private var isCreatingActivity: Bool = false
 
+    public enum CandidateTab: String, CaseIterable {
+        case uncompleted = "未完成"
+        case completed = "已完成"
+    }
+
     public init(state: AppState) {
         self.state = state
+    }
+
+    private var hasQuery: Bool {
+        !quickCreateText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var availableTasks: [Task] {
+        guard let v = state.vault else { return [] }
+        let currentPlanIds = Set(dayPlan.taskIds)
+        return v.index.listTasks()
+            .filter { !currentPlanIds.contains($0.id) }
+            .sorted { a, b in
+                if a.createdAt != b.createdAt {
+                    return a.createdAt > b.createdAt
+                }
+                return a.id > b.id
+            }
+    }
+
+    private var filteredCandidates: [Task] {
+        let q = quickCreateText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if q.isEmpty {
+            switch candidateTab {
+            case .uncompleted:
+                return availableTasks.filter { $0.status != .done }
+            case .completed:
+                return availableTasks.filter { $0.status == .done }
+            }
+        } else {
+            return availableTasks.filter {
+                $0.title.lowercased().contains(q) ||
+                $0.tags.contains { $0.lowercased().contains(q) }
+            }
+        }
+    }
+
+    private var candidateListHeight: CGFloat {
+        let count = filteredCandidates.count
+        if count == 0 {
+            return 52
+        }
+        let rowHeight: CGFloat = 34
+        let total = CGFloat(count) * rowHeight + 8
+        return min(total, 220)
+    }
+
+    private var hasAvailableTasks: Bool {
+        if hasQuery {
+            return !filteredCandidates.isEmpty
+        }
+        return !availableTasks.isEmpty
     }
 
     private var todayStr: String {
@@ -143,35 +206,69 @@ public struct TodayView: View {
         return rows.sorted { $0.at > $1.at }
     }
 
-    private var borderColor: Color {
-        switch state.themePreference {
-        case "dark": return Color(red: 41/255, green: 37/255, blue: 36/255)
-        default: return Color(red: 231/255, green: 229/255, blue: 228/255)
+    private var isDarkMode: Bool {
+        if state.themePreference == "dark" {
+            return true
+        } else if state.themePreference == "light" {
+            return false
         }
+        return colorScheme == .dark
+    }
+
+    private var popoverBackground: Color {
+        isDarkMode ? Color(red: 28/255, green: 25/255, blue: 23/255) : Color.white
+    }
+
+    private var popoverFooterBackground: Color {
+        isDarkMode ? Color(red: 38/255, green: 35/255, blue: 33/255) : Color(red: 247/255, green: 246/255, blue: 245/255)
+    }
+
+    private var borderColor: Color {
+        isDarkMode ? Color(red: 41/255, green: 37/255, blue: 36/255) : Color(red: 231/255, green: 229/255, blue: 228/255)
     }
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Top Date Bar
-                dateBar
+            ZStack(alignment: .top) {
+                if isDropdownVisible {
+                    Color.black.opacity(0.0001)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            isDropdownVisible = false
+                            highlightedCandidateIndex = nil
+                            isInputFocused = false
+                        }
+                        .zIndex(1)
+                }
 
-                // Section: Plan
-                planSection
+                VStack(alignment: .leading, spacing: 20) {
+                    // Top Date Bar
+                    dateBar
+                        .zIndex(1)
 
-                // Thin separator
-                Rectangle()
-                    .fill(borderColor)
-                    .frame(height: 1)
-                    .padding(.vertical, 4)
+                    // Section: Plan
+                    planSection
+                        .zIndex(100)
 
-                // Section: Activity Timeline
-                activitySection
+                    // Thin separator
+                    Rectangle()
+                        .fill(borderColor)
+                        .frame(height: 1)
+                        .padding(.vertical, 4)
+                        .zIndex(2)
+
+                    // Section: Activity Timeline
+                    activitySection
+                        .zIndex(1)
+                }
+                .padding(.horizontal, 48)
+                .padding(.top, 24)
+                .padding(.bottom, 64)
+                .frame(maxWidth: 860)
+                .zIndex(10)
             }
-            .padding(.horizontal, 48)
-            .padding(.top, 24)
-            .padding(.bottom, 64)
-            .frame(maxWidth: 860)
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -264,40 +361,17 @@ public struct TodayView: View {
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(.secondary)
             }
+            .zIndex(1)
 
-            // Quick Create Input
-            HStack(spacing: 0) {
-                TextField("添加任务或搜索...", text: $quickCreateText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-                    .padding(.horizontal, 12)
-                    .onSubmit {
-                        submitQuickCreate()
-                    }
-
-                Button(action: submitQuickCreate) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 10, weight: .bold))
-                        Text("添加")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 168/255, green: 184/255, blue: 174/255)))
-                }
-                .buttonStyle(.plain)
-                .padding(.trailing, 6)
-            }
-            .frame(height: 36)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.02)))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(borderColor, lineWidth: 1))
+            // Quick Create Input Container with Dropdown
+            quickCreateInputContainer
+                .zIndex(100)
 
             Text("仅安排今天推进的任务，不改变任务的截止日期。")
                 .font(.system(size: 11))
                 .foregroundColor(.secondary)
                 .padding(.bottom, 2)
+                .zIndex(1)
 
             // Task List
             if !planTasks.isEmpty {
@@ -376,6 +450,282 @@ public struct TodayView: View {
         state.objectWillChange.send()
     }
 
+    // MARK: - Quick Create & Inline Task Picker
+
+    private var quickCreateInputContainer: some View {
+        HStack(spacing: 0) {
+            TextField("添加任务或搜索...", text: $quickCreateText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .padding(.horizontal, 12)
+                .focused($isInputFocused)
+                .onTapGesture {
+                    isDropdownVisible = true
+                }
+                .onSubmit {
+                    handleQuickCreateSubmit()
+                }
+                .onKeyPress(.downArrow) {
+                    if !filteredCandidates.isEmpty {
+                        let current = highlightedCandidateIndex ?? -1
+                        highlightedCandidateIndex = min(current + 1, filteredCandidates.count - 1)
+                        isDropdownVisible = true
+                        return .handled
+                    }
+                    return .ignored
+                }
+                .onKeyPress(.upArrow) {
+                    if !filteredCandidates.isEmpty {
+                        if let current = highlightedCandidateIndex {
+                            if current > 0 {
+                                highlightedCandidateIndex = current - 1
+                            } else {
+                                highlightedCandidateIndex = nil
+                            }
+                            isDropdownVisible = true
+                            return .handled
+                        }
+                    }
+                    return .ignored
+                }
+                .onKeyPress(.escape) {
+                    isDropdownVisible = false
+                    highlightedCandidateIndex = nil
+                    isInputFocused = false
+                    return .handled
+                }
+                .onKeyPress(.leftArrow) {
+                    if !hasQuery {
+                        candidateTab = .uncompleted
+                        highlightedCandidateIndex = nil
+                        isDropdownVisible = true
+                        return .handled
+                    }
+                    return .ignored
+                }
+                .onKeyPress(.rightArrow) {
+                    if !hasQuery {
+                        candidateTab = .completed
+                        highlightedCandidateIndex = nil
+                        isDropdownVisible = true
+                        return .handled
+                    }
+                    return .ignored
+                }
+
+            Button(action: handleQuickCreateSubmit) {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                    Text("添加")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 168/255, green: 184/255, blue: 174/255)))
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 6)
+        }
+        .frame(height: 36)
+        .background(
+            GeometryReader { geo in
+                Color.primary.opacity(0.02)
+                    .preference(key: InputWidthPreferenceKey.self, value: geo.size.width)
+            }
+        )
+        .onPreferenceChange(InputWidthPreferenceKey.self) { width in
+            inputWidth = width
+        }
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(borderColor, lineWidth: 1))
+        .onChange(of: isInputFocused) { _, focused in
+            if focused {
+                isDropdownVisible = true
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if isDropdownVisible && hasAvailableTasks {
+                candidateDropdownView
+                    .frame(width: inputWidth > 0 ? inputWidth : nil)
+                    .offset(y: 40)
+                    .zIndex(200)
+            }
+        }
+        .zIndex(100)
+    }
+
+    private var candidateDropdownView: some View {
+        VStack(spacing: 0) {
+            // 1. Tab Bar (shown when there is no search query)
+            if !hasQuery {
+                HStack(spacing: 4) {
+                    candidateTabButton(title: "未完成", tab: .uncompleted)
+                    candidateTabButton(title: "已完成", tab: .completed)
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+            }
+
+            // 2. Candidate Task List
+            if filteredCandidates.isEmpty {
+                VStack(spacing: 4) {
+                    Text(!hasQuery ? (candidateTab == .uncompleted ? "暂无未完成任务" : "暂无已完成任务") : "未找到相关任务，按 ↵ 创建新任务")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+            } else {
+                ScrollView {
+                    ScrollViewReader { proxy in
+                        VStack(spacing: 1) {
+                            ForEach(Array(filteredCandidates.enumerated()), id: \.element.id) { index, task in
+                                candidateRow(task: task, isHighlighted: highlightedCandidateIndex == index) {
+                                    addExistingTaskToPlan(task)
+                                }
+                                .id(task.id)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 4)
+                        .onChange(of: highlightedCandidateIndex) { _, newIdx in
+                            if let idx = newIdx, idx >= 0, idx < filteredCandidates.count {
+                                proxy.scrollTo(filteredCandidates[idx].id, anchor: .center)
+                            }
+                        }
+                    }
+                }
+                .frame(height: candidateListHeight)
+            }
+
+            Divider()
+
+            // 3. Footer Bar with Shortcuts
+            HStack {
+                HStack(spacing: 4) {
+                    Text("↵")
+                        .font(.system(size: 10, design: .monospaced))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
+
+                    Text(hasQuery ? (highlightedCandidateIndex != nil ? "加入已有" : "创建新任务") : "加入今日")
+                        .font(.system(size: 11))
+                }
+
+                Spacer()
+
+                HStack(spacing: 8) {
+                    HStack(spacing: 3) {
+                        Text("↑")
+                            .font(.system(size: 10, design: .monospaced))
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
+                        Text("↓")
+                            .font(.system(size: 10, design: .monospaced))
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
+                        Text(hasQuery && highlightedCandidateIndex == nil ? "选择" : "移动")
+                            .font(.system(size: 11))
+                    }
+
+                    if !hasQuery {
+                        HStack(spacing: 3) {
+                            Text("←")
+                                .font(.system(size: 10, design: .monospaced))
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
+                                .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
+                            Text("→")
+                                .font(.system(size: 10, design: .monospaced))
+                                .padding(.horizontal, 3)
+                                .padding(.vertical, 1)
+                                .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
+                            Text("分类")
+                                .font(.system(size: 11))
+                        }
+                    }
+
+                    HStack(spacing: 3) {
+                        Text("ESC")
+                            .font(.system(size: 9, design: .monospaced))
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
+                        Text("关闭")
+                            .font(.system(size: 11))
+                    }
+                }
+            }
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(popoverFooterBackground)
+        }
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(popoverBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(borderColor, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .shadow(color: Color.black.opacity(isDarkMode ? 0.35 : 0.14), radius: 14, x: 0, y: 8)
+    }
+
+    private func candidateTabButton(title: String, tab: CandidateTab) -> some View {
+        Button(action: {
+            candidateTab = tab
+            highlightedCandidateIndex = nil
+        }) {
+            Text(title)
+                .font(.system(size: 12, weight: candidateTab == tab ? .semibold : .regular))
+                .foregroundColor(candidateTab == tab ? .primary : .secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(candidateTab == tab ? Color.primary.opacity(0.08) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func candidateRow(task: Task, isHighlighted: Bool, action: @escaping () -> Void) -> some View {
+        CandidateTaskRowView(task: task, isHighlighted: isHighlighted, action: action)
+    }
+
+    private func handleQuickCreateSubmit() {
+        if let idx = highlightedCandidateIndex, idx >= 0, idx < filteredCandidates.count {
+            addExistingTaskToPlan(filteredCandidates[idx])
+        } else if !hasQuery && !filteredCandidates.isEmpty {
+            addExistingTaskToPlan(filteredCandidates[0])
+        } else {
+            submitQuickCreate()
+        }
+    }
+
+    private func addExistingTaskToPlan(_ task: Task) {
+        guard let v = state.vault else { return }
+        do {
+            try v.addTaskToPlan(date: state.todayDateString, taskId: task.id)
+            quickCreateText = ""
+            highlightedCandidateIndex = nil
+            isDropdownVisible = false
+            state.objectWillChange.send()
+        } catch {
+            print("Failed to add task to plan:", error)
+        }
+    }
+
     private func submitQuickCreate() {
         let clean = quickCreateText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty, let v = state.vault else { return }
@@ -383,12 +733,10 @@ public struct TodayView: View {
         // Create task and add to day plan
         do {
             let t = try v.createTask(title: clean, status: .todo, tags: [])
-            var plan = v.getDayPlan(date: state.todayDateString)
-            if !plan.taskIds.contains(t.id) {
-                plan.taskIds.append(t.id)
-                try? v.updateDayPlan(plan)
-            }
+            try v.addTaskToPlan(date: state.todayDateString, taskId: t.id)
             quickCreateText = ""
+            highlightedCandidateIndex = nil
+            isDropdownVisible = false
             state.objectWillChange.send()
         } catch {
             print("Create task failed:", error)
@@ -688,5 +1036,58 @@ public struct DateNavStepperButton: View {
                 isHovered = hovering
             }
         }
+    }
+}
+
+// MARK: - Candidate Task Row View
+
+struct CandidateTaskRowView: View {
+    let task: Task
+    let isHighlighted: Bool
+    let action: () -> Void
+    @State private var isHovered: Bool = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: task.status == .done ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 13))
+                    .foregroundColor(task.status == .done ? Color(red: 4/255, green: 120/255, blue: 87/255) : .secondary.opacity(0.6))
+
+                Text(task.title)
+                    .font(.system(size: 13))
+                    .foregroundColor(task.status == .done ? .secondary : .primary)
+                    .strikethrough(task.status == .done)
+                    .lineLimit(1)
+
+                Spacer()
+
+                ForEach(task.tags.prefix(2), id: \.self) { tag in
+                    Text("#\(tag)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isHighlighted ? Color.primary.opacity(0.08) : (isHovered ? Color.primary.opacity(0.04) : Color.clear))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+// MARK: - Input Width Preference Key
+
+private struct InputWidthPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

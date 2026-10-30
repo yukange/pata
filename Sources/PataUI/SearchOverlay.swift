@@ -3,6 +3,7 @@ import AppKit
 import PataCore
 
 public struct SearchOverlay: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var state: AppState
     @State private var query: String = ""
     @FocusState private var isFieldFocused: Bool
@@ -31,6 +32,19 @@ public struct SearchOverlay: View {
 
     private var files: [EntityRef] {
         allResults.filter { $0.type == .file }
+    }
+
+    private var isDarkMode: Bool {
+        if state.themePreference == "dark" {
+            return true
+        } else if state.themePreference == "light" {
+            return false
+        }
+        return colorScheme == .dark
+    }
+
+    private var modalBackground: Color {
+        isDarkMode ? Color(red: 28/255, green: 25/255, blue: 23/255) : Color.white
     }
 
     public var body: some View {
@@ -213,9 +227,10 @@ public struct SearchOverlay: View {
                 .background(Color.stoneBadgeBg.opacity(0.5))
             }
             .frame(width: 560)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(modalBackground))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(nsColor: .separatorColor).opacity(0.7), lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.2), radius: 24, x: 0, y: 12)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: Color.black.opacity(isDarkMode ? 0.35 : 0.2), radius: 24, x: 0, y: 12)
         }
         .onAppear {
             DispatchQueue.main.async {

@@ -151,4 +151,59 @@ struct DayPlanScenarioTests {
         shiftDay(5)
         #expect(state.todayDateString == todayStr)
     }
+
+    @Test("Given existing vault tasks and a DayPlan, when candidate tasks are queried for inline dropdown, then tasks already in DayPlan are excluded and candidates are categorized and searchable")
+    func inlineTaskCandidatesFilteringScenario() throws {
+        let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let vault = try Vault(rootPath: tmpDir.path)
+
+        // Given: 3 tasks in vault
+        let task1 = try vault.createTask(title: "设计新架构方案", status: .todo, tags: ["architecture"])
+        let task2 = try vault.createTask(title: "修复网络连接问题", status: .todo, tags: ["bug"])
+        let task3 = try vault.createTask(title: "编写需求说明书", status: .done, tags: ["docs"])
+
+        let dateStr = "2026-10-30"
+
+        // And: task1 is already in DayPlan for dateStr
+        try vault.addTaskToPlan(date: dateStr, taskId: task1.id)
+
+        let plan = vault.getDayPlan(date: dateStr)
+        let currentPlanIds = Set(plan.taskIds)
+
+        // When: Filtering available tasks (excluding tasks already in plan)
+        let availableTasks = vault.index.listTasks().filter { !currentPlanIds.contains($0.id) }
+
+        // Then: task1 is excluded, task2 and task3 are available
+        #expect(availableTasks.count == 2)
+        #expect(!availableTasks.contains { $0.id == task1.id })
+        #expect(availableTasks.contains { $0.id == task2.id })
+        #expect(availableTasks.contains { $0.id == task3.id })
+
+        // And: Uncompleted tab filter gives only task2
+        let uncompletedCandidates = availableTasks.filter { $0.status == .todo }
+        #expect(uncompletedCandidates.count == 1)
+        #expect(uncompletedCandidates.first?.id == task2.id)
+
+        // And: Completed tab filter gives only task3
+        let completedCandidates = availableTasks.filter { $0.status == .done }
+        #expect(completedCandidates.count == 1)
+        #expect(completedCandidates.first?.id == task3.id)
+
+        // And: Keyword search "网络" matches task2
+        let searchResults = availableTasks.filter {
+            $0.title.lowercased().contains("网络") || $0.tags.contains { $0.contains("网络") }
+        }
+        #expect(searchResults.count == 1)
+        #expect(searchResults.first?.id == task2.id)
+
+        // When: Selecting task2 to add to DayPlan
+        try vault.addTaskToPlan(date: dateStr, taskId: task2.id)
+
+        // Then: DayPlan now has both task1 and task2
+        let updatedPlan = vault.getDayPlan(date: dateStr)
+        #expect(updatedPlan.taskIds == [task1.id, task2.id])
+    }
 }
