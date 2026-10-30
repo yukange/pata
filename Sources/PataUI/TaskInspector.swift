@@ -199,7 +199,7 @@ public struct TaskInspector: View {
             Spacer()
 
             Menu {
-                Button("复制引用") {
+                Button("复制给 Agent") {
                     copyForAgent(t)
                 }
 
