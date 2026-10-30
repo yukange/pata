@@ -156,7 +156,7 @@ public struct TodayView: View {
                 id: act.id,
                 time: tStr,
                 at: act.at,
-                author: "我",
+                author: act.by == "agent" ? "Agent" : "我",
                 taskTitle: nil,
                 taskId: nil,
                 text: act.body,
@@ -169,12 +169,12 @@ public struct TodayView: View {
             // Activities on task
             for act in t.activities {
                 if df.string(from: act.at) == state.todayDateString {
-                    let isCompletion = act.body.hasPrefix("完成任务：")
+                    let author = act.by == "agent" ? "Agent" : "我"
                     rows.append(TimelineItem(
                         id: act.id,
                         time: tf.string(from: act.at),
                         at: act.at,
-                        author: isCompletion ? "我" : "我",
+                        author: author,
                         taskTitle: t.title,
                         taskId: t.id,
                         text: act.body,
@@ -183,14 +183,37 @@ public struct TodayView: View {
                 }
             }
 
-            // Task completion event if not recorded
-            for ev in t.statusEvents {
-                if df.string(from: ev.at) == state.todayDateString && ev.action == .completed {
-                    let evId = "ev-\(t.id)-\(ev.at.timeIntervalSince1970)"
+            // Task status events (completed / reopened)
+            for (idx, ev) in t.statusEvents.enumerated() {
+                if df.string(from: ev.at) == state.todayDateString {
+                    let isComp = ev.action == .completed
+                    let authorStr: String
+                    if isComp {
+                        authorStr = ev.by == "agent" ? "由 Agent 完成" : "由我完成"
+                    } else {
+                        authorStr = ev.by == "agent" ? "由 Agent 重新打开" : "由我重新打开"
+                    }
+                    let evId = "ev-\(t.id)-\(idx)-\(ev.at.timeIntervalSince1970)"
                     rows.append(TimelineItem(
                         id: evId,
                         time: tf.string(from: ev.at),
                         at: ev.at,
+                        author: authorStr,
+                        taskTitle: t.title,
+                        taskId: t.id,
+                        text: "",
+                        tags: []
+                    ))
+                }
+            }
+
+            // Legacy fallback if task is done and has completedAt on todayDateString but no statusEvents
+            if t.status == .done, t.statusEvents.isEmpty, let compAt = t.completedAt {
+                if df.string(from: compAt) == state.todayDateString {
+                    rows.append(TimelineItem(
+                        id: "comp-\(t.id)",
+                        time: tf.string(from: compAt),
+                        at: compAt,
                         author: "由我完成",
                         taskTitle: t.title,
                         taskId: t.id,
@@ -202,11 +225,12 @@ public struct TodayView: View {
 
             // Creation event
             if df.string(from: t.createdAt) == state.todayDateString {
+                let author = t.createdBy == "agent" ? "由 Agent 创建" : "由我创建"
                 rows.append(TimelineItem(
                     id: "created-\(t.id)",
                     time: tf.string(from: t.createdAt),
                     at: t.createdAt,
-                    author: "由我创建",
+                    author: author,
                     taskTitle: t.title,
                     taskId: t.id,
                     text: "",
@@ -856,7 +880,7 @@ public struct TodayView: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
 
-                Image(systemName: "person.fill")
+                Image(systemName: item.author.contains("Agent") ? "cpu" : "person.fill")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
 
@@ -865,9 +889,15 @@ public struct TodayView: View {
                     .foregroundColor(.secondary)
 
                 if let taskTitle = item.taskTitle {
-                    Text(taskTitle)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(red: 71/255, green: 110/255, blue: 88/255))
+                    if let taskId = item.taskId {
+                        TaskTimelineLinkButton(title: taskTitle) {
+                            state.openTaskInspector(taskId: taskId)
+                        }
+                    } else {
+                        Text(taskTitle)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color(red: 71/255, green: 110/255, blue: 88/255))
+                    }
                 }
 
                 Spacer()
@@ -893,6 +923,13 @@ public struct TodayView: View {
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Clicking a one-line system event without comment body also opens task details
+            if item.text.isEmpty, let taskId = item.taskId {
+                state.openTaskInspector(taskId: taskId)
+            }
+        }
     }
 
     private func submitActivity() {
@@ -1235,5 +1272,32 @@ struct PlanTaskDropDelegate: DropDelegate {
     func performDrop(info: DropInfo) -> Bool {
         onCommit()
         return true
+    }
+}
+
+private struct TaskTimelineLinkButton: View {
+    let title: String
+    let action: () -> Void
+
+    @State private var isHovered: Bool = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Color(red: 71/255, green: 110/255, blue: 88/255))
+                .underline(isHovered)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .help("打开任务详情")
     }
 }
