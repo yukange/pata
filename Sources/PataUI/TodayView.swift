@@ -334,13 +334,14 @@ public struct TodayView: View {
                     }
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                    .frame(height: 24)
                     .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.04)))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(borderColor, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
         }
+        .frame(height: 28)
     }
 
     private func shiftDay(_ delta: Int) {
@@ -989,13 +990,14 @@ public struct TodayToolbarDateBar: View {
                     }
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
+                    .frame(height: 20)
                     .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.04)))
                     .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
             }
         }
+        .frame(height: 24)
     }
 
     private func shiftDay(_ delta: Int) {
