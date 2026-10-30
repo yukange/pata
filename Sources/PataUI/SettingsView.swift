@@ -13,6 +13,7 @@ public struct SettingsView: View {
     @State private var keyMessage: String = ""
     @State private var autoCheckUpdates: Bool = true
     @State private var copiedPath: Bool = false
+    @State private var showColorPopover: Bool = false
 
     private let presetAccents = [
         (name: "蓝色", hex: "#007aff", color: Color(red: 0/255, green: 122/255, blue: 255/255)),
@@ -162,6 +163,34 @@ public struct SettingsView: View {
                         }
                         .buttonStyle(.plain)
                         .help(preset.name)
+                    }
+
+                    // Custom Accent Color Picker
+                    let isPreset = presetAccents.contains { $0.hex.lowercased() == state.accentColorHex.lowercased() }
+                    let isCustomSelected = !state.accentColorHex.isEmpty && !isPreset
+                    let customColor = isCustomSelected ? (Color(hex: state.accentColorHex) ?? .accentColor) : Color.stoneBadgeBg
+
+                    Button(action: { showColorPopover.toggle() }) {
+                        Circle()
+                            .fill(customColor)
+                            .frame(width: 20, height: 20)
+                            .overlay(
+                                Image(systemName: "paintpalette")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(isCustomSelected ? customColor.onAccent : .secondary)
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(isCustomSelected ? Color.primary : Color.clear, lineWidth: 1.5)
+                                    .padding(-2)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .help(isCustomSelected ? "自定义颜色 (\(state.accentColorHex))" : "自定义颜色")
+                    .popover(isPresented: $showColorPopover, arrowEdge: .bottom) {
+                        ModernColorPickerPopover(accentHex: $state.accentColorHex) {
+                            state.savePreferences()
+                        }
                     }
                 }
             }

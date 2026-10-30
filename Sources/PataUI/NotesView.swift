@@ -128,8 +128,8 @@ public struct NotesView: View {
                     }
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 4/255, green: 120/255, blue: 87/255)))
-                    .foregroundColor(.white)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(state.effectiveAccentColor))
+                    .foregroundColor(state.effectiveAccentOnColor)
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()

@@ -70,10 +70,10 @@ public struct TasksView: View {
                             Text("快速创建")
                                 .font(.system(size: 12, weight: .medium))
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(state.effectiveAccentOnColor)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 168/255, green: 184/255, blue: 174/255)))
+                        .background(RoundedRectangle(cornerRadius: 6).fill(state.effectiveAccentColor))
                     }
                     .buttonStyle(.plain)
                     .padding(.trailing, 6)
@@ -182,7 +182,7 @@ public struct TasksView: View {
                 ForEach(task.tags, id: \.self) { tag in
                     Text("#\(tag)")
                         .font(.system(size: 11))
-                        .foregroundColor(Color(red: 71/255, green: 110/255, blue: 88/255))
+                        .foregroundColor(.accentColor)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
                         .background(RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.04)))

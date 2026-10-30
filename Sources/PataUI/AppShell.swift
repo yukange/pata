@@ -202,6 +202,8 @@ public struct AppShell: View {
             .allowsHitTesting(false)
             .frame(width: 0, height: 0)
         }
+        .tint(state.effectiveAccentColor)
+        .accentColor(state.effectiveAccentColor)
         .preferredColorScheme(preferredColorScheme)
         .frame(minWidth: 1000, minHeight: 650)
         .ignoresSafeArea()

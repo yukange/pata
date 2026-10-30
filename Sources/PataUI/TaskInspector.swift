@@ -147,10 +147,10 @@ public struct TaskInspector: View {
                             Text("发送 ⌘↵")
                                 .font(.system(size: 11, weight: .medium))
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(state.effectiveAccentOnColor)
                         .padding(.horizontal, 9)
                         .padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(Color(red: 154/255, green: 178/255, blue: 167/255)))
+                        .background(RoundedRectangle(cornerRadius: 5).fill(state.effectiveAccentColor))
                     }
                     .buttonStyle(.plain)
                     .keyboardShortcut(.return, modifiers: .command)
@@ -243,7 +243,7 @@ public struct TaskInspector: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .foregroundColor(Color(red: 71/255, green: 110/255, blue: 88/255))
+                .foregroundColor(.accentColor)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.04)))
@@ -439,10 +439,10 @@ public struct TaskInspector: View {
                         Button(action: { saveDescription(t) }) {
                             Text("保存")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.white)
+                                .foregroundColor(state.effectiveAccentOnColor)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
-                                .background(RoundedRectangle(cornerRadius: 5).fill(Color.emeraldColor))
+                                .background(RoundedRectangle(cornerRadius: 5).fill(state.effectiveAccentColor))
                         }
                         .buttonStyle(.plain)
                         .keyboardShortcut(.return, modifiers: .command)
@@ -605,11 +605,7 @@ public struct TaskInspector: View {
                         Spacer()
                     }
 
-                    Text(item.text)
-                        .font(.system(size: 13))
-                        .foregroundColor(.primary)
-                        .lineSpacing(3)
-                        .textSelection(.enabled)
+                    ActivityTextView(text: item.text, state: state)
                         .padding(.top, 1)
                 }
                 .padding(.vertical, 2)

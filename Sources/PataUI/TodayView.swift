@@ -558,10 +558,10 @@ public struct TodayView: View {
                     Text("添加")
                         .font(.system(size: 12, weight: .medium))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(state.effectiveAccentOnColor)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 168/255, green: 184/255, blue: 174/255)))
+                .background(RoundedRectangle(cornerRadius: 6).fill(state.effectiveAccentColor))
             }
             .buttonStyle(.plain)
             .padding(.trailing, 6)
@@ -838,10 +838,10 @@ public struct TodayView: View {
                         Text("发送 ⌘↵")
                             .font(.system(size: 11, weight: .medium))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(state.effectiveAccentOnColor)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 154/255, green: 178/255, blue: 167/255)))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(state.effectiveAccentColor))
                 }
                 .buttonStyle(.plain)
                 .keyboardShortcut(.return, modifiers: .command)
@@ -896,7 +896,7 @@ public struct TodayView: View {
                     } else {
                         Text(taskTitle)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Color(red: 71/255, green: 110/255, blue: 88/255))
+                            .foregroundColor(.accentColor)
                     }
                 }
 
@@ -904,19 +904,19 @@ public struct TodayView: View {
             }
 
             if !item.text.isEmpty {
-                Text(item.text)
-                    .font(.system(size: 13))
-                    .foregroundColor(.primary)
-                    .lineSpacing(3)
+                ActivityTextView(text: item.text, state: state)
                     .padding(.top, 2)
             }
 
             if !item.tags.isEmpty {
                 HStack(spacing: 6) {
                     ForEach(item.tags, id: \.self) { t in
-                        Text("#\(t)")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(red: 71/255, green: 110/255, blue: 88/255))
+                        Button(action: { state.navigateToTag(t) }) {
+                            Text("#\(t)")
+                                .font(.system(size: 11))
+                                .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .padding(.top, 2)
@@ -1285,7 +1285,7 @@ private struct TaskTimelineLinkButton: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color(red: 71/255, green: 110/255, blue: 88/255))
+                .foregroundColor(.accentColor)
                 .underline(isHovered)
         }
         .buttonStyle(.plain)

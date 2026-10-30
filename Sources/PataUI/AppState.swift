@@ -66,6 +66,27 @@ public final class AppState: ObservableObject {
     @Published public var themePreference: String = "system" // "system", "light", "dark"
     @Published public var accentColorHex: String = ""
 
+    /// 当前生效的主题强调色（若未指定或跟随系统则返回系统强调色）
+    public var effectiveAccentColor: Color {
+        let clean = accentColorHex.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !clean.isEmpty, let c = Color(hex: clean) {
+            return c
+        }
+        return Color(nsColor: .controlAccentColor)
+    }
+
+    /// 当前生效的主题强调色对应的高对比前景文字颜色（自动计算 AA 级对比度）
+    public var effectiveAccentOnColor: Color {
+        effectiveAccentColor.onAccent
+    }
+
+    /// 用户显式自定义或选定的强调色（若跟随系统则为 nil）
+    public var customAccentColor: Color? {
+        let clean = accentColorHex.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return nil }
+        return Color(hex: clean)
+    }
+
     private let configURL: URL = {
         if CommandLine.arguments.contains("--snapshot") {
             return URL(fileURLWithPath: "/tmp/pata_snapshot_vault.json")
