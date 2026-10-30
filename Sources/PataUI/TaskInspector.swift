@@ -9,6 +9,7 @@ public struct TaskInspector: View {
     @State private var newActivityBody: String = ""
     @State private var isEditingDesc: Bool = false
     @State private var descDraft: String = ""
+    @State private var showDeleteConfirm: Bool = false
 
     // In-place tag editing
     @State private var isAddingTag: Bool = false
@@ -168,6 +169,16 @@ public struct TaskInspector: View {
                 descDraft = ""
                 cancelAddTag()
             }
+            .alert("确认删除任务？", isPresented: $showDeleteConfirm) {
+                Button("删除", role: .destructive) {
+                    if let t = task {
+                        deleteTask(t)
+                    }
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("删除后无法恢复，确定要永久删除该任务吗？")
+            }
         }
     }
 
@@ -177,7 +188,7 @@ public struct TaskInspector: View {
         HStack {
             Button(action: { state.closeTaskInspector() }) {
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.secondary)
                     .padding(8)
                     .contentShape(Rectangle())
@@ -188,20 +199,20 @@ public struct TaskInspector: View {
             Spacer()
 
             Menu {
-                Button("复制给 Agent") {
+                Button("复制引用") {
                     copyForAgent(t)
                 }
 
                 if isTaskInTodayPlan {
-                    Button("移出今日计划") {
+                    Button("移出今日") {
                         removeFromTodayPlan()
                     }
                 }
 
                 Divider()
 
-                Button("删除任务", role: .destructive) {
-                    deleteTask(t)
+                Button("删除", role: .destructive) {
+                    showDeleteConfirm = true
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -211,6 +222,8 @@ public struct TaskInspector: View {
                     .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
         }
         .frame(height: 44)
         .padding(.horizontal, 8)
