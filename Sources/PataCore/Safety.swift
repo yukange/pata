@@ -55,6 +55,20 @@ public final class WriteTracker: @unchecked Sendable {
         return true
     }
 
+    public func hasRecentWrites(inDirectory dirPath: String, window: TimeInterval = 2.0) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        cleanupLocked()
+        let now = Date()
+        let prefix = dirPath.hasSuffix("/") ? dirPath : (dirPath + "/")
+        for (path, record) in recentWrites {
+            if path.hasPrefix(prefix) && now.timeIntervalSince(record.timestamp) <= window {
+                return true
+            }
+        }
+        return false
+    }
+
     private func cleanupLocked() {
         let cutoff = Date().addingTimeInterval(-retention)
         for (p, rec) in recentWrites {

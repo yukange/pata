@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import PataCore
 
 public struct TagView: View {
@@ -12,302 +13,313 @@ public struct TagView: View {
         state.selectedTag ?? "架构设计"
     }
 
-    private var relatedTasks: [Task] {
+    private var items: [EntityRef] {
         guard let v = state.vault else { return [] }
-        return v.index.listTasks().filter { $0.tags.contains(activeTagName) }.sorted { $0.id < $1.id }
+        return v.index.findByTag(activeTagName).sorted { $0.time > $1.time }
     }
 
-    private var relatedNotes: [Note] {
-        guard let v = state.vault else { return [] }
-        return v.index.listNotes().filter { $0.tags.contains(activeTagName) }.sorted { $0.id < $1.id }
+    private var taskCount: Int {
+        items.filter { $0.type == .task }.count
+    }
+
+    private var noteCount: Int {
+        items.filter { $0.type == .note }.count
+    }
+
+    private var activityCount: Int {
+        items.filter { $0.type == .activity }.count
     }
 
     public var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 27) {
-                // Page Header: Eyebrow, Title, Subtitle
-                pageHeader
+            VStack(alignment: .leading, spacing: 16) {
+                // Header with Tag Chip & Counts
+                HStack(spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "number")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(activeTagName)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.stoneTagBg))
+                    .foregroundColor(Color(red: 4/255, green: 120/255, blue: 87/255))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(red: 4/255, green: 120/255, blue: 87/255).opacity(0.3), lineWidth: 1))
 
-                // Section 1: 相关任务
-                tasksSection
+                    Text("共 \(items.count) 项（任务 \(taskCount) · 笔记 \(noteCount) · 记录 \(activityCount)）")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
 
-                // Section 2: 相关笔记
-                notesSection
+                    Spacer()
+                }
+                .padding(.bottom, 8)
+                .overlay(Rectangle().frame(height: 1).foregroundColor(Color(nsColor: .separatorColor).opacity(0.5)), alignment: .bottom)
+
+                // Items list
+                if items.isEmpty {
+                    VStack(spacing: 8) {
+                        Spacer()
+                        Image(systemName: "number")
+                            .font(.system(size: 32))
+                            .foregroundColor(.secondary.opacity(0.3))
+                        Text("暂无相关内容")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 200)
+                    .background(RoundedRectangle(cornerRadius: 12).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(items, id: \.id) { item in
+                            switch item.type {
+                            case .task:
+                                taskCard(item)
+                            case .note:
+                                noteCard(item)
+                            case .activity:
+                                activityCard(item)
+                            default:
+                                EmptyView()
+                            }
+                        }
+                    }
+                }
             }
-            .padding(.horizontal, 46)
-            .padding(.top, 46)
-            .padding(.bottom, 105)
-            .frame(maxWidth: 785)
+            .padding(24)
+            .frame(maxWidth: 900)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Page Header
+    // MARK: - Task Card
 
-    private var pageHeader: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("TAGGED CONTENT")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Color(red: 147/255, green: 162/255, blue: 146/255))
-                .tracking(1.2)
+    private func taskCard(_ item: EntityRef) -> some View {
+        let isSelected = state.selectedTaskId == item.id
 
-            Text("# \(activeTagName)")
-                .font(.system(size: 29, weight: .bold))
-                .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-
-            Text("聚合所有带此标签的任务、笔记与动态。")
-                .font(.system(size: 12))
-                .foregroundColor(Color(red: 137/255, green: 145/255, blue: 136/255))
-        }
-        .padding(.bottom, 6)
-    }
-
-    // MARK: - Tasks Section
-
-    private var tasksSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Text("相关任务")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-
-                Text("\(relatedTasks.count)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 240/255, green: 242/255, blue: 237/255)))
-                    .foregroundColor(Color(red: 164/255, green: 170/255, blue: 162/255))
-            }
-
-            if relatedTasks.isEmpty {
-                Text("没有找到带此标签的任务。")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(red: 161/255, green: 170/255, blue: 160/255))
-                    .padding(.vertical, 12)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(relatedTasks.enumerated()), id: \.element.id) { index, task in
-                        if index > 0 {
-                            Rectangle()
-                                .fill(Color(red: 240/255, green: 241/255, blue: 237/255))
-                                .frame(height: 1)
+        return Button(action: {
+            state.selectedTaskId = item.id
+        }) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Header Row
+                HStack {
+                    HStack(spacing: 6) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.square")
+                                .font(.system(size: 10))
+                            Text("任务")
+                                .font(.system(size: 11, weight: .medium))
                         }
-                        taskRow(task)
-                    }
-                }
-                .background(RoundedRectangle(cornerRadius: 13).fill(Color.white))
-                .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color(red: 232/255, green: 235/255, blue: 229/255), lineWidth: 1))
-                .shadow(color: Color.black.opacity(0.03), radius: 10, x: 0, y: 4)
-            }
-        }
-    }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.stoneTagBg))
+                        .foregroundColor(Color(red: 4/255, green: 120/255, blue: 87/255))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color(red: 4/255, green: 120/255, blue: 87/255).opacity(0.3), lineWidth: 1))
 
-    private func taskRow(_ task: Task) -> some View {
-        let isDone = task.status == .done
-
-        return HStack(spacing: 14) {
-            // Checkbox
-            // Rounded Checkbox
-            Button(action: { toggleTaskStatus(task) }) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 5)
-                        .stroke(isDone ? Color(red: 120/255, green: 163/255, blue: 137/255) : Color(red: 174/255, green: 189/255, blue: 175/255), lineWidth: 1.5)
-                        .frame(width: 17, height: 17)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(Color.white))
-
-                    if isDone {
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(Color(red: 120/255, green: 163/255, blue: 137/255))
-                            .frame(width: 17, height: 17)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Button(action: {
-                    state.currentNav = .tasks
-                    state.openTaskInspector(taskId: task.id)
-                }) {
-                    Text(task.title)
-                        .font(.system(size: 13, weight: .medium))
-                        .strikethrough(isDone)
-                        .foregroundColor(isDone ? Color(red: 167/255, green: 173/255, blue: 165/255) : Color(red: 36/255, green: 40/255, blue: 36/255))
-                }
-                .buttonStyle(.plain)
-
-                HStack(spacing: 4) {
-                    if !task.tags.isEmpty {
-                        Text(task.tags.map { "#\($0)" }.joined(separator: " · "))
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(red: 130/255, green: 137/255, blue: 128/255))
-                    }
-                    if let due = task.due {
-                        Text("· 截止 \(formatDueShort(due))")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(red: 130/255, green: 137/255, blue: 128/255))
-                    }
-                }
-            }
-
-            Spacer()
-
-            if let p = task.extra["priority"], !p.isEmpty {
-                priorityPill(p)
-            }
-        }
-        .padding(.horizontal, 20)
-        .frame(minHeight: 62)
-    }
-
-    // MARK: - Notes Section
-
-    private var notesSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Text("相关笔记")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-
-                Text("\(relatedNotes.count)")
-                    .font(.system(size: 11, design: .monospaced))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 240/255, green: 242/255, blue: 237/255)))
-                    .foregroundColor(Color(red: 164/255, green: 170/255, blue: 162/255))
-            }
-
-            if relatedNotes.isEmpty {
-                Text("没有找到带此标签的笔记。")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(red: 161/255, green: 170/255, blue: 160/255))
-                    .padding(.vertical, 12)
-            } else {
-                VStack(spacing: 12) {
-                    ForEach(relatedNotes) { note in
-                        Button(action: {
-                            state.currentNav = .notes
-                            state.selectedNoteId = note.id
-                        }) {
-                            VStack(alignment: .leading, spacing: 11) {
-                                Text(note.title)
-                                    .font(.system(size: 17, weight: .bold))
-                                    .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-
-                                Text(extractExcerpt(note.body))
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color(red: 120/255, green: 129/255, blue: 121/255))
-                                    .lineSpacing(4)
-                                    .lineLimit(2)
-
-                                HStack {
-                                    HStack(spacing: 8) {
-                                        ForEach(note.tags, id: \.self) { tag in
-                                            Text("#\(tag)")
-                                                .font(.system(size: 11))
-                                                .foregroundColor(Color(red: 101/255, green: 132/255, blue: 105/255))
-                                                .padding(.horizontal, 7)
-                                                .padding(.vertical, 4)
-                                                .background(RoundedRectangle(cornerRadius: 5).fill(Color(red: 239/255, green: 246/255, blue: 238/255)))
-                                        }
-                                    }
-
-                                    Spacer()
-
-                                    Text(formatRelativeDate(note.updatedAt))
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color(red: 173/255, green: 180/255, blue: 172/255))
-                                }
-                            }
-                            .padding(24)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(RoundedRectangle(cornerRadius: 13).fill(Color.white))
-                            .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color(red: 232/255, green: 236/255, blue: 230/255), lineWidth: 1))
-                            .shadow(color: Color.black.opacity(0.03), radius: 10, x: 0, y: 4)
+                        if item.status == .done {
+                            Text("已完成")
+                                .font(.system(size: 11, weight: .medium))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 4).fill(Color.stoneBadgeBg))
+                                .foregroundColor(.secondary)
                         }
-                        .buttonStyle(.plain)
                     }
+
+                    Spacer()
+
+                    Text(formatItemTime(item.time))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                // Content Row
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.title ?? item.id)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.primary)
+
+                        if let snippet = item.snippet, !snippet.isEmpty {
+                            Text(snippet)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 2) {
+                        Text("查看任务")
+                            .font(.system(size: 11))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(.secondary)
                 }
             }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? Color.accentColor : Color(nsColor: .separatorColor).opacity(0.6), lineWidth: isSelected ? 1.5 : 1))
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Helpers
+    // MARK: - Note Card
 
-    private func priorityPill(_ p: String) -> some View {
-        let (bg, fg): (Color, Color) = {
-            switch p.uppercased() {
-            case "P1":
-                return (Color(red: 253/255, green: 240/255, blue: 238/255), Color(red: 217/255, green: 83/255, blue: 79/255))
-            case "P2":
-                return (Color(red: 254/255, green: 246/255, blue: 231/255), Color(red: 217/255, green: 155/255, blue: 38/255))
-            case "P3":
-                return (Color(red: 240/255, green: 242/255, blue: 237/255), Color(red: 130/255, green: 137/255, blue: 128/255))
-            default:
-                return (Color(red: 240/255, green: 242/255, blue: 237/255), Color(red: 130/255, green: 137/255, blue: 128/255))
+    private func noteCard(_ item: EntityRef) -> some View {
+        Button(action: {
+            state.currentNav = .notes
+            state.selectedNoteId = item.id
+        }) {
+            VStack(alignment: .leading, spacing: 8) {
+                // Header Row
+                HStack {
+                    HStack(spacing: 4) {
+                        Image(systemName: "doc.text")
+                            .font(.system(size: 10))
+                        Text("笔记")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.blue.opacity(0.1)))
+                    .foregroundColor(.blue)
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.blue.opacity(0.3), lineWidth: 1))
+
+                    Spacer()
+
+                    Text(formatItemTime(item.time))
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                // Content Row
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.title ?? item.id)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.primary)
+
+                        if let snippet = item.snippet, !snippet.isEmpty {
+                            Text(snippet)
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                        }
+                    }
+
+                    Spacer()
+
+                    HStack(spacing: 2) {
+                        Text("打开笔记")
+                            .font(.system(size: 11))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 9))
+                    }
+                    .foregroundColor(.secondary)
+                }
             }
-        }()
-
-        return Text(p)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(fg)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: 5).fill(bg))
-    }
-
-    private func formatDueShort(_ due: String) -> String {
-        let parts = due.split(separator: "-")
-        if parts.count == 3 {
-            return "\(parts[1])/\(parts[2])"
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
         }
-        return due
+        .buttonStyle(.plain)
     }
 
-    private func extractExcerpt(_ body: String) -> String {
-        let lines = body.components(separatedBy: "\n")
-        for line in lines {
-            let t = line.trimmingCharacters(in: .whitespaces)
-            if !t.isEmpty && !t.hasPrefix("#") && !t.hasPrefix("-") && !t.hasPrefix(">") {
-                return t
+    // MARK: - Activity Card
+
+    private func activityCard(_ item: EntityRef) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Header Row
+            HStack {
+                HStack(spacing: 6) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "bubble.left")
+                            .font(.system(size: 10))
+                        Text("记录")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.orange.opacity(0.1)))
+                    .foregroundColor(.orange)
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+
+                    if item.inherited {
+                        Text("经父任务")
+                            .font(.system(size: 11, weight: .medium))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(RoundedRectangle(cornerRadius: 4).fill(Color.orange.opacity(0.15)))
+                            .foregroundColor(.orange)
+                    }
+
+                    if let taskId = item.taskId {
+                        Text("所属任务: \(item.title ?? taskId)")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Text("今日计划")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Text(formatItemTime(item.time))
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+
+            // Body
+            Text(item.snippet ?? "（无正文内容）")
+                .font(.system(size: 13))
+                .foregroundColor(.primary)
+                .lineLimit(3)
+                .lineSpacing(2)
+
+            // Jump to task button
+            if let taskId = item.taskId {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        state.selectedTaskId = taskId
+                    }) {
+                        HStack(spacing: 3) {
+                            Text("查看任务")
+                                .font(.system(size: 11))
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 9))
+                        }
+                        .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 2)
             }
         }
-        return ""
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
     }
 
-    private func formatRelativeDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        let todayStr = state.todayDateString
-        let dateStr = f.string(from: d)
-
-        let fTime = DateFormatter()
-        fTime.dateFormat = "HH:mm"
-
+    private func formatItemTime(_ date: Date) -> String {
         let cal = Calendar.current
-        var yesterdayStr = ""
-        if let todayDate = f.date(from: todayStr),
-           let yDate = cal.date(byAdding: .day, value: -1, to: todayDate) {
-            yesterdayStr = f.string(from: yDate)
-        }
-
-        if dateStr == todayStr {
-            return "今天 \(fTime.string(from: d))"
-        } else if dateStr == yesterdayStr {
-            return "昨天 \(fTime.string(from: d))"
+        let formatter = DateFormatter()
+        if cal.isDateInToday(date) {
+            formatter.dateFormat = "HH:mm"
+            return "今天 \(formatter.string(from: date))"
+        } else if cal.isDate(date, equalTo: Date(), toGranularity: .year) {
+            formatter.dateFormat = "MM-dd HH:mm"
+            return formatter.string(from: date)
         } else {
-            let month = cal.component(.month, from: d)
-            let day = cal.component(.day, from: d)
-            return "\(month) 月 \(day) 日"
+            formatter.dateFormat = "yyyy-MM-dd HH:mm"
+            return formatter.string(from: date)
         }
-    }
-
-    private func toggleTaskStatus(_ task: Task) {
-        guard let v = state.vault else { return }
-        let newStatus: TaskStatus = task.status == .done ? .todo : .done
-        try? v.setTaskStatus(id: task.id, status: newStatus)
     }
 }

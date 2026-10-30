@@ -52,14 +52,15 @@ public final class Vault: @unchecked Sendable {
         mutationLock.lock()
         defer { mutationLock.unlock() }
 
-        index.clear()
         index.vaultRoot = rootPath
+        var seenPaths = Set<String>()
 
         // 1. Scan tasks/
         let tasksDir = (rootPath as NSString).appendingPathComponent("tasks")
         if let taskFiles = try? FileManager.default.contentsOfDirectory(atPath: tasksDir) {
             for f in taskFiles.sorted() where f.hasSuffix(".md") {
-                let absPath = (tasksDir as NSString).appendingPathComponent(f)
+                let absPath = URL(fileURLWithPath: (tasksDir as NSString).appendingPathComponent(f)).standardized.path
+                seenPaths.insert(absPath)
                 do {
                     let (baseline, data) = try Safety.readBaseline(absPath: absPath)
                     guard let text = String(data: data, encoding: .utf8) else { continue }
@@ -73,13 +74,14 @@ public final class Vault: @unchecked Sendable {
 
         // 2. Scan notes/ (recursively)
         let notesDir = (rootPath as NSString).appendingPathComponent("notes")
-        scanNotesDirectory(notesDir)
+        scanNotesDirectory(notesDir, seenPaths: &seenPaths)
 
         // 3. Scan plans/
         let plansDir = (rootPath as NSString).appendingPathComponent("plans")
         if let planFiles = try? FileManager.default.contentsOfDirectory(atPath: plansDir) {
             for f in planFiles.sorted() where f.hasSuffix(".md") {
-                let absPath = (plansDir as NSString).appendingPathComponent(f)
+                let absPath = URL(fileURLWithPath: (plansDir as NSString).appendingPathComponent(f)).standardized.path
+                seenPaths.insert(absPath)
                 do {
                     let (baseline, data) = try Safety.readBaseline(absPath: absPath)
                     guard let text = String(data: data, encoding: .utf8) else { continue }
@@ -93,18 +95,22 @@ public final class Vault: @unchecked Sendable {
 
         // 4. Scan files/ (recursively)
         let filesDir = (rootPath as NSString).appendingPathComponent("files")
-        scanFilesDirectory(filesDir)
+        scanFilesDirectory(filesDir, seenPaths: &seenPaths)
+
+        // 5. Prune deleted files
+        index.pruneMissingPaths(validPaths: seenPaths)
     }
 
-    private func scanFilesDirectory(_ dir: String) {
+    private func scanFilesDirectory(_ dir: String, seenPaths: inout Set<String>) {
         guard let items = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return }
         for item in items where !item.hasPrefix(".") {
-            let fullPath = (dir as NSString).appendingPathComponent(item)
+            let fullPath = URL(fileURLWithPath: (dir as NSString).appendingPathComponent(item)).standardized.path
             var isDir: ObjCBool = false
             if FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir) {
                 if isDir.boolValue {
-                    scanFilesDirectory(fullPath)
+                    scanFilesDirectory(fullPath, seenPaths: &seenPaths)
                 } else {
+                    seenPaths.insert(fullPath)
                     if let attrs = try? FileManager.default.attributesOfItem(atPath: fullPath),
                        let size = attrs[.size] as? Int64,
                        let modTime = attrs[.modificationDate] as? Date {
@@ -124,15 +130,16 @@ public final class Vault: @unchecked Sendable {
         }
     }
 
-    private func scanNotesDirectory(_ dir: String) {
+    private func scanNotesDirectory(_ dir: String, seenPaths: inout Set<String>) {
         guard let items = try? FileManager.default.contentsOfDirectory(atPath: dir) else { return }
         for item in items where !item.hasPrefix(".") {
-            let fullPath = (dir as NSString).appendingPathComponent(item)
+            let fullPath = URL(fileURLWithPath: (dir as NSString).appendingPathComponent(item)).standardized.path
             var isDir: ObjCBool = false
             if FileManager.default.fileExists(atPath: fullPath, isDirectory: &isDir) {
                 if isDir.boolValue {
-                    scanNotesDirectory(fullPath)
+                    scanNotesDirectory(fullPath, seenPaths: &seenPaths)
                 } else if item.hasSuffix(".md") {
+                    seenPaths.insert(fullPath)
                     do {
                         let (baseline, data) = try Safety.readBaseline(absPath: fullPath)
                         guard let text = String(data: data, encoding: .utf8) else { continue }
@@ -674,6 +681,9 @@ public final class Vault: @unchecked Sendable {
 
             source.setEventHandler { [weak self] in
                 guard let self = self else { return }
+                if self.tracker.hasRecentWrites(inDirectory: path, window: 2.0) {
+                    return
+                }
                 try? self.rescan()
                 self.onEvent?(VaultEvent(op: "update", path: path))
             }

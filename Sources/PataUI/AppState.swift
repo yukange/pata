@@ -127,8 +127,8 @@ public final class AppState: ObservableObject {
     public func toggleSidebar() {
         withAnimation(.easeInOut(duration: 0.2)) {
             self.isSidebarVisible.toggle()
-            self.savePreferences()
         }
+        self.savePreferences()
     }
 
     public func openVault(path: String) {

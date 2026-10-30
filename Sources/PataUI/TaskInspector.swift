@@ -6,12 +6,12 @@ public struct TaskInspector: View {
     @ObservedObject var state: AppState
     let taskId: String
 
-    @State private var newActivityText: String = ""
-    @State private var showDuePopover: Bool = false
-    @State private var showDeleteConfirm: Bool = false
-    @State private var copiedForAgent: Bool = false
+    @State private var newActivityBody: String = ""
+    @State private var isEditingDesc: Bool = false
+    @State private var descDraft: String = ""
     @State private var newTagInput: String = ""
-    @State private var isAddingTag: Bool = false
+    @State private var showTagPopover: Bool = false
+    @State private var showDuePopover: Bool = false
 
     public init(state: AppState, taskId: String) {
         self.state = state
@@ -22,427 +22,316 @@ public struct TaskInspector: View {
         state.vault?.index.getTask(taskId)
     }
 
-    private var isTaskInTodayPlan: Bool {
-        guard let v = state.vault else { return false }
-        let plan = v.getDayPlan(date: state.todayDateString)
-        return plan.taskIds.contains(taskId)
+    private var isOverdue: Bool {
+        guard let t = task, let due = t.due, t.status != .done else { return false }
+        return due < state.todayDateString
+    }
+
+    private var borderColor: Color {
+        switch state.themePreference {
+        case "dark": return Color(red: 41/255, green: 37/255, blue: 36/255)
+        default: return Color(red: 231/255, green: 229/255, blue: 228/255)
+        }
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            if let t = task {
-                // Top Navigation Bar
-                topHeaderBar(t)
+        if let t = task {
+            VStack(spacing: 0) {
+                // Top header bar (close arrow -> and more menu ...)
+                inspectorHeader(t)
 
                 Divider()
 
-                // Scrollable Content
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
                         // Title
-                        titleView(t)
+                        Text(t.title)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.primary)
 
-                        // Properties: Status, Due Date, Tags
-                        propertiesView(t)
+                        // Status & Due Date Row
+                        HStack(spacing: 12) {
+                            Button(action: { toggleStatus(t) }) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: t.status == .done ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(t.status == .done ? Color.emeraldColor : .secondary)
+                                    Text(t.status == .done ? "已完成" : "待办")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.primary)
+                                }
+                            }
+                            .buttonStyle(.plain)
 
-                        // Description
-                        descriptionView(t)
+                            if let due = t.due {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "calendar")
+                                        .font(.system(size: 11))
+                                    Text(isOverdue ? "\(due) (已逾期)" : "\(due) 截止")
+                                        .font(.system(size: 12, weight: isOverdue ? .medium : .regular))
+                                }
+                                .foregroundColor(isOverdue ? Color(red: 220/255, green: 38/255, blue: 38/255) : .secondary)
+                            }
+                        }
+
+                        // Tags Row
+                        HStack(spacing: 6) {
+                            ForEach(t.tags, id: \.self) { tag in
+                                HStack(spacing: 3) {
+                                    Text("#\(tag)")
+                                        .font(.system(size: 11))
+                                    Button(action: { removeTag(t, tag) }) {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 8))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .foregroundColor(Color(red: 71/255, green: 110/255, blue: 88/255))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.04)))
+                            }
+
+                            Button(action: { showTagPopover.toggle() }) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 9))
+                                    Text("标签")
+                                        .font(.system(size: 11))
+                                }
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 4).fill(Color.primary.opacity(0.02)))
+                                .overlay(RoundedRectangle(cornerRadius: 4).stroke(borderColor, lineWidth: 1))
+                            }
+                            .buttonStyle(.plain)
+                            .popover(isPresented: $showTagPopover) {
+                                tagPopoverContent(t)
+                            }
+                        }
 
                         Divider()
 
-                        // Activity Timeline
-                        activitiesSection(t)
+                        // Description Section
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("描述")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+
+                            Text(t.description.isEmpty ? "暂无描述" : t.description)
+                                .font(.system(size: 13))
+                                .foregroundColor(.primary)
+                                .lineSpacing(3)
+                        }
+
+                        Divider()
+
+                        // Activities Section
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("活动")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+
+                            // Created event
+                            HStack(spacing: 6) {
+                                Text(formatTime(t.createdAt))
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.secondary)
+                                Text("由我创建")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                            }
+
+                            // Activities
+                            ForEach(t.activities) { act in
+                                VStack(alignment: .leading, spacing: 3) {
+                                    HStack(spacing: 6) {
+                                        Text(formatTime(act.at))
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(.secondary)
+                                        Image(systemName: "person.fill")
+                                            .font(.system(size: 9))
+                                            .foregroundColor(.secondary)
+                                        Text("我")
+                                            .font(.system(size: 11))
+                                            .foregroundColor(.secondary)
+                                        Spacer()
+                                    }
+
+                                    Text(act.body)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(.primary)
+                                        .padding(.top, 1)
+                                }
+                            }
+                        }
                     }
                     .padding(20)
                 }
 
-                Divider()
+                // Bottom Activity Composer
+                VStack(alignment: .trailing, spacing: 6) {
+                    TextEditor(text: $newActivityBody)
+                        .font(.system(size: 12))
+                        .frame(height: 52)
+                        .scrollContentBackground(.hidden)
+                        .padding(6)
+                        .overlay(
+                            Group {
+                                if newActivityBody.isEmpty {
+                                    Text("记录进展...")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary.opacity(0.6))
+                                        .padding(.leading, 10)
+                                        .padding(.top, 10)
+                                        .allowsHitTesting(false)
+                                }
+                            },
+                            alignment: .topLeading
+                        )
 
-                // Bottom Composer
-                VStack(spacing: 8) {
-                    ActivityComposer(text: $newActivityText, placeholder: "添加活动或评论... (⌘+Enter 发送)") {
-                        submitActivity(t)
+                    Button(action: submitActivity) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "paperplane.fill")
+                                .font(.system(size: 9))
+                            Text("发送 ⌘↵")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(RoundedRectangle(cornerRadius: 5).fill(Color(red: 154/255, green: 178/255, blue: 167/255)))
                     }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .padding(.trailing, 8)
+                    .padding(.bottom, 6)
                 }
+                .background(Color.primary.opacity(0.02))
+                .overlay(
+                    Rectangle()
+                        .stroke(borderColor, lineWidth: 1)
+                )
                 .padding(12)
-                .background(Color(nsColor: .windowBackgroundColor))
-            } else {
-                VStack(spacing: 12) {
-                    Spacer()
-                    Image(systemName: "checkmark.seal")
-                        .font(.system(size: 32))
-                        .foregroundColor(.secondary)
-                    Text("任务已删除或不存在")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        }
-        .frame(minWidth: 320, maxWidth: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .alert("确认删除任务？", isPresented: $showDeleteConfirm) {
-            Button("删除", role: .destructive) {
-                deleteTask()
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("删除后无法恢复，确定要永久删除该任务吗？")
         }
     }
 
-    // MARK: - Top Header Bar
-
-    private func topHeaderBar(_ t: Task) -> some View {
-        HStack(spacing: 10) {
+    private func inspectorHeader(_ t: Task) -> some View {
+        HStack {
             Button(action: { state.closeTaskInspector() }) {
                 Image(systemName: "arrow.right")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
-                    .padding(4)
+                    .padding(8)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("关闭详情")
 
             Spacer()
 
-            if copiedForAgent {
-                Text("已复制")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-            }
-
             Menu {
-                Button(action: copyForAgent) {
-                    Label("复制给 Agent", systemImage: "doc.on.doc")
+                Button("复制给 Agent (⌘⇧C)") {
+                    copyForAgent(t)
                 }
-
-                if isTaskInTodayPlan {
-                    Button(action: removeFromTodayPlan) {
-                        Label("移出今日计划", systemImage: "calendar.badge.minus")
-                    }
-                }
-
                 Divider()
-
-                Button(role: .destructive, action: { showDeleteConfirm = true }) {
-                    Label("删除任务", systemImage: "trash")
+                Button("删除任务", role: .destructive) {
+                    deleteTask(t)
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 14))
                     .foregroundColor(.secondary)
-                    .frame(width: 20, height: 20)
+                    .padding(8)
+                    .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
-            .frame(width: 24)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .frame(height: 44)
+        .padding(.horizontal, 8)
     }
 
-    // MARK: - Title
-
-    private func titleView(_ t: Task) -> some View {
-        TextField("任务标题...", text: Binding(
-            get: { t.title },
-            set: { updateTitle(t, $0) }
-        ))
-        .font(.system(size: 18, weight: .bold))
-        .textFieldStyle(.plain)
-    }
-
-    // MARK: - Properties
-
-    private func propertiesView(_ t: Task) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 12) {
-                // Status Toggle Button
-                Button(action: { toggleStatus(t) }) {
-                    HStack(spacing: 6) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 3)
-                                .stroke(t.status == .done ? Color.green : Color.secondary.opacity(0.6), lineWidth: 1.2)
-                                .frame(width: 14, height: 14)
-
-                            if t.status == .done {
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(Color.green)
-                                    .frame(width: 10, height: 10)
-                            }
-                        }
-
-                        Text(t.status == .done ? "已完成" : "待办")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(t.status == .done ? .green : .primary)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(t.status == .done ? Color.green.opacity(0.12) : Color.secondary.opacity(0.1))
-                    )
+    private func tagPopoverContent(_ t: Task) -> some View {
+        VStack(spacing: 8) {
+            TextField("输入标签...", text: $newTagInput)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit {
+                    addTag(t)
                 }
-                .buttonStyle(.plain)
-
-                // Due Date Button & Popover
-                Button(action: { showDuePopover.toggle() }) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 12))
-                        Text(formatDueDisplay(t.due))
-                            .font(.system(size: 12))
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.1)))
-                    .foregroundColor(t.due != nil ? (isOverdue(t.due!) ? .red : .primary) : .secondary)
-                }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showDuePopover) {
-                    duePickerPopover(t)
-                }
-            }
-
-            // Tags Editor
-            HStack(spacing: 6) {
-                Image(systemName: "tag")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-
-                ForEach(t.tags, id: \.self) { tag in
-                    HStack(spacing: 3) {
-                        Text("#\(tag)")
-                            .font(.system(size: 11))
-                        Button(action: { removeTag(t, tag) }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 9))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.12)))
-                    .foregroundColor(.secondary)
-                }
-
-                if isAddingTag {
-                    TextField("标签名", text: $newTagInput)
-                        .font(.system(size: 11))
-                        .textFieldStyle(.plain)
-                        .frame(width: 70)
-                        .onSubmit {
-                            addTag(t)
-                        }
-                } else {
-                    Button(action: { isAddingTag = true }) {
-                        Text("+ 标签")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
+            Button("添加") {
+                addTag(t)
             }
         }
-    }
-
-    // MARK: - Due Picker Popover
-
-    private func duePickerPopover(_ t: Task) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Button("今天") {
-                setDueDate(t, dateOffset: 0)
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, 2)
-
-            Button("明天") {
-                setDueDate(t, dateOffset: 1)
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, 2)
-
-            Button("下周一") {
-                setDueNextMonday(t)
-            }
-            .buttonStyle(.plain)
-            .padding(.vertical, 2)
-
-            Divider()
-
-            if t.due != nil {
-                Button("清除截止日期") {
-                    var updated = t
-                    updated.due = nil
-                    try? state.vault?.updateTask(updated)
-                    showDuePopover = false
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.red)
-                .padding(.vertical, 2)
-            }
-        }
-        .font(.system(size: 12))
         .padding(12)
-        .frame(width: 140)
+        .frame(width: 180)
     }
 
-    // MARK: - Description
-
-    private func descriptionView(_ t: Task) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("描述")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.secondary)
-
-            TextEditor(text: Binding(
-                get: { t.description },
-                set: { updateDescription(t, $0) }
-            ))
-            .font(.system(size: 13))
-            .frame(minHeight: 64)
-            .padding(6)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color(nsColor: .controlBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor), lineWidth: 0.8))
-        }
-    }
-
-    // MARK: - Activities
-
-    private func activitiesSection(_ t: Task) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("活动记录 (\(t.activities.count))")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.secondary)
-
-            let sortedActs = t.activities.sorted { $0.at < $1.at }
-            if sortedActs.isEmpty {
-                Text("尚无活动记录")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-                    .padding(.vertical, 4)
-            } else {
-                ForEach(sortedActs) { act in
-                    ActivityItemView(
-                        activity: act,
-                        onSaveEdit: { newBody in
-                            try? state.vault?.updateActivity(id: act.id, body: newBody)
-                        },
-                        onDelete: {
-                            try? state.vault?.deleteActivity(id: act.id)
-                        }
-                    )
-                }
-            }
-        }
-    }
-
-    // MARK: - Helpers & Actions
-
-    private func formatDueDisplay(_ due: String?) -> String {
-        guard let due = due, !due.isEmpty else { return "添加截止日期" }
-        let today = state.todayDateString
-        if due == today { return "今天截止" }
-        if due < today { return "\(due) (已逾期)" }
-        return "\(due) 截止"
-    }
-
-    private func isOverdue(_ due: String) -> Bool {
-        due < state.todayDateString
-    }
-
-    private func setDueDate(_ t: Task, dateOffset: Int) {
+    private func formatTime(_ d: Date) -> String {
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        if let d = Calendar.current.date(byAdding: .day, value: dateOffset, to: Date()) {
-            var updated = t
-            updated.due = f.string(from: d)
-            try? state.vault?.updateTask(updated)
-        }
-        showDuePopover = false
+        f.dateFormat = "MM-dd HH:mm"
+        return f.string(from: d)
     }
 
-    private func setDueNextMonday(_ t: Task) {
-        let calendar = Calendar.current
-        var comps = DateComponents()
-        comps.weekday = 2 // Monday
-        if let nextMon = calendar.nextDate(after: Date(), matching: comps, matchingPolicy: .nextTime) {
-            let f = DateFormatter()
-            f.dateFormat = "yyyy-MM-dd"
-            var updated = t
-            updated.due = f.string(from: nextMon)
-            try? state.vault?.updateTask(updated)
-        }
-        showDuePopover = false
+    private func toggleStatus(_ t: Task) {
+        let next: TaskStatus = t.status == .done ? .todo : .done
+        try? state.vault?.setTaskStatus(id: t.id, status: next)
+        state.objectWillChange.send()
     }
 
-    private func toggleStatus(_ task: Task) {
-        let newStatus: TaskStatus = task.status == .done ? .todo : .done
-        try? state.vault?.setTaskStatus(id: task.id, status: newStatus)
+    private func removeTag(_ t: Task, _ tag: String) {
+        var updated = t
+        updated.tags.removeAll { $0.lowercased() == tag.lowercased() }
+        try? state.vault?.updateTask(updated)
+        state.objectWillChange.send()
     }
 
-    private func updateTitle(_ task: Task, _ newTitle: String) {
-        var t = task
-        t.title = newTitle
-        try? state.vault?.updateTask(t)
-    }
-
-    private func updateDescription(_ task: Task, _ desc: String) {
-        var t = task
-        t.description = desc
-        try? state.vault?.updateTask(t)
-    }
-
-    private func removeTag(_ task: Task, _ tagToRemove: String) {
-        var t = task
-        t.tags.removeAll { $0.lowercased() == tagToRemove.lowercased() }
-        try? state.vault?.updateTask(t)
-    }
-
-    private func addTag(_ task: Task) {
+    private func addTag(_ t: Task) {
         let clean = newTagInput.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
-        guard !clean.isEmpty else {
-            isAddingTag = false
-            return
-        }
-        var t = task
-        if !t.tags.contains(where: { $0.lowercased() == clean.lowercased() }) {
-            t.tags.append(clean)
-            try? state.vault?.updateTask(t)
+        guard !clean.isEmpty else { return }
+        var updated = t
+        if !updated.tags.contains(clean) {
+            updated.tags.append(clean)
+            try? state.vault?.updateTask(updated)
+            state.objectWillChange.send()
         }
         newTagInput = ""
-        isAddingTag = false
+        showTagPopover = false
     }
 
-    private func submitActivity(_ task: Task) {
-        let text = newActivityText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let v = state.vault else { return }
+    private func submitActivity() {
+        let clean = newActivityBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, let v = state.vault else { return }
 
-        _ = try? v.createActivity(taskId: task.id, body: text)
-        newActivityText = ""
-    }
-
-    private func copyForAgent() {
-        let prompt = "处理这个 Pata 任务：pata://task/\(taskId)"
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(prompt, forType: .string)
-        copiedForAgent = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            copiedForAgent = false
+        do {
+            _ = try v.createActivity(taskId: taskId, date: state.todayDateString, body: clean)
+            newActivityBody = ""
+            state.objectWillChange.send()
+        } catch {
+            print("Failed to add activity:", error)
         }
     }
 
-    private func removeFromTodayPlan() {
-        guard let v = state.vault else { return }
-        var plan = v.getDayPlan(date: state.todayDateString)
-        plan.taskIds.removeAll { $0 == taskId }
-        try? v.updateDayPlan(plan)
+    private func copyForAgent(_ t: Task) {
+        let text = """
+        [Pata 任务参考]
+        ID: \(t.id)
+        标题: \(t.title)
+        状态: \(t.status == .done ? "done" : "todo")
+        URI: pata://task/\(t.id)
+        """
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
-    private func deleteTask() {
-        try? state.vault?.deleteTask(id: taskId)
+    private func deleteTask(_ t: Task) {
+        try? state.vault?.deleteTask(id: t.id)
         state.closeTaskInspector()
+        state.objectWillChange.send()
     }
 }

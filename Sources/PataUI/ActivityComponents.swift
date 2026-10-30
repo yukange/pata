@@ -176,3 +176,18 @@ public struct ActivityItemView: View {
         }
     }
 }
+
+extension Color {
+    public static var emeraldColor: Color {
+        Color(red: 4/255, green: 120/255, blue: 87/255)
+    }
+    public static var stoneBadgeBg: Color {
+        Color(nsColor: .separatorColor).opacity(0.3)
+    }
+    public static var stoneSelectedBg: Color {
+        Color(nsColor: .selectedContentBackgroundColor).opacity(0.2)
+    }
+    public static var stoneTagBg: Color {
+        Color(red: 4/255, green: 120/255, blue: 87/255).opacity(0.1)
+    }
+}

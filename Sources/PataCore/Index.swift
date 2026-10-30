@@ -619,6 +619,35 @@ public final class MemoryIndex: @unchecked Sendable {
         recomputeDanglingRefsLocked()
     }
 
+    public func pruneMissingPaths(validPaths: Set<String>) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let currentFileToID = fileToID
+        for (path, id) in currentFileToID {
+            if !validPaths.contains(path) {
+                fileToID.removeValue(forKey: path)
+                idToFile.removeValue(forKey: id)
+                tasks.removeValue(forKey: id)
+                notes.removeValue(forKey: id)
+                dayPlans.removeValue(forKey: id)
+                baselines.removeValue(forKey: path)
+                activityLocs = activityLocs.filter { $0.value.path != path }
+            }
+        }
+
+        let currentFiles = Array(files.keys)
+        for rel in currentFiles {
+            let abs = (vaultRoot as NSString).appendingPathComponent(rel)
+            let standard = URL(fileURLWithPath: abs).standardized.path
+            if !validPaths.contains(standard) {
+                files.removeValue(forKey: rel)
+            }
+        }
+
+        recomputeDanglingRefsLocked()
+    }
+
     private func recomputeDanglingRefsLocked() {
         var dangling: [DanglingRef] = []
 

@@ -8,26 +8,36 @@ public struct NotesView: View {
     @ObservedObject var state: AppState
     @StateObject private var audioPlayer = AudioPlayerManager.shared
 
-    @State private var searchQuery: String = ""
-    @State private var isEditingBody: Bool = false
-    @State private var editedTitle: String = ""
-    @State private var editedBody: String = ""
+    @State private var isDraftsCollapsed: Bool = false
+    @State private var isNotesCollapsed: Bool = false
+    @State private var listWidth: CGFloat = 280
+    @State private var isAudioNote: Bool = false
+
+    // Editing state
+    @State private var currentTitle: String = ""
+    @State private var currentBody: String = ""
+    @State private var currentTags: [String] = []
+    @State private var newTagInput: String = ""
+    @State private var showTagPopover: Bool = false
+    @State private var isNamingDraft: Bool = false
+    @State private var backlinksOpen: Bool = false
+    @State private var isEditorFocused: Bool = false
+    @State private var autoSaveWorkItem: DispatchWorkItem? = nil
 
     public init(state: AppState) {
         self.state = state
     }
 
     private var allNotes: [Note] {
-        state.vault?.index.listNotes().sorted { $0.id < $1.id } ?? []
+        state.vault?.index.listNotes().sorted { $0.updatedAt > $1.updatedAt } ?? []
     }
 
-    private var filteredNotes: [Note] {
-        allNotes.filter { n in
-            if searchQuery.isEmpty { return true }
-            return n.title.localizedCaseInsensitiveContains(searchQuery) ||
-                   n.body.localizedCaseInsensitiveContains(searchQuery) ||
-                   n.tags.contains(where: { $0.localizedCaseInsensitiveContains(searchQuery) })
-        }
+    private var drafts: [Note] {
+        allNotes.filter { $0.draft }
+    }
+
+    private var formalNotes: [Note] {
+        allNotes.filter { !$0.draft }
     }
 
     private var currentNote: Note? {
@@ -35,374 +45,703 @@ public struct NotesView: View {
         return state.vault?.index.getNote(id)
     }
 
+    private var backlinks: [LinkSource] {
+        guard let note = currentNote, let vault = state.vault else { return [] }
+        return vault.index.backlinks(targetID: note.id)
+    }
+
     public var body: some View {
-        ScrollView {
-            if let note = currentNote {
-                noteDetailView(note)
-            } else {
-                notesListView
+        HStack(spacing: 0) {
+            // Left Column: Notes List (280px)
+            leftColumn
+                .frame(width: listWidth)
+                .background(Color(nsColor: .windowBackgroundColor).opacity(0.4))
+
+            // Divider
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.6))
+                .frame(width: 1)
+
+            // Right Column: Note Editor or Empty State
+            rightColumn
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .textBackgroundColor))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            syncCurrentNoteState()
+        }
+        .onChange(of: state.selectedNoteId) {
+            flushAutoSave()
+            syncCurrentNoteState()
+        }
+        .onChange(of: currentBody) { newBody in
+            guard let note = currentNote, note.body != newBody else { return }
+            scheduleAutoSave(for: note, body: newBody)
+        }
+        .onDisappear {
+            flushAutoSave()
+        }
+    }
+
+    private func syncCurrentNoteState() {
+        if let note = currentNote {
+            currentTitle = note.title
+            currentBody = note.body
+            currentTags = note.tags
+            isNamingDraft = false
+        }
+    }
+
+    // MARK: - Left Column
+
+    private var leftColumn: some View {
+        VStack(spacing: 0) {
+            // Top Action Bar
+            HStack {
+                HStack(spacing: 6) {
+                    Text("全部笔记")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    Text("\(allNotes.count)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Split Button / Actions
+                Menu {
+                    Button(action: handleCreateDraft) {
+                        Label("新建草稿", systemImage: "doc")
+                    }
+                    Button(action: handleCreateFormalNote) {
+                        Label("新建笔记", systemImage: "doc.text")
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 11, weight: .semibold))
+                        Text("新建草稿")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 4/255, green: 120/255, blue: 87/255)))
+                    .foregroundColor(.white)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+
+            Divider()
+
+            // Scrollable Groups
+            ScrollView {
+                VStack(spacing: 12) {
+                    // Group 1: 草稿
+                    VStack(spacing: 2) {
+                        HStack {
+                            Button {
+                                isDraftsCollapsed.toggle()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: isDraftsCollapsed ? "chevron.right" : "chevron.down")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.secondary)
+
+                                    Text("草稿")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.secondary)
+
+                                    Text("\(drafts.count)")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.stoneBadgeBg))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+
+                            Spacer()
+
+                            Button(action: handleCreateDraft) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+
+                        if !isDraftsCollapsed {
+                            if drafts.isEmpty {
+                                Text("暂无草稿")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                    .italic()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                            } else {
+                                ForEach(drafts) { draft in
+                                    draftRow(draft)
+                                }
+                            }
+                        }
+                    }
+
+                    // Group 2: 笔记
+                    VStack(spacing: 2) {
+                        HStack {
+                            Button {
+                                isNotesCollapsed.toggle()
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: isNotesCollapsed ? "chevron.right" : "chevron.down")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.secondary)
+
+                                    Text("笔记")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(.secondary)
+
+                                    Text("\(formalNotes.count)")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 1)
+                                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.stoneBadgeBg))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+
+                        if !isNotesCollapsed {
+                            if formalNotes.isEmpty {
+                                Text("暂无笔记")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                    .italic()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                            } else {
+                                ForEach(formalNotes) { note in
+                                    formalNoteRow(note)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(8)
+            }
+        }
+    }
+
+    private func draftRow(_ draft: Note) -> some View {
+        let isSelected = state.selectedNoteId == draft.id
+        let excerpt = getDraftExcerpt(draft.body)
+
+        return Button(action: {
+            state.selectedNoteId = draft.id
+        }) {
+            VStack(alignment: .leading, spacing: 2) {
+                if excerpt.isEmpty {
+                    Text("(空草稿)")
+                        .font(.system(size: 13))
+                        .italic()
+                        .foregroundColor(.secondary)
+                } else {
+                    Text(excerpt)
+                        .font(.system(size: 13))
+                        .lineLimit(2)
+                        .lineSpacing(2)
+                        .foregroundColor(isSelected ? .primary : .secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color.stoneSelectedBg : Color.clear))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("复制绝对路径") {
+                copyNotePath(draft)
+            }
+            Button("在 Finder 中打开") {
+                revealInFinder(draft)
+            }
+            Divider()
+            Button("删除草稿", role: .destructive) {
+                deleteNote(draft)
+            }
+        }
+    }
+
+    private func formalNoteRow(_ note: Note) -> some View {
+        let isSelected = state.selectedNoteId == note.id
+
+        return Button(action: {
+            state.selectedNoteId = note.id
+        }) {
+            HStack(spacing: 6) {
+                if note.audioTranscript {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 11))
+                        .foregroundColor(.accentColor)
+                }
+
+                Text(note.title.isEmpty ? "未命名笔记" : note.title)
+                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                    .foregroundColor(isSelected ? .primary : Color(nsColor: .labelColor).opacity(0.85))
+                    .lineLimit(1)
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color.stoneSelectedBg : Color.clear))
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("复制绝对路径") {
+                copyNotePath(note)
+            }
+            Button("在 Finder 中打开") {
+                revealInFinder(note)
+            }
+            Divider()
+            Button("删除笔记", role: .destructive) {
+                deleteNote(note)
+            }
+        }
+    }
+
+    // MARK: - Right Column
+
+    private var rightColumn: some View {
+        Group {
+            if let note = currentNote {
+                noteEditorView(note)
+            } else {
+                emptyStateView
+            }
+        }
+    }
+
+    private var emptyStateView: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "doc.text")
+                .font(.system(size: 38))
+                .foregroundColor(Color.secondary.opacity(0.4))
+                .padding(.bottom, 4)
+
+            Text("选择笔记开始阅读或编辑")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.primary)
+
+            Text("或者直接创建新草稿随手记录")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+
+            Button(action: handleCreateDraft) {
+                HStack(spacing: 4) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 11))
+                    Text("新建草稿")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Notes List View (Matches old_notes.png)
-
-    private var notesListView: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            // Page Header: Eyebrow, Title, Subtitle, + 新建笔记 Button
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("YOUR KNOWLEDGE SPACE")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(Color(red: 147/255, green: 162/255, blue: 146/255))
-                        .tracking(1.2)
-
-                    Text("Notes")
-                        .font(.system(size: 29, weight: .bold))
-                        .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-
-                    Text("记录值得留下的东西，打开一篇，专注写作。")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(red: 137/255, green: 145/255, blue: 136/255))
-                }
-
-                Spacer()
-
-                Button(action: createNewNote) {
-                    HStack(spacing: 5) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .bold))
-                        Text("新建笔记")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color(red: 71/255, green: 110/255, blue: 88/255)))
-                    .foregroundColor(.white)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.bottom, 6)
-
-            // Search Bar
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(red: 163/255, green: 170/255, blue: 162/255))
-
-                TextField("搜索标题、内容、标签…", text: $searchQuery)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 13))
-
-                if !searchQuery.isEmpty {
-                    Button(action: { searchQuery = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
-                            .font(.system(size: 12))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 14)
-            .frame(height: 43)
-            .background(RoundedRectangle(cornerRadius: 11).fill(Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 11).stroke(Color(red: 231/255, green: 235/255, blue: 229/255), lineWidth: 1))
-
-            // Section Heading: 最近编辑 + Count, Right: 单列内容浏览
-            HStack(alignment: .center) {
-                HStack(spacing: 8) {
-                    Text("最近编辑")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-
-                    Text("\(filteredNotes.count)")
-                        .font(.system(size: 11, design: .monospaced))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color(red: 240/255, green: 242/255, blue: 237/255)))
-                        .foregroundColor(Color(red: 164/255, green: 170/255, blue: 162/255))
-                }
-
-                Spacer()
-
-                Text("单列内容浏览")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(red: 137/255, green: 145/255, blue: 136/255))
-            }
-            .padding(.top, 9)
-
-            // Stack of Note Cards
-            VStack(spacing: 12) {
-                ForEach(filteredNotes) { note in
-                    noteCard(note)
-                }
-            }
-        }
-        .padding(.horizontal, 46)
-        .padding(.top, 46)
-        .padding(.bottom, 105)
-        .frame(maxWidth: 785)
-    }
-
-    private func noteCard(_ note: Note) -> some View {
-        Button(action: {
-            state.selectedNoteId = note.id
-            isEditingBody = false
-        }) {
-            VStack(alignment: .leading, spacing: 11) {
-                Text(note.title.isEmpty ? "未命名笔记" : note.title)
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-
-                Text(extractExcerpt(note.body))
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(red: 120/255, green: 129/255, blue: 121/255))
-                    .lineSpacing(4)
-                    .lineLimit(2)
-
+    private func noteEditorView(_ note: Note) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if note.draft && !isNamingDraft {
+                // Draft Mode: Floating action bar
                 HStack {
-                    HStack(spacing: 8) {
-                        ForEach(note.tags, id: \.self) { tag in
-                            Text("#\(tag)")
-                                .font(.system(size: 11))
-                                .foregroundColor(Color(red: 101/255, green: 132/255, blue: 105/255))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 4)
-                                .background(RoundedRectangle(cornerRadius: 5).fill(Color(red: 239/255, green: 246/255, blue: 238/255)))
-                        }
-                    }
-
                     Spacer()
 
-                    Text(formatRelativeDate(note.updatedAt))
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(red: 173/255, green: 180/255, blue: 172/255))
-                }
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 13).fill(Color.white))
-            .overlay(RoundedRectangle(cornerRadius: 13).stroke(Color(red: 232/255, green: 236/255, blue: 230/255), lineWidth: 1))
-            .shadow(color: Color.black.opacity(0.03), radius: 10, x: 0, y: 4)
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Note Detail View (Matches old_note_editor.png)
-
-    private func noteDetailView(_ note: Note) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Top Action Bar
-            HStack {
-                Button(action: { state.selectedNoteId = nil }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("返回笔记列表")
-                            .font(.system(size: 12))
-                    }
-                    .foregroundColor(Color(red: 115/255, green: 130/255, blue: 115/255))
-                }
-                .buttonStyle(.plain)
-
-                Spacer()
-
-                if isEditingBody {
-                    Button(action: { saveNoteEdits(note) }) {
-                        Text("保存修改")
+                    Button(action: { isNamingDraft = true }) {
+                        Text("转为笔记")
                             .font(.system(size: 12, weight: .medium))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(Color(red: 71/255, green: 110/255, blue: 88/255)))
-                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
                     }
                     .buttonStyle(.plain)
-                } else {
-                    Button(action: {
-                        editedTitle = note.title
-                        editedBody = note.body
-                        isEditingBody = true
-                    }) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "doc.text")
-                                .font(.system(size: 11))
-                            Text("编辑正文")
-                                .font(.system(size: 12))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.white))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(red: 229/255, green: 233/255, blue: 225/255), lineWidth: 1))
-                        .foregroundColor(Color(red: 89/255, green: 100/255, blue: 88/255))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.bottom, 24)
 
-            // Eyebrow
-            Text("MARKDOWN NOTE")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Color(red: 147/255, green: 162/255, blue: 146/255))
-                .tracking(1.2)
+                    moreMenu(note)
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
                 .padding(.bottom, 8)
-
-            // Title
-            if isEditingBody {
-                TextField("笔记标题", text: $editedTitle)
-                    .font(.system(size: 28, weight: .bold))
-                    .textFieldStyle(.plain)
-                    .padding(.bottom, 14)
             } else {
-                Text(note.title)
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-                    .padding(.bottom, 14)
-            }
+                // Formal Note Mode or Draft Naming Header
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .center) {
+                        TextField("无标题笔记", text: $currentTitle, onCommit: {
+                            saveNoteTitle(note)
+                        })
+                        .font(.system(size: 24, weight: .bold))
+                        .textFieldStyle(.plain)
 
-            // Meta: Tags + Modified Date
-            HStack(spacing: 10) {
-                ForEach(note.tags, id: \.self) { tag in
-                    Text("#\(tag)")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(red: 101/255, green: 132/255, blue: 105/255))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 5).fill(Color(red: 239/255, green: 246/255, blue: 238/255)))
-                }
+                        Spacer()
 
-                Text("\(formatRelativeDate(note.updatedAt)) 修改")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(red: 173/255, green: 180/255, blue: 172/255))
-            }
-            .padding(.bottom, 32)
-
-            // Content: Rendered Markdown or TextEditor
-            if isEditingBody {
-                TextEditor(text: $editedBody)
-                    .font(.system(size: 13))
-                    .lineSpacing(4)
-                    .frame(minHeight: 440)
-                    .padding(16)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 221/255, green: 232/255, blue: 221/255), lineWidth: 1))
-            } else {
-                renderedMarkdownBody(note.body)
-            }
-        }
-        .padding(.horizontal, 46)
-        .padding(.top, 46)
-        .padding(.bottom, 105)
-        .frame(maxWidth: 770)
-    }
-
-    // MARK: - Markdown Rendering (Matches old_note_editor.png)
-
-    @ViewBuilder
-    private func renderedMarkdownBody(_ md: String) -> some View {
-        let lines = md.components(separatedBy: "\n")
-        VStack(alignment: .leading, spacing: 14) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { index, line in
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-                if trimmed.hasPrefix("# ") {
-                    // Skip top H1 since title is rendered above
-                    EmptyView()
-                } else if trimmed.hasPrefix("## ") {
-                    Text(trimmed.dropFirst(3))
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-                        .padding(.top, 18)
-                        .padding(.bottom, 4)
-                } else if trimmed.hasPrefix("- ") || trimmed.hasPrefix("• ") {
-                    let itemText = trimmed.hasPrefix("- ") ? trimmed.dropFirst(2) : trimmed.dropFirst(2)
-                    HStack(alignment: .top, spacing: 8) {
-                        Text("•")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(Color(red: 68/255, green: 80/255, blue: 67/255))
-                        Text(LocalizedStringKey(String(itemText)))
-                            .font(.system(size: 14))
-                            .foregroundColor(Color(red: 68/255, green: 80/255, blue: 67/255))
-                            .lineSpacing(4)
+                        moreMenu(note)
                     }
-                    .padding(.leading, 8)
-                } else if trimmed.hasPrefix("> ") {
+
+                    // Metadata Row: Author & Tags
                     HStack(spacing: 12) {
-                        Rectangle()
-                            .fill(Color(red: 164/255, green: 194/255, blue: 168/255))
-                            .frame(width: 3)
-                        Text(trimmed.dropFirst(2))
-                            .font(.system(size: 13))
-                            .foregroundColor(Color(red: 121/255, green: 133/255, blue: 120/255))
+                        HStack(spacing: 4) {
+                            Image(systemName: note.createdBy == "agent" ? "cpu" : "person")
+                                .font(.system(size: 11))
+                            Text(note.createdBy == "agent" ? "智能体创建" : "由我创建")
+                                .font(.system(size: 11))
+                        }
+                        .foregroundColor(.secondary)
+
+                        // Tags Chips
+                        HStack(spacing: 6) {
+                            ForEach(currentTags, id: \.self) { tag in
+                                HStack(spacing: 3) {
+                                    Text("#\(tag)")
+                                        .font(.system(size: 11))
+                                    Button(action: { removeTag(tag, from: note) }) {
+                                        Image(systemName: "xmark")
+                                            .font(.system(size: 9))
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 4).fill(Color.stoneTagBg))
+                                .foregroundColor(.primary)
+                            }
+
+                            Button(action: { showTagPopover.toggle() }) {
+                                HStack(spacing: 2) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: 9))
+                                    Text("标签")
+                                        .font(.system(size: 11))
+                                }
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(RoundedRectangle(cornerRadius: 4).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
+                                .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .popover(isPresented: $showTagPopover) {
+                                VStack(spacing: 8) {
+                                    TextField("添加标签...", text: $newTagInput, onCommit: {
+                                        addTag(newTagInput, to: note)
+                                    })
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 140)
+                                }
+                                .padding(8)
+                            }
+                        }
+
+                        if isNamingDraft {
+                            Button("确认转为笔记") {
+                                convertCurrentDraft(note)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .controlSize(.small)
+                        }
                     }
-                    .padding(.vertical, 8)
-                } else if !trimmed.isEmpty {
-                    Text(LocalizedStringKey(trimmed))
-                        .font(.system(size: 14))
-                        .foregroundColor(Color(red: 68/255, green: 80/255, blue: 67/255))
-                        .lineSpacing(5)
                 }
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 12)
+
+                Divider()
+            }
+
+            // Editor / Content Body
+            PataNoteEditor(
+                noteId: note.id,
+                text: $currentBody,
+                isReadOnlyTranscript: note.audioTranscript,
+                isFocused: $isEditorFocused,
+                onSeekAudio: { ms in
+                    audioPlayer.seek(toMilliseconds: ms)
+                },
+                onOpenLink: { target in
+                    handleOpenLink(target)
+                }
+            )
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Backlinks drawer
+            if !backlinks.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 4) {
+                    Button {
+                        backlinksOpen.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: backlinksOpen ? "chevron.down" : "chevron.right")
+                                .font(.system(size: 9))
+                            Text("被引用 · \(backlinks.count)")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+
+                    if backlinksOpen {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(backlinks, id: \.id) { ref in
+                                Button(action: {
+                                    if ref.type == .task {
+                                        state.selectedTaskId = ref.id
+                                    } else {
+                                        state.selectedNoteId = ref.id
+                                    }
+                                }) {
+                                    Text("\(ref.type == .task ? "任务 · " : "")\(ref.title.isEmpty ? ref.id : ref.title)")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.leading, 12)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
             }
         }
     }
 
-    // MARK: - Helpers
-
-    private func extractExcerpt(_ body: String) -> String {
-        let lines = body.components(separatedBy: "\n")
-        for line in lines {
-            let t = line.trimmingCharacters(in: .whitespaces)
-            if !t.isEmpty && !t.hasPrefix("#") && !t.hasPrefix("-") && !t.hasPrefix(">") {
-                return t
+    private func moreMenu(_ note: Note) -> some View {
+        Menu {
+            Button("复制绝对路径") {
+                copyNotePath(note)
             }
+            Button("在 Finder 中打开") {
+                revealInFinder(note)
+            }
+            Divider()
+            Button(note.draft ? "删除草稿" : "删除笔记", role: .destructive) {
+                deleteNote(note)
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+                .padding(4)
         }
-        return ""
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
-    private func formatRelativeDate(_ d: Date) -> String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        let todayStr = state.todayDateString
-        let dateStr = f.string(from: d)
+    // MARK: - Actions
 
-        let fTime = DateFormatter()
-        fTime.dateFormat = "HH:mm"
-
-        let cal = Calendar.current
-        var yesterdayStr = ""
-        if let todayDate = f.date(from: todayStr),
-           let yDate = cal.date(byAdding: .day, value: -1, to: todayDate) {
-            yesterdayStr = f.string(from: yDate)
-        }
-
-        if dateStr == todayStr {
-            return "今天 \(fTime.string(from: d))"
-        } else if dateStr == yesterdayStr {
-            return "昨天 \(fTime.string(from: d))"
-        } else {
-            let month = cal.component(.month, from: d)
-            let day = cal.component(.day, from: d)
-            return "\(month) 月 \(day) 日"
-        }
-    }
-
-    private func createNewNote() {
+    private func handleCreateDraft() {
         guard let v = state.vault else { return }
-        if let note = try? v.createNote(title: "未命名笔记", body: "# 未命名笔记\n\n开始写作…") {
+        do {
+            let note = try v.createNote(title: "", body: "", tags: [], draft: true)
             state.selectedNoteId = note.id
-            editedTitle = note.title
-            editedBody = note.body
-            isEditingBody = true
+            state.rescanVault()
+        } catch {
+            print("Create draft error: \(error)")
         }
     }
 
-    private func saveNoteEdits(_ note: Note) {
+    private func handleCreateFormalNote() {
+        guard let v = state.vault else { return }
+        do {
+            let note = try v.createNote(title: "未命名笔记", body: "", tags: [], draft: false)
+            state.selectedNoteId = note.id
+            state.rescanVault()
+        } catch {
+            print("Create note error: \(error)")
+        }
+    }
+
+    private func convertCurrentDraft(_ note: Note) {
+        guard let v = state.vault else { return }
+        do {
+            _ = try v.convertDraftToNote(id: note.id, newTitle: currentTitle.isEmpty ? "未命名笔记" : currentTitle, tags: currentTags)
+            isNamingDraft = false
+            state.rescanVault()
+        } catch {
+            print("Convert draft error: \(error)")
+        }
+    }
+
+    private func saveNoteTitle(_ note: Note) {
         guard let v = state.vault else { return }
         var updated = note
-        updated.title = editedTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名笔记" : editedTitle
-        updated.body = editedBody
-        updated.updatedAt = Date()
-        try? _ = v.updateNote(updated)
-        isEditingBody = false
+        updated.title = currentTitle
+        do {
+            _ = try v.updateNote(updated)
+            state.rescanVault()
+        } catch {
+            print("Update note title error: \(error)")
+        }
+    }
+
+    private func scheduleAutoSave(for note: Note, body: String) {
+        autoSaveWorkItem?.cancel()
+        let noteId = note.id
+        let item = DispatchWorkItem { [weak state] in
+            guard let s = state, let v = s.vault, let n = v.index.getNote(noteId) else { return }
+            if n.body != body {
+                var updated = n
+                updated.body = body
+                do {
+                    _ = try v.updateNote(updated)
+                } catch {
+                    print("Update note body error: \(error)")
+                }
+            }
+        }
+        autoSaveWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
+    }
+
+    private func flushAutoSave() {
+        if let item = autoSaveWorkItem {
+            item.cancel()
+            autoSaveWorkItem = nil
+            if let note = currentNote, note.body != currentBody, let v = state.vault {
+                var updated = note
+                updated.body = currentBody
+                do {
+                    _ = try v.updateNote(updated)
+                } catch {
+                    print("Flush note body error: \(error)")
+                }
+            }
+        }
+    }
+
+    private func addTag(_ tag: String, to note: Note) {
+        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !currentTags.contains(trimmed) else { return }
+        currentTags.append(trimmed)
+        newTagInput = ""
+        showTagPopover = false
+
+        guard let v = state.vault else { return }
+        var updated = note
+        updated.tags = currentTags
+        do {
+            _ = try v.updateNote(updated)
+            state.rescanVault()
+        } catch {
+            print("Add tag error: \(error)")
+        }
+    }
+
+    private func removeTag(_ tag: String, from note: Note) {
+        currentTags.removeAll { $0 == tag }
+        guard let v = state.vault else { return }
+        var updated = note
+        updated.tags = currentTags
+        do {
+            _ = try v.updateNote(updated)
+            state.rescanVault()
+        } catch {
+            print("Remove tag error: \(error)")
+        }
+    }
+
+    private func copyNotePath(_ note: Note) {
+        if let v = state.vault {
+            let path = v.resolveEntityPath(note)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(path, forType: .string)
+        }
+    }
+
+    private func revealInFinder(_ note: Note) {
+        if let v = state.vault {
+            let path = v.resolveEntityPath(note)
+            NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: v.rootPath)
+        }
+    }
+
+    private func deleteNote(_ note: Note) {
+        guard let v = state.vault else { return }
+        do {
+            try v.deleteNote(id: note.id)
+            if state.selectedNoteId == note.id {
+                state.selectedNoteId = nil
+            }
+            state.rescanVault()
+        } catch {
+            print("Delete note error: \(error)")
+        }
+    }
+
+    private func getDraftExcerpt(_ body: String) -> String {
+        let lines = body.components(separatedBy: .newlines)
+        var textLines: [String] = []
+        for line in lines {
+            let cleaned = line
+                .replacingOccurrences(of: #"^#{1,6}\s+"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"^>\s+"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"^[-*+]\s+(\[[ xX]\]\s+)?"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"^\d+\.\s+"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
+                .replacingOccurrences(of: #"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]"#, with: "$1", options: .regularExpression)
+                .replacingOccurrences(of: #"[`*_~=]"#, with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !cleaned.isEmpty {
+                textLines.append(cleaned)
+                if textLines.count >= 2 { break }
+            }
+        }
+        return textLines.joined(separator: "\n")
+    }
+
+    private func handleOpenLink(_ target: String) {
+        guard let v = state.vault else { return }
+        // Check if it's a note
+        for n in v.index.listNotes() {
+            if target == n.id || target.hasSuffix("/\(n.id).md") || target.contains(n.id) {
+                state.selectedNoteId = n.id
+                return
+            }
+            let relPath = v.resolveEntityPath(n)
+            if relPath.hasSuffix(target) || target.hasSuffix(relPath) {
+                state.selectedNoteId = n.id
+                return
+            }
+        }
+
+        // Check if it's a file
+        if target.hasPrefix("files/") {
+            let full = (v.rootPath as NSString).appendingPathComponent(target)
+            if FileManager.default.fileExists(atPath: full) {
+                NSWorkspace.shared.open(URL(fileURLWithPath: full))
+            }
+        }
     }
 }

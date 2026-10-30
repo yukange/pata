@@ -150,4 +150,31 @@ struct DraftScenarioTests {
         #expect(list[0].id == draft.id)
         #expect(list[1].id == n1.id)
     }
+
+    @Test("Given an existing note, when rescanning vault, then the note index is preserved continuously without index clearing")
+    func rescanPreservesNoteIndexContinuouslyScenario() throws {
+        let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent("pata_bdd_note_rescan_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let vault = try Vault(rootPath: tmpDir.path)
+        let note = try vault.createNote(title: "持续索引笔记", body: "正文内容", draft: false)
+
+        // Verify initial index
+        #expect(vault.index.getNote(note.id) != nil)
+
+        // Rescan vault multiple times
+        try vault.rescan()
+        #expect(vault.index.getNote(note.id) != nil)
+        #expect(vault.index.getNote(note.id)?.body.trimmingCharacters(in: .whitespacesAndNewlines) == "正文内容")
+
+        // Directory write tracker verification for feedback suppression
+        let notesDir = (tmpDir.path as NSString).appendingPathComponent("notes")
+        var updated = note
+        updated.body = "新正文内容"
+        _ = try vault.updateNote(updated)
+
+        #expect(vault.tracker.hasRecentWrites(inDirectory: notesDir, window: 2.0))
+        #expect(vault.index.getNote(note.id)?.body.trimmingCharacters(in: .whitespacesAndNewlines) == "新正文内容")
+    }
 }

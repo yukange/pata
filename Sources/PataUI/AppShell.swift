@@ -2,6 +2,99 @@ import SwiftUI
 import AppKit
 import PataCore
 
+public struct WindowDragArea: NSViewRepresentable {
+    public init() {}
+    public func makeNSView(context: Context) -> WindowDragView {
+        WindowDragView()
+    }
+    public func updateNSView(_ nsView: WindowDragView, context: Context) {}
+}
+
+public class WindowDragView: NSView {
+    public override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 {
+            window?.zoom(nil)
+        } else {
+            window?.performDrag(with: event)
+        }
+    }
+}
+
+public struct PataLogoView: View {
+    public init() {}
+
+    public var body: some View {
+        Canvas { context, size in
+            let w = size.width
+            let h = size.height
+
+            // Scale from 828 x 816 viewbox
+            let sx = w / 828.0
+            let sy = h / 816.0
+
+            context.scaleBy(x: sx, y: sy)
+
+            // Back card (Purple gradient)
+            var backPath = Path()
+            backPath.move(to: CGPoint(x: 166, y: 343))
+            backPath.addCurve(to: CGPoint(x: 204, y: 318), control1: CGPoint(x: 176, y: 330), control2: CGPoint(x: 188, y: 322))
+            backPath.addLine(to: CGPoint(x: 477, y: 365))
+            backPath.addCurve(to: CGPoint(x: 579, y: 475), control1: CGPoint(x: 517, y: 374), control2: CGPoint(x: 550, y: 414))
+            backPath.addCurve(to: CGPoint(x: 567, y: 586), control1: CGPoint(x: 604, y: 527), control2: CGPoint(x: 601, y: 566))
+            backPath.addLine(to: CGPoint(x: 344, y: 668))
+            backPath.addCurve(to: CGPoint(x: 243, y: 630), control1: CGPoint(x: 297, y: 683), control2: CGPoint(x: 265, y: 663))
+            backPath.addLine(to: CGPoint(x: 143, y: 408))
+            backPath.closeSubpath()
+
+            let purpleGrad = Gradient(colors: [
+                Color(red: 255/255, green: 157/255, blue: 64/255),
+                Color(red: 255/255, green: 93/255, blue: 174/255),
+                Color(red: 173/255, green: 80/255, blue: 240/255),
+                Color(red: 96/255, green: 111/255, blue: 251/255)
+            ])
+            context.fill(backPath, with: .linearGradient(purpleGrad, startPoint: CGPoint(x: 0, y: 80), endPoint: CGPoint(x: 800, y: 800)))
+
+            // Middle card (Yellow gradient)
+            var midPath = Path()
+            midPath.move(to: CGPoint(x: 211, y: 279))
+            midPath.addLine(to: CGPoint(x: 479, y: 326))
+            midPath.addCurve(to: CGPoint(x: 575, y: 441), control1: CGPoint(x: 523, y: 340), control2: CGPoint(x: 553, y: 380))
+            midPath.addCurve(to: CGPoint(x: 591, y: 562), control1: CGPoint(x: 597, y: 496), control2: CGPoint(x: 610, y: 532))
+            midPath.addLine(to: CGPoint(x: 405, y: 625))
+            midPath.addCurve(to: CGPoint(x: 295, y: 586), control1: CGPoint(x: 354, y: 642), control2: CGPoint(x: 320, y: 626))
+            midPath.closeSubpath()
+
+            let yellowGrad = Gradient(colors: [
+                Color(red: 255/255, green: 238/255, blue: 87/255),
+                Color(red: 255/255, green: 198/255, blue: 59/255),
+                Color(red: 255/255, green: 156/255, blue: 70/255)
+            ])
+            context.fill(midPath, with: .linearGradient(yellowGrad, startPoint: CGPoint(x: 80, y: 25), endPoint: CGPoint(x: 660, y: 800)))
+
+            // Front white leaf card
+            var frontPath = Path()
+            frontPath.move(to: CGPoint(x: 310, y: 224))
+            frontPath.addLine(to: CGPoint(x: 484, y: 279))
+            frontPath.addCurve(to: CGPoint(x: 560, y: 366), control1: CGPoint(x: 527, y: 295), control2: CGPoint(x: 539, y: 316))
+            frontPath.addCurve(to: CGPoint(x: 664, y: 487), control1: CGPoint(x: 607, y: 456), control2: CGPoint(x: 639, y: 470))
+            frontPath.addLine(to: CGPoint(x: 453, y: 583))
+            frontPath.addCurve(to: CGPoint(x: 342, y: 544), control1: CGPoint(x: 402, y: 592), control2: CGPoint(x: 366, y: 577))
+            frontPath.closeSubpath()
+
+            context.fill(frontPath, with: .color(Color.white.opacity(0.95)))
+            context.stroke(frontPath, with: .color(Color(red: 226/255, green: 218/255, blue: 240/255)), lineWidth: 3.5)
+
+            // Sparkles
+            let sparkGrad = Gradient(colors: [
+                Color(red: 255/255, green: 232/255, blue: 67/255),
+                Color(red: 255/255, green: 142/255, blue: 37/255)
+            ])
+            context.fill(Path(roundedRect: CGRect(x: 490, y: 143, width: 42, height: 103), cornerRadius: 21), with: .linearGradient(sparkGrad, startPoint: CGPoint(x: 490, y: 143), endPoint: CGPoint(x: 532, y: 246)))
+        }
+        .frame(width: 18, height: 18)
+    }
+}
+
 public struct AppShell: View {
     @StateObject private var state = AppState.shared
 
@@ -15,14 +108,44 @@ public struct AppShell: View {
         }
     }
 
-    private var topTags: [String] {
-        guard let v = state.vault else { return ["架构设计", "Flink", "Doris", "POC", "复盘", "工作"] }
-        let tags = v.index.listTags().map { $0.name }
-        let preferred = ["架构设计", "Flink", "Doris", "POC", "复盘", "工作"]
-        let ordered = preferred.filter { tags.contains($0) }
-        let remaining = tags.filter { !preferred.contains($0) }
-        let result = ordered + remaining
-        return result.isEmpty ? preferred : result
+    private var windowBg: Color {
+        switch state.themePreference {
+        case "dark": return Color(red: 12/255, green: 10/255, blue: 9/255)
+        default: return Color(red: 245/255, green: 245/255, blue: 244/255)
+        }
+    }
+
+    private var currentThemeBg: Color {
+        islandBg
+    }
+
+    private var islandBg: Color {
+        switch state.themePreference {
+        case "dark": return Color(red: 28/255, green: 25/255, blue: 23/255)
+        default: return Color(red: 250/255, green: 250/255, blue: 248/255)
+        }
+    }
+
+    private var sidebarBg: Color {
+        switch state.themePreference {
+        case "dark": return Color(red: 12/255, green: 10/255, blue: 9/255).opacity(0.85)
+        default: return Color(red: 245/255, green: 245/255, blue: 244/255).opacity(0.85)
+        }
+    }
+
+    private var borderColor: Color {
+        switch state.themePreference {
+        case "dark": return Color(red: 41/255, green: 37/255, blue: 36/255)
+        default: return Color(red: 231/255, green: 229/255, blue: 228/255)
+        }
+    }
+
+    private var allTagsWithCounts: [(tag: String, count: Int)] {
+        guard let v = state.vault else { return [] }
+        return v.index.listTags().map { t in
+            let c = v.index.findByTag(t.name).count
+            return (tag: t.name, count: c)
+        }.sorted { $0.tag.localizedStandardCompare($1.tag) == .orderedAscending }
     }
 
     public var body: some View {
@@ -30,331 +153,279 @@ public struct AppShell: View {
             if state.vault == nil {
                 firstLaunchVaultPicker
             } else {
-                HStack(spacing: 0) {
-                    // Left: App Sidebar
-                    if state.isSidebarVisible {
-                        sidebarView
-                            .frame(width: 230)
-                            .background(Color(red: 245/255, green: 245/255, blue: 241/255))
-                            .transition(.move(edge: .leading))
-
-                        Rectangle()
-                            .fill(Color(red: 233/255, green: 235/255, blue: 230/255))
-                            .frame(width: 1)
+                VStack(spacing: 0) {
+                    // When sidebar is collapsed: Top Header Strip across the whole window
+                    if !state.isSidebarVisible {
+                        collapsedTopHeader
                     }
 
-                    // Middle: Active Workspace (with top breadcrumb bar)
-                    VStack(spacing: 0) {
-                        topWorkspaceBar
-
-                        if state.showSettings {
-                            SettingsView(state: state)
-                        } else {
-                            switch state.currentNav {
-                            case .today:
-                                TodayView(state: state)
-                            case .tasks:
-                                TasksView(state: state)
-                            case .notes:
-                                NotesView(state: state)
-                            case .tags:
-                                TagView(state: state)
-                            }
+                    // Main Row: Sidebar (when expanded) + Island Main Content
+                    HStack(alignment: .top, spacing: 0) {
+                        if state.isSidebarVisible {
+                            expandedSidebar
+                                .frame(width: 240)
+                                .frame(maxHeight: .infinity)
+                                .background(sidebarBg)
+                                .transition(.move(edge: .leading))
                         }
+
+                        // Right: Island (岛屿风格主工作区)
+                        islandMainContent
+                            .padding(.trailing, 8)
+                            .padding(.top, state.isSidebarVisible ? 8 : 0)
+                            .padding(.bottom, 8)
+                            .padding(.leading, state.isSidebarVisible ? 0 : 8)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(red: 250/255, green: 250/255, blue: 248/255))
-
-                    // Right: Global Task Inspector
-                    if state.isInspectorVisible, let taskId = state.selectedTaskId, !state.showSettings {
-                        inspectorDivider
-
-                        TaskInspector(state: state, taskId: taskId)
-                            .frame(width: state.inspectorWidth)
-                            .transition(.move(edge: .trailing))
-                    }
                 }
-                .animation(.easeInOut(duration: 0.2), value: state.isSidebarVisible)
+                .background(windowBg)
             }
 
-            // Floating Search Overlay (⌘K)
+            // Floating Search Overlay (⌘K / ⌘P)
             if state.showSearch {
                 SearchOverlay(state: state)
             }
         }
         .preferredColorScheme(preferredColorScheme)
         .frame(minWidth: 1000, minHeight: 650)
+        .ignoresSafeArea()
     }
 
-    // MARK: - Top Workspace Breadcrumb Bar (Matches prototype 66px)
-
-    private var topWorkspaceBar: some View {
-        HStack(spacing: 12) {
-            // Collapsed toggle button if sidebar hidden
-            if !state.isSidebarVisible {
-                Button(action: { state.toggleSidebar() }) {
-                    Image(systemName: "sidebar.leading")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(red: 125/255, green: 136/255, blue: 123/255))
-                        .padding(4)
-                }
-                .buttonStyle(.plain)
-                .help("展开侧栏 (⌃⌘S)")
-            }
-
-            // Breadcrumb: 工作空间 / Navigation Title
-            HStack(spacing: 8) {
-                Text("工作空间")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(red: 69/255, green: 77/255, blue: 69/255))
-
-                Text("/")
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(red: 139/255, green: 147/255, blue: 137/255))
-
+    private var islandMainContent: some View {
+        HStack(spacing: 0) {
+            // Main Workspace View
+            VStack(spacing: 0) {
                 if state.showSettings {
-                    Text("偏好设置")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(red: 139/255, green: 147/255, blue: 137/255))
-                } else if state.currentNav == .notes, let nid = state.selectedNoteId, let note = state.vault?.index.getNote(nid) {
-                    Text("Notes")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(red: 139/255, green: 147/255, blue: 137/255))
-                    Text("/")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(red: 139/255, green: 147/255, blue: 137/255))
-                    Text(note.title)
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(red: 139/255, green: 147/255, blue: 137/255))
+                    SettingsView(state: state)
                 } else {
-                    Text(state.currentNav.title)
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(red: 139/255, green: 147/255, blue: 137/255))
+                    switch state.currentNav {
+                    case .today:
+                        TodayView(state: state)
+                    case .tasks:
+                        TasksView(state: state)
+                    case .notes:
+                        NotesView(state: state)
+                    case .tags:
+                        TagView(state: state)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Right: Global Task Inspector (inside the island)
+            if state.isInspectorVisible, let taskId = state.selectedTaskId, !state.showSettings {
+                Rectangle()
+                    .fill(borderColor)
+                    .frame(width: 1)
+
+                TaskInspector(state: state, taskId: taskId)
+                    .frame(width: state.inspectorWidth)
+                    .background(islandBg)
+                    .transition(.move(edge: .trailing))
+            }
+        }
+        .background(islandBg)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(borderColor, lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.04), radius: 2, x: 0, y: 1)
+    }
+
+    private var collapsedTopHeader: some View {
+        HStack(spacing: 0) {
+            // Left: Traffic lights clearance (86px) -> Logo -> "Pata" -> Expand sidebar button
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    PataLogoView()
+
+                    Text("Pata")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.secondary)
+                }
+                .offset(y: -0.5)
+
+                SidebarToggleButton(collapsed: true) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        state.toggleSidebar()
+                    }
+                }
+            }
+            .padding(.leading, 86)
+
+            Spacer()
+
+            // Center: Segmented Navigation Tabs
+            HStack(spacing: 4) {
+                TopNavTabButton(title: "Today", icon: "calendar", isSelected: !state.showSettings && state.currentNav == .today) {
+                    state.showSettings = false
+                    state.currentNav = .today
+                }
+                TopNavTabButton(title: "Tasks", icon: "checkmark.square", isSelected: !state.showSettings && state.currentNav == .tasks) {
+                    state.showSettings = false
+                    state.currentNav = .tasks
+                }
+                TopNavTabButton(title: "Notes", icon: "doc.text", isSelected: !state.showSettings && state.currentNav == .notes) {
+                    state.showSettings = false
+                    state.currentNav = .notes
+                }
+                TopNavTabButton(title: "Tags", icon: "number", isSelected: !state.showSettings && state.currentNav == .tags) {
+                    state.showSettings = false
+                    state.currentNav = .tags
                 }
             }
 
             Spacer()
 
-            // Right: Prototype badge + Search button + ⌘K + Settings
-            HStack(spacing: 16) {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color(red: 120/255, green: 164/255, blue: 137/255))
-                        .frame(width: 6, height: 6)
-                    Text("仅 UI 原型")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(red: 139/255, green: 147/255, blue: 137/255))
+            // Right: Search & Settings
+            HStack(spacing: 8) {
+                SearchHeaderButton(borderColor: borderColor) {
+                    state.showSearch = true
                 }
 
-                Button(action: { state.showSearch = true }) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 14))
-                        .foregroundColor(Color(red: 125/255, green: 136/255, blue: 123/255))
+                SettingsHeaderButton(showSettings: state.showSettings) {
+                    state.showSettings.toggle()
                 }
-                .buttonStyle(.plain)
-
-                Button(action: { state.showSearch = true }) {
-                    Text("⌘ K")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(Color(red: 155/255, green: 162/255, blue: 153/255))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color(red: 226/255, green: 231/255, blue: 223/255), lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-
-                Button(action: { state.showSettings.toggle() }) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(red: 125/255, green: 136/255, blue: 123/255))
-                }
-                .buttonStyle(.plain)
-                .help("偏好设置 (⌘,)")
             }
+            .padding(.trailing, 16)
         }
-        .padding(.horizontal, 50)
-        .frame(height: 66)
-        .background(Color(red: 250/255, green: 250/255, blue: 248/255).opacity(0.89))
-        .overlay(
-            Rectangle()
-                .fill(Color(red: 238/255, green: 240/255, blue: 234/255))
-                .frame(height: 1),
-            alignment: .bottom
-        )
+        .frame(height: 38)
+        .background(WindowDragArea())
     }
 
-    // MARK: - Sidebar View (Matches old_today.png)
+    // MARK: - Expanded Sidebar (240px wide)
 
-    private var sidebarView: some View {
+    private var expandedSidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Brand Logo & Titles
-            HStack(spacing: 11) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(red: 71/255, green: 112/255, blue: 91/255))
-                        .frame(width: 36, height: 36)
-                        .shadow(color: Color(red: 71/255, green: 112/255, blue: 91/255).opacity(0.15), radius: 5, x: 0, y: 4)
+            // Top Header: Traffic Lights clearance (86px) + Logo + Title + Collapse Button
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    PataLogoView()
 
-                    Text("啪")
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundColor(.white)
+                    Text("Pata")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.secondary)
                 }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 5) {
-                        Text("啪嗒")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(Color(red: 36/255, green: 40/255, blue: 36/255))
-
-                        Text("PATA")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Color(red: 130/255, green: 137/255, blue: 128/255))
-                    }
-
-                    Text("记下一点，完成一件")
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(red: 130/255, green: 137/255, blue: 128/255))
-                }
+                .offset(y: -0.5)
 
                 Spacer()
+
+                SidebarToggleButton(collapsed: false) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        state.toggleSidebar()
+                    }
+                }
             }
-            .padding(.horizontal, 17)
-            .padding(.top, 29)
-            .padding(.bottom, 34)
+            .padding(.leading, 86)
+            .padding(.trailing, 12)
+            .frame(height: 38)
+            .background(WindowDragArea())
 
-            // Primary Navigations
-            VStack(spacing: 5) {
-                sidebarNavButton(title: "Today", icon: "sun.max", nav: .today)
-                sidebarNavButton(title: "Tasks", icon: "checklist", nav: .tasks)
-                sidebarNavButton(title: "Notes", icon: "doc.text", nav: .notes)
+            // Search Bar Button in sidebar
+            Button(action: { state.showSearch = true }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Text("搜索")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+
+                    Spacer()
+
+                    Text("⌘K/⌘P")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.06)))
+                }
+                .padding(.horizontal, 10)
+                .frame(maxWidth: .infinity)
+                .frame(height: 28)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.03)))
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(borderColor, lineWidth: 1))
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 17)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
+            .padding(.bottom, 6)
 
-            // Divider Separator
-            Rectangle()
-                .fill(Color(red: 230/255, green: 233/255, blue: 226/255))
-                .frame(height: 1)
-                .padding(.horizontal, 24)
-                .padding(.top, 25)
-                .padding(.bottom, 17)
+            // Navigation Items
+            VStack(spacing: 2) {
+                SidebarNavRowButton(title: "Today", icon: "calendar", isSelected: !state.showSettings && state.currentNav == .today) {
+                    state.showSettings = false
+                    state.currentNav = .today
+                }
+                SidebarNavRowButton(title: "Tasks", icon: "checkmark.square", isSelected: !state.showSettings && state.currentNav == .tasks) {
+                    state.showSettings = false
+                    state.currentNav = .tasks
+                }
+                SidebarNavRowButton(title: "Notes", icon: "doc.text", isSelected: !state.showSettings && state.currentNav == .notes) {
+                    state.showSettings = false
+                    state.currentNav = .notes
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.top, 4)
 
-            // Section: 标签 · LABELS
+            // Global Tags Section
             VStack(alignment: .leading, spacing: 4) {
-                Text("标签 · LABELS")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(Color(red: 156/255, green: 163/255, blue: 153/255))
-                    .tracking(1.0)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 8)
+                HStack {
+                    Text("全局标签")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Text("\(allTagsWithCounts.count)")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.top, 16)
+                .padding(.bottom, 4)
 
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 2) {
-                        ForEach(topTags, id: \.self) { tag in
-                            let isSelected = state.currentNav == .tags && state.selectedTag == tag
-                            Button(action: {
+                    VStack(spacing: 1) {
+                        // All virtual tag
+                        SidebarTagRowButton(
+                            tag: "全部",
+                            count: nil,
+                            isSelected: !state.showSettings && state.currentNav == .tags && (state.selectedTag == nil || state.selectedTag == "全部")
+                        ) {
+                            state.showSettings = false
+                            state.currentNav = .tags
+                            state.selectedTag = nil
+                        }
+
+                        ForEach(allTagsWithCounts, id: \.tag) { item in
+                            SidebarTagRowButton(
+                                tag: item.tag,
+                                count: item.count,
+                                isSelected: !state.showSettings && state.currentNav == .tags && state.selectedTag == item.tag
+                            ) {
                                 state.showSettings = false
-                                state.selectedTag = tag
                                 state.currentNav = .tags
-                            }) {
-                                HStack {
-                                    Text("# \(tag)")
-                                        .font(.system(size: 12, weight: isSelected ? .bold : .regular))
-                                        .foregroundColor(isSelected ? Color(red: 44/255, green: 88/255, blue: 64/255) : Color(red: 112/255, green: 123/255, blue: 111/255))
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 24)
-                                .padding(.vertical, 7)
-                                .background(
-                                    isSelected ?
-                                    RoundedRectangle(cornerRadius: 8).fill(Color(red: 228/255, green: 236/255, blue: 227/255)).padding(.horizontal, 12) :
-                                    RoundedRectangle(cornerRadius: 8).fill(Color.clear).padding(.horizontal, 12)
-                                )
+                                state.selectedTag = item.tag
                             }
-                            .buttonStyle(.plain)
                         }
                     }
+                    .padding(.horizontal, 8)
                 }
             }
 
             Spacer()
 
-            // Footer
-            VStack(alignment: .leading, spacing: 4) {
-                Rectangle()
-                    .fill(Color(red: 230/255, green: 233/255, blue: 226/255))
-                    .frame(height: 1)
-                    .padding(.bottom, 12)
+            // Bottom Settings Row
+            Rectangle()
+                .fill(borderColor)
+                .frame(height: 1)
 
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color(red: 120/255, green: 164/255, blue: 137/255))
-                        .frame(width: 6, height: 6)
-                    Text("本地 Markdown 工作空间")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(red: 154/255, green: 163/255, blue: 152/255))
-                }
-
-                Text("Less is More · 设计原型")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(red: 154/255, green: 163/255, blue: 152/255))
+            SidebarBottomSettingsButton {
+                state.showSettings = true
             }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 20)
         }
-    }
-
-    private func sidebarNavButton(title: String, icon: String, nav: NavigationItem) -> some View {
-        let isSelected = state.currentNav == nav && !state.showSettings
-
-        return Button(action: {
-            state.showSettings = false
-            state.currentNav = nav
-            if nav == .notes {
-                state.selectedNoteId = nil
-            }
-        }) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                    .foregroundColor(isSelected ? Color(red: 61/255, green: 113/255, blue: 82/255) : Color(red: 119/255, green: 131/255, blue: 117/255))
-                    .frame(width: 18)
-
-                Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                    .foregroundColor(isSelected ? Color(red: 44/255, green: 88/255, blue: 64/255) : Color(red: 97/255, green: 106/255, blue: 96/255))
-
-                Spacer()
-            }
-            .padding(.vertical, 9)
-            .padding(.horizontal, 12)
-            .background(
-                isSelected ?
-                RoundedRectangle(cornerRadius: 9).fill(Color(red: 228/255, green: 236/255, blue: 227/255)) :
-                RoundedRectangle(cornerRadius: 9).fill(Color.clear)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - Inspector Resize Divider
-
-    private var inspectorDivider: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: 1)
-            .overlay(
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(width: 7)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture()
-                            .onChanged { val in
-                                let newW = state.inspectorWidth - val.translation.width
-                                state.inspectorWidth = min(max(newW, 280), 720)
-                            }
-                    )
-            )
     }
 
     // MARK: - First Launch Vault Picker
@@ -363,7 +434,7 @@ public struct AppShell: View {
         VStack(spacing: 20) {
             Image(systemName: "folder.badge.gearshape")
                 .font(.system(size: 48))
-                .foregroundColor(Color(red: 71/255, green: 112/255, blue: 91/255))
+                .foregroundColor(Color.accentColor)
 
             VStack(spacing: 6) {
                 Text("欢迎使用 啪嗒 / Pata")
@@ -383,13 +454,13 @@ public struct AppShell: View {
                 .font(.system(size: 13, weight: .semibold))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color(red: 71/255, green: 112/255, blue: 91/255)))
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.accentColor))
                 .foregroundColor(.white)
             }
             .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(red: 250/255, green: 250/255, blue: 248/255))
+        .background(currentThemeBg)
     }
 
     private func selectVaultFolder() {
@@ -402,6 +473,246 @@ public struct AppShell: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             state.openVault(path: url.path)
+        }
+    }
+}
+
+// MARK: - Header & Sidebar Sub-Components with Complete Hit-Testing & Hover Feedback
+
+public struct SidebarToggleButton: View {
+    let collapsed: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    public init(collapsed: Bool, action: @escaping () -> Void) {
+        self.collapsed = collapsed
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(isHovered ? Color.primary.opacity(0.08) : Color.black.opacity(0.0001))
+                    .frame(width: 24, height: 24)
+
+                ZStack {
+                    RoundedRectangle(cornerRadius: 2.25)
+                        .stroke(Color.secondary, lineWidth: 1.25)
+                        .frame(width: 14, height: 11)
+
+                    Rectangle()
+                        .fill(Color.secondary)
+                        .frame(width: 1.25, height: 11)
+                        .offset(x: -2)
+
+                    if !collapsed {
+                        Rectangle()
+                            .fill(Color.secondary.opacity(0.3))
+                            .frame(width: 3.5, height: 9)
+                            .offset(x: -4)
+                    }
+                }
+            }
+            .frame(width: 24, height: 24)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .help(collapsed ? "展开侧栏 (⌃⌘S)" : "收起侧栏 (⌃⌘S)")
+    }
+}
+
+struct TopNavTabButton: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                Text(title)
+                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .foregroundColor(isSelected ? .primary : .secondary)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.primary.opacity(0.08) : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+struct SearchHeaderButton: View {
+    let borderColor: Color
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                Text("搜索")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                Text("⌘K/⌘P")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 1)
+                    .background(RoundedRectangle(cornerRadius: 3).fill(Color.primary.opacity(0.06)))
+            }
+            .padding(.horizontal, 10)
+            .frame(width: 176, height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isHovered ? Color.primary.opacity(0.06) : Color.primary.opacity(0.03))
+            )
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(borderColor, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+struct SettingsHeaderButton: View {
+    let showSettings: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "gearshape")
+                .font(.system(size: 13))
+                .foregroundColor(showSettings ? .primary : .secondary)
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(showSettings ? Color.primary.opacity(0.12) : (isHovered ? Color.primary.opacity(0.08) : Color.black.opacity(0.0001)))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .help("设置 (⌘,)")
+    }
+}
+
+struct SidebarNavRowButton: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 13))
+                Text(title)
+                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                Spacer()
+            }
+            .foregroundColor(isSelected ? .primary : .secondary)
+            .padding(.horizontal, 10)
+            .frame(height: 32)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.primary.opacity(0.08) : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+struct SidebarTagRowButton: View {
+    let tag: String
+    let count: Int?
+    let isSelected: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text("#")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                Text(tag)
+                    .font(.system(size: 13))
+                    .foregroundColor(isSelected ? .primary : .secondary)
+                Spacer()
+                if let c = count {
+                    Text("\(c)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.primary.opacity(0.08) : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
+        }
+    }
+}
+
+struct SidebarBottomSettingsButton: View {
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 13))
+                Text("设置")
+                    .font(.system(size: 13))
+                Spacer()
+            }
+            .foregroundColor(.secondary)
+            .padding(.horizontal, 14)
+            .frame(height: 44)
+            .background(isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovered = hovering
         }
     }
 }
