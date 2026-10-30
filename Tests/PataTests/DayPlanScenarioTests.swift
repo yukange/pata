@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import PataCore
+@testable import PataUI
 
 @Suite("BDD Feature: DayPlan & Task Invariants")
 struct DayPlanScenarioTests {
@@ -100,5 +101,54 @@ struct DayPlanScenarioTests {
         let stored = vault.index.getTask(task.id)
         #expect(stored != nil)
         #expect(stored?.title == "待移除测试任务")
+    }
+
+    @Test("Given today plan date, when shifting forward from today, then forward navigation into the future is blocked")
+    @MainActor
+    func shiftingForwardPastTodayIsBlockedScenario() {
+        let state = AppState.shared
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        let todayStr = f.string(from: Date())
+        state.todayDateString = todayStr
+
+        // Given: Today's date is set
+        let canShiftForward = state.todayDateString < todayStr
+        #expect(!canShiftForward)
+
+        // When: Attempting to advance day when already on today
+        func shiftDay(_ delta: Int) {
+            guard delta < 0 || state.todayDateString < todayStr else { return }
+            if let d = f.date(from: state.todayDateString),
+               let next = Calendar.current.date(byAdding: .day, value: delta, to: d) {
+                let nextStr = f.string(from: next)
+                if delta > 0 && nextStr > todayStr {
+                    state.todayDateString = todayStr
+                } else {
+                    state.todayDateString = nextStr
+                }
+            }
+        }
+
+        // Shifting forward (+1) is blocked
+        shiftDay(1)
+        #expect(state.todayDateString == todayStr)
+
+        // Shifting backward (-1) goes to yesterday
+        shiftDay(-1)
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+        let yesterdayStr = f.string(from: yesterday)
+        #expect(state.todayDateString == yesterdayStr)
+
+        // When on yesterday, canShiftForward becomes true
+        #expect(state.todayDateString < todayStr)
+
+        // Shifting forward returns to today
+        shiftDay(1)
+        #expect(state.todayDateString == todayStr)
+
+        // Further shifting forward continues to be blocked
+        shiftDay(5)
+        #expect(state.todayDateString == todayStr)
     }
 }

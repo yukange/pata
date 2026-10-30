@@ -79,7 +79,8 @@ let package = Package(
                 "PataCore",
                 "PataKeychain",
                 "PataAudio",
-                "PataMCP"
+                "PataMCP",
+                "PataUI"
             ],
             path: "Tests/PataTests"
         )

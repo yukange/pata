@@ -21,6 +21,10 @@ public struct TodayView: View {
         state.todayDateString == todayStr
     }
 
+    private var canShiftForward: Bool {
+        state.todayDateString < todayStr
+    }
+
     private var planWord: String {
         isToday ? "今日" : "当日"
     }
@@ -175,30 +179,33 @@ public struct TodayView: View {
     // MARK: - Date Bar
 
     private var dateBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             HStack(spacing: 0) {
-                Button(action: {
-                    shiftDay(-1)
-                }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .frame(width: 26, height: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                DateNavStepperButton(
+                    icon: "chevron.left",
+                    isEnabled: true,
+                    width: 28,
+                    height: 24,
+                    helpText: "前一天",
+                    action: { shiftDay(-1) }
+                )
 
-                Button(action: {
-                    shiftDay(1)
-                }) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .frame(width: 26, height: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                Rectangle()
+                    .fill(borderColor)
+                    .frame(width: 1, height: 14)
+
+                DateNavStepperButton(
+                    icon: "chevron.right",
+                    isEnabled: canShiftForward,
+                    width: 28,
+                    height: 24,
+                    helpText: canShiftForward ? "后一天" : "不能选择未来日期",
+                    action: { shiftDay(1) }
+                )
             }
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color.primary.opacity(0.03)))
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(borderColor, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
 
             Text(displayDateString)
                 .font(.system(size: 16, weight: .semibold))
@@ -228,11 +235,19 @@ public struct TodayView: View {
     }
 
     private func shiftDay(_ delta: Int) {
+        if delta > 0 && !canShiftForward {
+            return
+        }
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         if let d = f.date(from: state.todayDateString),
            let next = Calendar.current.date(byAdding: .day, value: delta, to: d) {
-            state.todayDateString = f.string(from: next)
+            let nextStr = f.string(from: next)
+            if delta > 0 && nextStr > todayStr {
+                state.todayDateString = todayStr
+            } else {
+                state.todayDateString = nextStr
+            }
         }
     }
 
@@ -538,6 +553,10 @@ public struct TodayToolbarDateBar: View {
         state.todayDateString == todayStr
     }
 
+    private var canShiftForward: Bool {
+        state.todayDateString < todayStr
+    }
+
     private var displayDateString: String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
@@ -553,25 +572,32 @@ public struct TodayToolbarDateBar: View {
 
     public var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            HStack(spacing: 2) {
-                Button(action: { shiftDay(-1) }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+            HStack(spacing: 0) {
+                DateNavStepperButton(
+                    icon: "chevron.left",
+                    isEnabled: true,
+                    width: 22,
+                    height: 20,
+                    helpText: "前一天",
+                    action: { shiftDay(-1) }
+                )
 
-                Button(action: { shiftDay(1) }) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.secondary)
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
+                Rectangle()
+                    .fill(Color(nsColor: .separatorColor))
+                    .frame(width: 1, height: 12)
+
+                DateNavStepperButton(
+                    icon: "chevron.right",
+                    isEnabled: canShiftForward,
+                    width: 22,
+                    height: 20,
+                    helpText: canShiftForward ? "后一天" : "不能选择未来日期",
+                    action: { shiftDay(1) }
+                )
             }
+            .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.03)))
+            .overlay(RoundedRectangle(cornerRadius: 5).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: 5))
 
             Text(displayDateString)
                 .font(.system(size: 13, weight: .semibold))
@@ -599,11 +625,68 @@ public struct TodayToolbarDateBar: View {
     }
 
     private func shiftDay(_ delta: Int) {
+        if delta > 0 && !canShiftForward {
+            return
+        }
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         if let d = f.date(from: state.todayDateString),
            let next = Calendar.current.date(byAdding: .day, value: delta, to: d) {
-            state.todayDateString = f.string(from: next)
+            let nextStr = f.string(from: next)
+            if delta > 0 && nextStr > todayStr {
+                state.todayDateString = todayStr
+            } else {
+                state.todayDateString = nextStr
+            }
+        }
+    }
+}
+
+// MARK: - Date Stepper Button Component
+
+public struct DateNavStepperButton: View {
+    let icon: String
+    let isEnabled: Bool
+    let width: CGFloat
+    let height: CGFloat
+    let helpText: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    public init(
+        icon: String,
+        isEnabled: Bool,
+        width: CGFloat = 26,
+        height: CGFloat = 24,
+        helpText: String = "",
+        action: @escaping () -> Void
+    ) {
+        self.icon = icon
+        self.isEnabled = isEnabled
+        self.width = width
+        self.height = height
+        self.helpText = helpText
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: {
+            if isEnabled { action() }
+        }) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(isEnabled ? (isHovered ? .primary : .secondary) : .secondary.opacity(0.28))
+                .frame(width: width, height: height)
+                .background(isEnabled && isHovered ? Color.primary.opacity(0.06) : Color.black.opacity(0.0001))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .help(helpText)
+        .onHover { hovering in
+            if isEnabled {
+                isHovered = hovering
+            }
         }
     }
 }
