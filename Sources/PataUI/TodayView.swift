@@ -380,12 +380,6 @@ public struct TodayView: View {
             quickCreateInputContainer
                 .zIndex(100)
 
-            Text("仅安排今天推进的任务，不改变任务的截止日期。")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
-                .padding(.bottom, 2)
-                .zIndex(1)
-
             // Task List
             if !planTasks.isEmpty {
                 VStack(spacing: 0) {
@@ -824,10 +818,6 @@ public struct TodayView: View {
             }
             .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.02)))
             .overlay(RoundedRectangle(cornerRadius: 8).stroke(borderColor, lineWidth: 1))
-
-            Text("记录将记入 \(state.todayDateString) 的日计划")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
 
             // Timeline Items
             if timelineItems.isEmpty {
