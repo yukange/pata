@@ -155,13 +155,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    private static var hasPreventedInitialFocus = false
+
     static func configureWindow(_ window: NSWindow) {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
         window.isMovableByWindowBackground = true
         window.toolbar = nil
+        window.initialFirstResponder = window.contentView
         window.layoutIfNeeded()
+
+        if !hasPreventedInitialFocus {
+            hasPreventedInitialFocus = true
+            DispatchQueue.main.async {
+                window.makeFirstResponder(nil)
+            }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

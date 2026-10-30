@@ -283,6 +283,14 @@ public struct TodayView: View {
             .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            isInputFocused = false
+            isDropdownVisible = false
+            DispatchQueue.main.async {
+                isInputFocused = false
+                isDropdownVisible = false
+            }
+        }
     }
 
     // MARK: - Date Bar

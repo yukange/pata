@@ -5,6 +5,7 @@ public struct TasksView: View {
     @ObservedObject var state: AppState
     @State private var quickCreateText: String = ""
     @State private var statusFilter: String = "all" // "all", "active", "done"
+    @FocusState private var isQuickCreateFocused: Bool
 
     public init(state: AppState) {
         self.state = state
@@ -53,8 +54,13 @@ public struct TasksView: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .padding(.horizontal, 12)
+                        .focused($isQuickCreateFocused)
                         .onSubmit {
                             submitQuickCreate()
+                        }
+                        .onKeyPress(.escape) {
+                            isQuickCreateFocused = false
+                            return .handled
                         }
 
                     Button(action: submitQuickCreate) {
@@ -104,6 +110,12 @@ public struct TasksView: View {
             .frame(maxWidth: 860)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            isQuickCreateFocused = false
+            DispatchQueue.main.async {
+                isQuickCreateFocused = false
+            }
+        }
     }
 
     private func filterButton(title: String, filterKey: String) -> some View {
