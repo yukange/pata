@@ -176,9 +176,9 @@ if let idx = CommandLine.arguments.firstIndex(of: "--snapshot"), idx + 1 < Comma
     app.setActivationPolicy(.accessory)
 
     let state = AppState.shared
-    // Open DemoVault by default for 1:1 prototype fidelity
+    // Open DemoVault by default for 1:1 prototype fidelity (isolated, never persist)
     let demoVaultPath = "/Users/wuyukang/code/github/pata-swift/DemoVault"
-    state.openVault(path: demoVaultPath)
+    state.openVault(path: demoVaultPath, persist: false)
     print("Vault tasks count:", state.vault?.index.listTasks().count ?? -1)
     print("Vault parse errors:", state.vault?.index.listParseErrors() ?? [])
     let p = state.vault?.getDayPlan(date: "2026-10-11")

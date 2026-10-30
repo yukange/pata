@@ -67,6 +67,9 @@ public final class AppState: ObservableObject {
     @Published public var accentColorHex: String = ""
 
     private let configURL: URL = {
+        if CommandLine.arguments.contains("--snapshot") {
+            return URL(fileURLWithPath: "/tmp/pata_snapshot_vault.json")
+        }
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         let dir = appSupport.appendingPathComponent("pata")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -98,7 +101,7 @@ public final class AppState: ObservableObject {
         }
 
         if let vPath = json["vault_path"] as? String, !vPath.isEmpty {
-            openVault(path: vPath)
+            openVault(path: vPath, persist: false)
         }
 
         if let mcpEnabled = json["mcp_enabled"] as? Bool, mcpEnabled, let v = vault {
@@ -108,6 +111,10 @@ public final class AppState: ObservableObject {
     }
 
     public func savePreferences() {
+        if CommandLine.arguments.contains("--snapshot") {
+            return
+        }
+
         var dict: [String: Any] = [
             "theme": themePreference,
             "accent_color": accentColorHex,
@@ -137,7 +144,7 @@ public final class AppState: ObservableObject {
         }
     }
 
-    public func openVault(path: String) {
+    public func openVault(path: String, persist: Bool = true) {
         do {
             let v = try Vault(rootPath: path)
             v.onEvent = { [weak self] _ in
@@ -150,7 +157,9 @@ public final class AppState: ObservableObject {
             self.vaultStatus = v.rootPath
             self.vaultHealthErrors = v.index.listParseErrors()
             MCPServer.shared.setVault(v)
-            savePreferences()
+            if persist && !CommandLine.arguments.contains("--snapshot") {
+                savePreferences()
+            }
         } catch {
             self.vaultStatus = "打开资料库失败: \(error.localizedDescription)"
         }
