@@ -15,36 +15,9 @@ permissions:
 jobs:
   release-macos:
     runs-on: macos-14
-    env:
-      OFFICIAL_BUILD: 'true'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache: true
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install Wails v3 CLI
-        run: |
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.28
-
-      - name: Install Frontend Dependencies
-        run: |
-          npm --prefix frontend ci
-
-      - name: Build Frontend Assets
-        run: |
-          npm --prefix frontend run build
 
       - name: Extract Clean SemVer Version
         id: get_version
@@ -52,7 +25,7 @@ jobs:
           RAW_TAG="${{ github.ref_name }}"
           CLEAN_VERSION="${RAW_TAG#v}"
           if [ -z "${CLEAN_VERSION}" ] || [ "${RAW_TAG}" = "main" ]; then
-            CLEAN_VERSION=$(node -p "require('./frontend/package.json').version")
+            CLEAN_VERSION="0.1.1"
           fi
           echo "version=${CLEAN_VERSION}" >> $GITHUB_OUTPUT
           if [ "${{ github.ref_type }}" = "tag" ]; then
@@ -61,31 +34,24 @@ jobs:
             echo "tag_name=v${CLEAN_VERSION}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build macOS App Bundle
-        env:
-          VERSION: ${{ steps.get_version.outputs.version }}
-          OFFICIAL_BUILD: 'true'
+      - name: Run Swift Unit Tests
         run: |
-          wails3 task darwin:package OFFICIAL_BUILD=true VERSION=${VERSION}
+          swift test
 
-      - name: Run Tests
+      - name: Build macOS Native App Bundle
         run: |
-          go test ./...
-          npm --prefix frontend test
+          ./scripts/build_swift_app.sh
 
       - name: Package Release Assets
-        env:
-          VERSION: ${{ steps.get_version.outputs.version }}
-          OFFICIAL_BUILD: 'true'
         run: |
-          # Package .app.zip for in-app updater
-          wails3 task darwin:package:zip ARCH=arm64 OFFICIAL_BUILD=true VERSION=${VERSION}
-          # Package .dmg for manual distribution
-          wails3 task darwin:package:dmg OFFICIAL_BUILD=true VERSION=${VERSION}
-          # Generate SHA256 checksums
-          wails3 task darwin:checksums
-          # Verify binary has official_build enabled
-          ./bin/pata.app/Contents/MacOS/pata --version | grep "official_build: true"
+          mkdir -p bin
+          cd build/bin
+          zip -r -y "../../bin/pata-macos-arm64.app.zip" "Pata.app"
+          hdiutil create -volname "Pata" -srcfolder "Pata.app" -ov -format UDZO "../../bin/pata.dmg"
+          cd ../..
+          cd bin
+          shasum -a 256 pata.dmg pata-macos-arm64.app.zip > SHA256SUMS
+          cd ..
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
@@ -96,17 +62,9 @@ jobs:
             bin/*.dmg
             bin/SHA256SUMS
 
-      - name: Prepare Clean Release Notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.get_version.outputs.tag_name }}
-        run: |
-          # If the release already exists, clear existing notes so generate_release_notes
-          # won't append duplicate text on re-runs.
-          gh release edit "${TAG_NAME}" --notes "" 2>/dev/null || true
-
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           tag_name: ${{ steps.get_version.outputs.tag_name }}
           name: "Pata v${{ steps.get_version.outputs.version }}"

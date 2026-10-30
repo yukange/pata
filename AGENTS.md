@@ -1,10 +1,10 @@
 # Pata · Agent 项目指引
 
-**项目名称：啪嗒 / Pata。** 阶段 1～13 的代码与 macOS 实机验收已完成；14～16 的验收状态以 [docs/README.md](docs/README.md) 为准。
+**项目名称：啪嗒 / Pata。** 阶段 1～17 已完成。**当前产品为纯 macOS 原生 Swift 应用（SwiftUI / AppKit + Swift Core + SwiftPM），无 Go / Wails / React / Vditor 运行时。**
 
 ## 开始阅读
 
-1. 阅读 [docs/README.md](docs/README.md)，按 01 → 16 了解已完成与规划中的阶段。
+1. 阅读 [docs/README.md](docs/README.md)，按 01 → 17 了解已完成与规划中的阶段。
 2. 阅读 [阶段 1 产品提案](docs/01-validate/proposal.md)、[已确认的取舍](docs/01-validate/decisions.md)、[UI 规范](docs/01-validate/ui.md)。
    - macOS 原生窗口细节和 Magpie 源码参考见 [macos-native.md](docs/01-validate/macos-native.md)；浏览器原型不等于真实 Liquid Glass 验证。
 3. 数据 Schema 的**单一来源**为 [阶段 2 schema.md](docs/02-foundation/schema.md)；旧 `docs/02-foundation/examples/` 为历史测试固件，不是生产数据。
@@ -37,6 +37,13 @@
 
 - **增加复杂度前先取得共识**：在为推测性或极低概率的竞态条件、安全边界情况增加复杂度之前，必须先向用户说明具体会出现什么问题、发生的可能性，以及新增实现和维护复杂度的成本，并取得用户明确同意。不得为了理论上的健壮性擅自扩大任务范围。
 
+## 阶段 17 · 纯 Swift 原生重构（已完成）
+
+- 目标与验收单一入口：[017 idea](docs/17-swift-native-rewrite/idea.md) / [017 proposal](docs/17-swift-native-rewrite/proposal.md)。**已全量迁移为纯 Swift 原生应用，旧版 Go / Wails / React 栈已退出维护并移除**。
+- 架构全面采用 SwiftUI/AppKit + Swift Core（PataCore、PataEditor、PataAudio、PataKeychain、PataMCP、PataUI、PataApp），以 SwiftPM 构建管理。
+- [schema.md](docs/02-foundation/schema.md) 仍是唯一生效存储协议。**Note 正文**使用标准 Markdown 相对链接；**Task/Activity** 内 `[[名称]]` 为纯文本且通过本作用域 `note_refs` 绑定 ID。
+- 保留 MCP Tools/Task URI、Agent 来源、MP3 逐字稿/Keychain、应用内更新以及草稿/文件冲突保护。
+- 自动化测试与构建单一入口为 `swift test` 与 `scripts/build_swift_app.sh`。
 ## 前端工程约束（阶段 12）
 
 - **优先统一已有体验，不为统一而重构**：保留现有 Today / Tasks / Notes 视觉与交互，仅对真实重复、缺陷及可访问性问题做局部优化；不得整体套用 Nova 主题。
