@@ -1,5 +1,7 @@
 import SwiftUI
+import AppKit
 import PataCore
+import UniformTypeIdentifiers
 
 public struct TodayView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -10,6 +12,9 @@ public struct TodayView: View {
     @State private var candidateTab: CandidateTab = .uncompleted
     @State private var highlightedCandidateIndex: Int? = nil
     @State private var inputWidth: CGFloat = 0
+
+    @State private var draggingTaskId: String? = nil
+    @State private var localPlanTaskIds: [String] = []
 
     @State private var quickActivityText: String = ""
     @State private var isCreatingActivity: Bool = false
@@ -96,9 +101,16 @@ public struct TodayView: View {
         state.vault?.getDayPlan(date: state.todayDateString) ?? DayPlan(date: state.todayDateString)
     }
 
+    private var effectivePlanTaskIds: [String] {
+        if draggingTaskId != nil && !localPlanTaskIds.isEmpty {
+            return localPlanTaskIds
+        }
+        return dayPlan.taskIds
+    }
+
     private var planTasks: [Task] {
         guard let v = state.vault else { return [] }
-        return dayPlan.taskIds.compactMap { v.index.getTask($0) }
+        return effectivePlanTaskIds.compactMap { v.index.getTask($0) }
     }
 
     private var completedPlanTasksCount: Int {
@@ -387,55 +399,54 @@ public struct TodayView: View {
                 }
                 .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.02)))
                 .overlay(RoundedRectangle(cornerRadius: 8).stroke(borderColor, lineWidth: 1))
+                .onDrop(of: [.plainText], isTargeted: nil) { _ in
+                    commitReorder()
+                    return true
+                }
             }
         }
     }
 
     private func planTaskRow(_ task: Task) -> some View {
-        let isDone = task.status == .done
-        let isOverdue = isTaskOverdue(task)
-
-        return HStack(spacing: 10) {
-            Button(action: { toggleStatus(task) }) {
-                Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16))
-                    .foregroundColor(isDone ? Color.emeraldColor : Color.secondary.opacity(0.5))
+        PlanTaskRowView(
+            task: task,
+            isDone: task.status == .done,
+            isOverdue: isTaskOverdue(task),
+            isDragging: draggingTaskId == task.id,
+            onToggle: { toggleStatus(task) },
+            onSelect: { state.openTaskInspector(taskId: task.id) },
+            onDragStart: {
+                self.draggingTaskId = task.id
+                self.localPlanTaskIds = dayPlan.taskIds
+                return NSItemProvider(object: task.id as NSString)
             }
-            .buttonStyle(.plain)
-
-            Text(task.title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(isDone ? .secondary : .primary)
-                .strikethrough(isDone, color: .secondary)
-
-            if let due = task.due {
-                if isOverdue {
-                    Text("逾期 \(due)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Color(red: 220/255, green: 38/255, blue: 38/255))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(RoundedRectangle(cornerRadius: 4).fill(Color(red: 254/255, green: 226/255, blue: 226/255)))
-                } else {
-                    Text("due \(due)")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
+        )
+        .onDrop(of: [.plainText], delegate: PlanTaskDropDelegate(
+            targetTask: task,
+            draggingTaskId: $draggingTaskId,
+            localTaskIds: $localPlanTaskIds,
+            onCommit: {
+                commitReorder()
             }
+        ))
+    }
 
-            ForEach(task.tags, id: \.self) { tag in
-                Text("#\(tag)")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-            }
-
-            Spacer()
+    private func commitReorder() {
+        guard let v = state.vault else {
+            draggingTaskId = nil
+            return
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            state.openTaskInspector(taskId: task.id)
+        let finalIds = localPlanTaskIds
+        draggingTaskId = nil
+        var plan = dayPlan
+        if !finalIds.isEmpty && plan.taskIds != finalIds {
+            plan.taskIds = finalIds
+            do {
+                _ = try v.updateDayPlan(plan)
+                state.objectWillChange.send()
+            } catch {
+                print("Failed to save reordered day plan:", error)
+            }
         }
     }
 
@@ -1104,5 +1115,125 @@ private struct InputWidthPreferenceKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+// MARK: - Drag and Drop Components for Today Plan Tasks
+
+struct GripVerticalHandle: View {
+    let isHovered: Bool
+    let isDragging: Bool
+
+    var body: some View {
+        HStack(spacing: 2.5) {
+            VStack(spacing: 2.5) {
+                Circle().frame(width: 2.5, height: 2.5)
+                Circle().frame(width: 2.5, height: 2.5)
+                Circle().frame(width: 2.5, height: 2.5)
+            }
+            VStack(spacing: 2.5) {
+                Circle().frame(width: 2.5, height: 2.5)
+                Circle().frame(width: 2.5, height: 2.5)
+                Circle().frame(width: 2.5, height: 2.5)
+            }
+        }
+        .foregroundColor(isHovered || isDragging ? Color.primary.opacity(0.65) : Color.secondary.opacity(0.35))
+        .frame(width: 20, height: 24)
+        .contentShape(Rectangle())
+        .help("按住拖拽排序")
+    }
+}
+
+struct PlanTaskRowView: View {
+    let task: Task
+    let isDone: Bool
+    let isOverdue: Bool
+    let isDragging: Bool
+    let onToggle: () -> Void
+    let onSelect: () -> Void
+    let onDragStart: () -> NSItemProvider
+
+    @State private var isHovered: Bool = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button(action: onToggle) {
+                Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 16))
+                    .foregroundColor(isDone ? Color.emeraldColor : Color.secondary.opacity(0.5))
+            }
+            .buttonStyle(.plain)
+
+            Text(task.title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isDone ? .secondary : .primary)
+                .strikethrough(isDone, color: .secondary)
+
+            if let due = task.due {
+                if isOverdue {
+                    Text("逾期 \(due)")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Color(red: 220/255, green: 38/255, blue: 38/255))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color(red: 254/255, green: 226/255, blue: 226/255)))
+                } else {
+                    Text("due \(due)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            ForEach(task.tags, id: \.self) { tag in
+                Text("#\(tag)")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            // Right-side :: grip handle
+            GripVerticalHandle(isHovered: isHovered, isDragging: isDragging)
+                .onDrag(onDragStart)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(isHovered ? Color.primary.opacity(0.03) : Color.clear)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovered = hovering
+        }
+        .onTapGesture {
+            onSelect()
+        }
+        .opacity(isDragging ? 0.35 : 1.0)
+    }
+}
+
+struct PlanTaskDropDelegate: DropDelegate {
+    let targetTask: Task
+    @Binding var draggingTaskId: String?
+    @Binding var localTaskIds: [String]
+    let onCommit: () -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let sourceId = draggingTaskId, sourceId != targetTask.id else { return }
+        guard let fromIdx = localTaskIds.firstIndex(of: sourceId),
+              let toIdx = localTaskIds.firstIndex(of: targetTask.id),
+              fromIdx != toIdx else { return }
+
+        let toOffset = toIdx > fromIdx ? toIdx + 1 : toIdx
+        withAnimation(.easeInOut(duration: 0.15)) {
+            localTaskIds.move(fromOffsets: IndexSet(integer: fromIdx), toOffset: toOffset)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        return DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        onCommit()
+        return true
     }
 }

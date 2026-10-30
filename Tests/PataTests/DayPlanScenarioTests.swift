@@ -251,4 +251,37 @@ struct DayPlanScenarioTests {
         remaining = vault.index.listTasks().filter { !currentPlanIds.contains($0.id) }
         #expect(remaining.isEmpty)
     }
+
+    @Test("Given a DayPlan with scheduled tasks, when tasks are reordered, then the new order is persisted and preserved across reloads")
+    func dayPlanTaskReorderingScenario() throws {
+        let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let vault = try Vault(rootPath: tmpDir.path)
+
+        let t1 = try vault.createTask(title: "设计新架构方案")
+        let t2 = try vault.createTask(title: "修复网络连接问题")
+        let t3 = try vault.createTask(title: "编写需求说明书")
+
+        let dateStr = "2026-10-30"
+        var plan = vault.getDayPlan(date: dateStr)
+        plan.taskIds = [t1.id, t2.id, t3.id]
+        _ = try vault.updateDayPlan(plan)
+
+        #expect(vault.getDayPlan(date: dateStr).taskIds == [t1.id, t2.id, t3.id])
+
+        // When: Reordering to [t3, t1, t2]
+        var reorderedPlan = vault.getDayPlan(date: dateStr)
+        reorderedPlan.taskIds = [t3.id, t1.id, t2.id]
+        _ = try vault.updateDayPlan(reorderedPlan)
+
+        // Then: Order is immediately updated
+        #expect(vault.getDayPlan(date: dateStr).taskIds == [t3.id, t1.id, t2.id])
+
+        // And: Reloading vault from disk preserves the exact reordered sequence
+        let reloadedVault = try Vault(rootPath: tmpDir.path)
+        let diskPlan = reloadedVault.getDayPlan(date: dateStr)
+        #expect(diskPlan.taskIds == [t3.id, t1.id, t2.id])
+    }
 }
