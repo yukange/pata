@@ -132,4 +132,29 @@ public struct Links {
 
         return count == 1 ? foundID : nil
     }
+
+    /// Computes the relative path from a base directory to a target file path.
+    /// E.g. from "/vault/notes" to "/vault/files/img.png" -> "../files/img.png".
+    public static func relativePath(from baseDir: String, to targetPath: String) -> String {
+        let baseComponents = (baseDir as NSString).standardizingPath.components(separatedBy: "/").filter { !$0.isEmpty }
+        let targetComponents = (targetPath as NSString).standardizingPath.components(separatedBy: "/").filter { !$0.isEmpty }
+
+        var commonPrefixLength = 0
+        while commonPrefixLength < baseComponents.count &&
+              commonPrefixLength < targetComponents.count &&
+              baseComponents[commonPrefixLength] == targetComponents[commonPrefixLength] {
+            commonPrefixLength += 1
+        }
+
+        let upSteps = baseComponents.count - commonPrefixLength
+        let downSteps = targetComponents[commonPrefixLength...]
+
+        var relativeParts = Array(repeating: "..", count: upSteps)
+        relativeParts.append(contentsOf: downSteps)
+
+        if relativeParts.isEmpty {
+            return "."
+        }
+        return relativeParts.joined(separator: "/")
+    }
 }

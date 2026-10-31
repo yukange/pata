@@ -13,6 +13,7 @@ struct PataApp: App {
                 .ignoresSafeArea()
         }
         .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1200, height: 780)
         .commands {
             CommandGroup(replacing: .sidebar) {
                 Button(AppState.shared.isSidebarVisible ? "隐藏侧边栏" : "显示侧边栏") {
@@ -164,6 +165,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.isMovableByWindowBackground = true
         window.toolbar = nil
         window.initialFirstResponder = window.contentView
+
+        // Remember user window size/position, default to 1200x780 centered
+        let autosaveName = "PataMainWindow"
+        window.setFrameAutosaveName(autosaveName)
+        if !window.setFrameUsingName(autosaveName) {
+            let defaultRect = NSRect(x: 0, y: 0, width: 1200, height: 780)
+            window.setFrame(defaultRect, display: false)
+            window.center()
+        }
+
         window.layoutIfNeeded()
 
         if !hasPreventedInitialFocus {

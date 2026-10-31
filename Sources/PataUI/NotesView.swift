@@ -75,7 +75,7 @@ public struct NotesView: View {
             flushAutoSave()
             syncCurrentNoteState()
         }
-        .onChange(of: currentBody) { newBody in
+        .onChange(of: currentBody) { _, newBody in
             guard let note = currentNote, note.body != newBody else { return }
             scheduleAutoSave(for: note, body: newBody)
         }
@@ -484,6 +484,11 @@ public struct NotesView: View {
                 text: $currentBody,
                 isReadOnlyTranscript: note.audioTranscript,
                 isFocused: $isEditorFocused,
+                vaultPath: state.vault?.rootPath,
+                noteFilePath: state.vault?.resolveEntityPath(note),
+                onPasteImage: { pasteboard in
+                    handlePasteImage(pasteboard, note: note)
+                },
                 onSeekAudio: { ms in
                     audioPlayer.seek(toMilliseconds: ms)
                 },
@@ -493,6 +498,9 @@ public struct NotesView: View {
             )
             .padding(.horizontal, 16)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                handleDropFiles(providers, for: note)
+            }
 
             // Backlinks drawer
             if !backlinks.isEmpty {
@@ -737,11 +745,75 @@ public struct NotesView: View {
         }
 
         // Check if it's a file
-        if target.hasPrefix("files/") {
-            let full = (v.rootPath as NSString).appendingPathComponent(target)
-            if FileManager.default.fileExists(atPath: full) {
-                NSWorkspace.shared.open(URL(fileURLWithPath: full))
+        let cleanTarget = target.removingPercentEncoding ?? target
+        let fullPath: String
+        if cleanTarget.hasPrefix("files/") {
+            fullPath = (v.rootPath as NSString).appendingPathComponent(cleanTarget)
+        } else if cleanTarget.hasPrefix("../files/") {
+            let sub = String(cleanTarget.dropFirst(3))
+            fullPath = (v.rootPath as NSString).appendingPathComponent(sub)
+        } else if let currentNote = currentNote {
+            let noteDir = (v.resolveEntityPath(currentNote) as NSString).deletingLastPathComponent
+            fullPath = URL(fileURLWithPath: (noteDir as NSString).appendingPathComponent(cleanTarget)).standardized.path
+        } else {
+            fullPath = (v.rootPath as NSString).appendingPathComponent(cleanTarget)
+        }
+        if FileManager.default.fileExists(atPath: fullPath) {
+            NSWorkspace.shared.open(URL(fileURLWithPath: fullPath))
+        }
+    }
+
+    private func handlePasteImage(_ pasteboard: NSPasteboard, note: Note) -> String? {
+        guard let v = state.vault else { return nil }
+        guard PataImageHelper.canPasteImage(from: pasteboard) else { return nil }
+        let notePath = v.resolveEntityPath(note)
+        if let result = PataImageHelper.handlePasteImage(from: pasteboard, vaultPath: v.rootPath, noteFilePath: notePath) {
+            state.objectWillChange.send()
+            return result
+        }
+        return nil
+    }
+
+    private func handleDropFiles(_ providers: [NSItemProvider], for note: Note) -> Bool {
+        guard let v = state.vault else { return false }
+        let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "tiff", "heic"]
+        var handled = false
+
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                provider.loadItem(forTypeIdentifier: "public.file-url", options: nil) { item, _ in
+                    let url: URL?
+                    if let fileURL = item as? URL {
+                        url = fileURL
+                    } else if let data = item as? Data, let fileURL = URL(dataRepresentation: data, relativeTo: nil) {
+                        url = fileURL
+                    } else {
+                        url = nil
+                    }
+
+                    guard let fileURL = url else { return }
+                    let ext = fileURL.pathExtension.lowercased()
+                    guard imageExtensions.contains(ext) else { return }
+
+                    DispatchQueue.main.async {
+                        do {
+                            let relPath = try v.importFile(sourceURL: fileURL)
+                            let notePath = v.resolveEntityPath(note)
+                            let noteDir = (notePath as NSString).deletingLastPathComponent
+                            let absImported = (v.rootPath as NSString).appendingPathComponent(relPath)
+                            let markdownPath = Links.relativePath(from: noteDir, to: absImported)
+                            let appendText = currentBody.isEmpty ? "![](\(markdownPath))\n" : "\n\n![](\(markdownPath))\n"
+                            currentBody.append(appendText)
+                            scheduleAutoSave(for: note, body: currentBody)
+                            state.objectWillChange.send()
+                        } catch {
+                            // ignore import error
+                        }
+                    }
+                }
+                handled = true
             }
         }
+        return handled
     }
 }

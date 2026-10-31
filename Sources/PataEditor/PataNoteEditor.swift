@@ -12,23 +12,54 @@ public struct PataNoteEditor: View {
     @Binding public var text: String
     public var isReadOnlyTranscript: Bool
     public var isFocused: Binding<Bool>?
+    public var vaultPath: String?
+    public var noteFilePath: String?
+    public var onPasteImage: ((NSPasteboard) -> String?)?
     public var onSeekAudio: ((Int) -> Void)?
     public var onTextChange: ((String) -> Void)?
     public var onOpenLink: ((String) -> Void)?
     public var listNoteRefs: (() -> [NoteRef])?
     public var listFiles: (() -> [FileResource])?
 
+    @State private var imageReloadVersion: Int = 0
+    @State private var containerWidth: CGFloat = 0
+
     private static let defaultConfiguration: MarkdownEditorConfiguration = {
         var config = MarkdownEditorConfiguration.default
         config.extensions = [HighlightExtension(), StrikethroughExtension()]
+        config.imageEmbed.minimumWidth = 720
+        config.imageEmbed.fallbackMaxWidth = 720
         return config
     }()
+
+    private var editorConfiguration: MarkdownEditorConfiguration {
+        var config = Self.defaultConfiguration
+        let effectiveWidth = containerWidth > 0 ? containerWidth : 720
+        config.imageEmbed.minimumWidth = effectiveWidth
+        config.imageEmbed.fallbackMaxWidth = effectiveWidth
+
+        let provider = PataEmbeddedImageProvider(
+            vaultPath: vaultPath,
+            noteFilePath: noteFilePath,
+            noteWidth: effectiveWidth,
+            onImageLoaded: {
+                DispatchQueue.main.async {
+                    imageReloadVersion += 1
+                }
+            }
+        )
+        config.services.images = provider
+        return config
+    }
 
     public init(
         noteId: String,
         text: Binding<String>,
         isReadOnlyTranscript: Bool = false,
         isFocused: Binding<Bool>? = nil,
+        vaultPath: String? = nil,
+        noteFilePath: String? = nil,
+        onPasteImage: ((NSPasteboard) -> String?)? = nil,
         onSeekAudio: ((Int) -> Void)? = nil,
         onTextChange: ((String) -> Void)? = nil,
         onOpenLink: ((String) -> Void)? = nil,
@@ -39,6 +70,9 @@ public struct PataNoteEditor: View {
         self._text = text
         self.isReadOnlyTranscript = isReadOnlyTranscript
         self.isFocused = isFocused
+        self.vaultPath = vaultPath
+        self.noteFilePath = noteFilePath
+        self.onPasteImage = onPasteImage
         self.onSeekAudio = onSeekAudio
         self.onTextChange = onTextChange
         self.onOpenLink = onOpenLink
@@ -49,11 +83,12 @@ public struct PataNoteEditor: View {
     public var body: some View {
         NativeTextViewWrapper(
             text: $text,
-            configuration: Self.defaultConfiguration,
+            configuration: editorConfiguration,
             fontSize: 15,
             documentId: noteId,
             isEditable: !isReadOnlyTranscript,
             isFocused: isFocused,
+            onPasteImage: effectiveOnPasteImage,
             onLinkClick: { target in
                 handleLinkClick(target)
             },
@@ -65,8 +100,38 @@ public struct PataNoteEditor: View {
                 ]
             )
         )
-        .onChange(of: text) { newText in
+        .background(
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear {
+                        updateContainerWidth(proxy.size.width)
+                    }
+                    .onChange(of: proxy.size.width) { _, newWidth in
+                        updateContainerWidth(newWidth)
+                    }
+            }
+        )
+        .onChange(of: text) { _, newText in
             onTextChange?(newText)
+        }
+    }
+
+    private func updateContainerWidth(_ width: CGFloat) {
+        guard width > 0, abs(containerWidth - width) > 1.0 else { return }
+        containerWidth = width
+    }
+
+    private var effectiveOnPasteImage: ((NSPasteboard) -> String?)? {
+        if let onPasteImage = onPasteImage {
+            return onPasteImage
+        }
+        guard let vaultPath = vaultPath, !vaultPath.isEmpty else { return nil }
+        return { pasteboard in
+            PataImageHelper.handlePasteImage(
+                from: pasteboard,
+                vaultPath: vaultPath,
+                noteFilePath: noteFilePath
+            )
         }
     }
 

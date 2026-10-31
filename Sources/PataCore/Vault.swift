@@ -661,6 +661,15 @@ public final class Vault: @unchecked Sendable {
         return relPath
     }
 
+    /// Imports raw file data into `files/` without overwriting existing files.
+    /// Returns the vault-relative path (e.g. "files/image_20261030_123456.png").
+    public func importFileData(_ data: Data, filename: String) throws -> String {
+        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(filename)
+        try data.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        return try importFile(sourceURL: tempURL, destFilename: filename)
+    }
+
     // MARK: - File System Watcher
 
     public func startWatcher() {
