@@ -12,6 +12,7 @@ public final class AudioPlayerManager: ObservableObject {
 
     private var player: AVPlayer?
     private var timeObserverToken: Any?
+    private var activeLoadId = UUID()
 
     public init() {}
 
@@ -26,30 +27,54 @@ public final class AudioPlayerManager: ObservableObject {
             return
         }
 
-        stop()
+        // Reset previous player state immediately without blocking MainActor
+        cleanUpCurrentPlayer()
         currentAudioPath = relativePath
 
-        let item = AVPlayerItem(url: url)
-        player = AVPlayer(playerItem: item)
+        let loadId = UUID()
+        activeLoadId = loadId
 
-        Task {
-            if let duration = try? await item.asset.load(.duration) {
+        // Asynchronously load asset and probe duration off the main thread to avoid UI hitch
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let asset = AVURLAsset(url: url)
+            var calculatedDurationMs = 0
+            if let duration = try? await asset.load(.duration) {
                 let seconds = CMTimeGetSeconds(duration)
                 if !seconds.isNaN && seconds > 0 {
-                    self.durationMs = Int(seconds * 1000)
+                    calculatedDurationMs = Int(seconds * 1000)
                 }
             }
-        }
 
-        let interval = CMTime(value: 50, timescale: 1000) // 50ms updates
-        timeObserverToken = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            let sec = CMTimeGetSeconds(time)
-            if !sec.isNaN {
-                Task { @MainActor [weak self] in
-                    self?.currentPositionMs = Int(sec * 1000)
+            await MainActor.run { [weak self] in
+                guard let self = self, self.activeLoadId == loadId else { return }
+
+                let item = AVPlayerItem(asset: asset)
+                let newPlayer = AVPlayer(playerItem: item)
+                self.player = newPlayer
+                self.durationMs = calculatedDurationMs
+
+                let interval = CMTime(value: 100, timescale: 1000) // 100ms updates (10 fps scrubber)
+                self.timeObserverToken = newPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+                    let sec = CMTimeGetSeconds(time)
+                    guard !sec.isNaN else { return }
+                    let ms = Int(sec * 1000)
+                    MainActor.assumeIsolated {
+                        self?.currentPositionMs = ms
+                    }
                 }
             }
         }
+    }
+
+    private func cleanUpCurrentPlayer() {
+        pause()
+        if let token = timeObserverToken, let p = player {
+            p.removeTimeObserver(token)
+            timeObserverToken = nil
+        }
+        player = nil
+        currentPositionMs = 0
+        durationMs = 0
     }
 
     public func play() {
@@ -86,14 +111,8 @@ public final class AudioPlayerManager: ObservableObject {
     }
 
     public func stop() {
-        pause()
-        if let token = timeObserverToken, let p = player {
-            p.removeTimeObserver(token)
-            timeObserverToken = nil
-        }
-        player = nil
+        activeLoadId = UUID()
+        cleanUpCurrentPlayer()
         currentAudioPath = nil
-        currentPositionMs = 0
-        durationMs = 0
     }
 }

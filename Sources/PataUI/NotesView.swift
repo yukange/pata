@@ -1,17 +1,23 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import PataCore
 import PataAudio
+import PataKeychain
 import PataEditor
 
 public struct NotesView: View {
     @ObservedObject var state: AppState
-    @StateObject private var audioPlayer = AudioPlayerManager.shared
+    @StateObject private var asrManager = ASRManager.shared
 
     @State private var isDraftsCollapsed: Bool = false
     @State private var isNotesCollapsed: Bool = false
-    @State private var listWidth: CGFloat = 280
+    @State private var isDividerHovered: Bool = false
+    @State private var isDividerDragging: Bool = false
+    @State private var hasPushedCursor: Bool = false
+    @State private var dragStartWidth: CGFloat? = nil
     @State private var isAudioNote: Bool = false
+    @State private var showMissingKeyAlert: Bool = false
 
     // Editing state
     @State private var currentTitle: String = ""
@@ -52,15 +58,16 @@ public struct NotesView: View {
 
     public var body: some View {
         HStack(spacing: 0) {
-            // Left Column: Notes List (280px)
-            leftColumn
-                .frame(width: listWidth)
-                .background(Color(nsColor: .windowBackgroundColor).opacity(0.4))
+            // Left Column: Notes List (resizable width)
+            if !state.isNotesListCollapsed {
+                leftColumn
+                    .frame(width: state.notesListWidth)
+                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.4))
+                    .transition(.move(edge: .leading))
 
-            // Divider
-            Rectangle()
-                .fill(Color(nsColor: .separatorColor).opacity(0.6))
-                .frame(width: 1)
+                // Resizer Divider
+                dividerHandle
+            }
 
             // Right Column: Note Editor or Empty State
             rightColumn
@@ -81,22 +88,67 @@ public struct NotesView: View {
         }
         .onDisappear {
             flushAutoSave()
+            AudioPlayerManager.shared.stop()
+            if hasPushedCursor {
+                NSCursor.pop()
+                hasPushedCursor = false
+            }
+        }
+        .alert("需配置语音转写 API Key", isPresented: $showMissingKeyAlert) {
+            Button("前往设置") {
+                state.showSettings = true
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("音频逐字稿生成依赖阿里云百炼 DashScope 语音服务。请先在「设置 - 语音转写」中配置 API Key。")
+        }
+    }
+
+    private func selectNote(_ note: Note) {
+        guard state.selectedNoteId != note.id else { return }
+        flushAutoSave()
+
+        // Atomically synchronize state before triggering view re-evaluation to eliminate redundant text formatting passes
+        currentTitle = note.title
+        currentBody = note.body
+        currentTags = note.tags
+        isNamingDraft = false
+        state.selectedNoteId = note.id
+
+        if note.audioTranscript, let audioRelPath = note.audioFile, let v = state.vault {
+            let fullAudioURL = URL(fileURLWithPath: (v.rootPath as NSString).appendingPathComponent(audioRelPath))
+            AudioPlayerManager.shared.loadAudio(url: fullAudioURL, relativePath: audioRelPath)
+        } else {
+            AudioPlayerManager.shared.stop()
         }
     }
 
     private func syncCurrentNoteState() {
         if let note = currentNote {
-            currentTitle = note.title
-            currentBody = note.body
-            currentTags = note.tags
+            if currentTitle != note.title { currentTitle = note.title }
+            if currentBody != note.body { currentBody = note.body }
+            if currentTags != note.tags { currentTags = note.tags }
             isNamingDraft = false
+
+            if note.audioTranscript, let audioRelPath = note.audioFile, let v = state.vault {
+                let fullAudioURL = URL(fileURLWithPath: (v.rootPath as NSString).appendingPathComponent(audioRelPath))
+                AudioPlayerManager.shared.loadAudio(url: fullAudioURL, relativePath: audioRelPath)
+            } else {
+                AudioPlayerManager.shared.stop()
+            }
+        } else {
+            AudioPlayerManager.shared.stop()
         }
     }
 
     // MARK: - Left Column
 
     private var leftColumn: some View {
-        VStack(spacing: 0) {
+        let notes = allNotes
+        let currentDrafts = notes.filter { $0.draft }
+        let currentFormalNotes = notes.filter { !$0.draft }
+
+        return VStack(spacing: 0) {
             // Top Action Bar
             HStack {
                 HStack(spacing: 6) {
@@ -104,35 +156,17 @@ public struct NotesView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.primary)
 
-                    Text("\(allNotes.count)")
+                    Text("\(notes.count)")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
 
                 Spacer()
 
-                // Split Button / Actions
-                Menu {
-                    Button(action: handleCreateDraft) {
-                        Label("新建草稿", systemImage: "doc")
-                    }
-                    Button(action: handleCreateFormalNote) {
-                        Label("新建笔记", systemImage: "doc.text")
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 11, weight: .semibold))
-                        Text("新建草稿")
-                            .font(.system(size: 12, weight: .medium))
-                    }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 4)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(state.effectiveAccentColor))
-                    .foregroundColor(state.effectiveAccentOnColor)
+                // Collapse sidebar button
+                NotesSidebarToggleButton(collapsed: false) {
+                    state.toggleNotesList()
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -157,7 +191,7 @@ public struct NotesView: View {
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundColor(.secondary)
 
-                                    Text("\(drafts.count)")
+                                    Text("\(currentDrafts.count)")
                                         .font(.system(size: 11, design: .monospaced))
                                         .padding(.horizontal, 5)
                                         .padding(.vertical, 1)
@@ -173,14 +207,17 @@ public struct NotesView: View {
                                 Image(systemName: "plus")
                                     .font(.system(size: 11))
                                     .foregroundColor(.secondary)
+                                    .frame(width: 20, height: 20)
+                                    .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
+                            .help("新建草稿")
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
 
                         if !isDraftsCollapsed {
-                            if drafts.isEmpty {
+                            if currentDrafts.isEmpty {
                                 Text("暂无草稿")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
@@ -189,7 +226,7 @@ public struct NotesView: View {
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
                             } else {
-                                ForEach(drafts) { draft in
+                                ForEach(currentDrafts) { draft in
                                     draftRow(draft)
                                 }
                             }
@@ -211,7 +248,7 @@ public struct NotesView: View {
                                         .font(.system(size: 12, weight: .semibold))
                                         .foregroundColor(.secondary)
 
-                                    Text("\(formalNotes.count)")
+                                    Text("\(currentFormalNotes.count)")
                                         .font(.system(size: 11, design: .monospaced))
                                         .padding(.horizontal, 5)
                                         .padding(.vertical, 1)
@@ -222,12 +259,30 @@ public struct NotesView: View {
                             .buttonStyle(.plain)
 
                             Spacer()
+
+                            Menu {
+                                Button(action: handleCreateFormalNote) {
+                                    Label("新建笔记", systemImage: "doc.text")
+                                }
+                                Button(action: handleCreateAudioNote) {
+                                    Label("从音频创建逐字稿", systemImage: "waveform")
+                                }
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 20, height: 20)
+                                    .contentShape(Rectangle())
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                            .help("新建笔记...")
                         }
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
 
                         if !isNotesCollapsed {
-                            if formalNotes.isEmpty {
+                            if currentFormalNotes.isEmpty {
                                 Text("暂无笔记")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
@@ -236,7 +291,7 @@ public struct NotesView: View {
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
                             } else {
-                                ForEach(formalNotes) { note in
+                                ForEach(currentFormalNotes) { note in
                                     formalNoteRow(note)
                                 }
                             }
@@ -253,7 +308,7 @@ public struct NotesView: View {
         let excerpt = getDraftExcerpt(draft.body)
 
         return Button(action: {
-            state.selectedNoteId = draft.id
+            selectNote(draft)
         }) {
             VStack(alignment: .leading, spacing: 2) {
                 if excerpt.isEmpty {
@@ -293,7 +348,7 @@ public struct NotesView: View {
         let isSelected = state.selectedNoteId == note.id
 
         return Button(action: {
-            state.selectedNoteId = note.id
+            selectNote(note)
         }) {
             HStack(spacing: 6) {
                 if note.audioTranscript {
@@ -342,33 +397,47 @@ public struct NotesView: View {
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "doc.text")
-                .font(.system(size: 38))
-                .foregroundColor(Color.secondary.opacity(0.4))
-                .padding(.bottom, 4)
-
-            Text("选择笔记开始阅读或编辑")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.primary)
-
-            Text("或者直接创建新草稿随手记录")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-
-            Button(action: handleCreateDraft) {
-                HStack(spacing: 4) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 11))
-                    Text("新建草稿")
-                        .font(.system(size: 12, weight: .medium))
+        VStack(spacing: 0) {
+            if state.isNotesListCollapsed {
+                HStack {
+                    NotesSidebarToggleButton(collapsed: true) {
+                        state.toggleNotesList()
+                    }
+                    Spacer()
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
             }
-            .buttonStyle(.plain)
-            .padding(.top, 8)
+
+            VStack(spacing: 8) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 38))
+                    .foregroundColor(Color.secondary.opacity(0.4))
+                    .padding(.bottom, 4)
+
+                Text("选择笔记开始阅读或编辑")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.primary)
+
+                Text("或者直接创建新草稿随手记录")
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+
+                Button(action: handleCreateDraft) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 11))
+                        Text("新建草稿")
+                            .font(.system(size: 12, weight: .medium))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 8)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -377,7 +446,13 @@ public struct NotesView: View {
         VStack(alignment: .leading, spacing: 0) {
             if note.draft && !isNamingDraft {
                 // Draft Mode: Floating action bar
-                HStack {
+                HStack(alignment: .center) {
+                    if state.isNotesListCollapsed {
+                        NotesSidebarToggleButton(collapsed: true) {
+                            state.toggleNotesList()
+                        }
+                    }
+
                     Spacer()
 
                     Button(action: { isNamingDraft = true }) {
@@ -397,7 +472,13 @@ public struct NotesView: View {
             } else {
                 // Formal Note Mode or Draft Naming Header
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .center) {
+                    HStack(alignment: .center, spacing: 10) {
+                        if state.isNotesListCollapsed {
+                            NotesSidebarToggleButton(collapsed: true) {
+                                state.toggleNotesList()
+                            }
+                        }
+
                         TextField("无标题笔记", text: $currentTitle, onCommit: {
                             saveNoteTitle(note)
                         })
@@ -478,28 +559,87 @@ public struct NotesView: View {
                 Divider()
             }
 
+            // Audio Player Toolbar for audio transcript notes
+            if note.audioTranscript {
+                AudioPlayerToolbarView(
+                    note: note,
+                    accentColor: state.effectiveAccentColor,
+                    accentOnColor: state.effectiveAccentOnColor,
+                    asrManager: asrManager,
+                    onConfirmReplace: {
+                        handleConfirmReplace(note)
+                    }
+                )
+                Divider()
+            }
+
             // Editor / Content Body
-            PataNoteEditor(
-                noteId: note.id,
-                text: $currentBody,
-                isReadOnlyTranscript: note.audioTranscript,
-                isFocused: $isEditorFocused,
-                vaultPath: state.vault?.rootPath,
-                noteFilePath: state.vault?.resolveEntityPath(note),
-                onPasteImage: { pasteboard in
-                    handlePasteImage(pasteboard, note: note)
-                },
-                onSeekAudio: { ms in
-                    audioPlayer.seek(toMilliseconds: ms)
-                },
-                onOpenLink: { target in
-                    handleOpenLink(target)
+            if note.audioTranscript && currentBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let status = asrManager.getStatus(for: note.id)
+                VStack(spacing: 12) {
+                    if status.state == .uploading || status.state == .transcribing || status.state == .writing {
+                        ProgressView()
+                            .controlSize(.regular)
+                        Text(status.stageMessage.isEmpty ? "正在后台转写逐字稿..." : status.stageMessage)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text("转写完成后将自动生成带时间戳与说话人的逐字稿正文")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary.opacity(0.8))
+                    } else if status.state == .failed {
+                        Image(systemName: "exclamationmark.triangle")
+                            .font(.system(size: 28))
+                            .foregroundColor(.roseBadgeText)
+                        Text("转写失败")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.primary)
+                        Text(status.error ?? "未能完成转写，请检查网络或 API Key")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                        Button("重试转写") {
+                            triggerTranscription(for: note, isRetranscribe: false)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    } else {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 28))
+                            .foregroundColor(.secondary.opacity(0.5))
+                        Text("暂无逐字稿正文")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Button("开始转写") {
+                            triggerTranscription(for: note, isRetranscribe: false)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
                 }
-            )
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onDrop(of: [.fileURL], isTargeted: nil) { providers in
-                handleDropFiles(providers, for: note)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding()
+            } else {
+                PataNoteEditor(
+                    noteId: note.id,
+                    text: $currentBody,
+                    isReadOnlyTranscript: note.audioTranscript,
+                    isFocused: $isEditorFocused,
+                    vaultPath: state.vault?.rootPath,
+                    noteFilePath: state.vault?.resolveEntityPath(note),
+                    onPasteImage: { pasteboard in
+                        handlePasteImage(pasteboard, note: note)
+                    },
+                    onSeekAudio: { ms in
+                        AudioPlayerManager.shared.seek(toMilliseconds: ms, autoPlay: true)
+                    },
+                    onOpenLink: { target in
+                        handleOpenLink(target)
+                    }
+                )
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .onDrop(of: [.fileURL], isTargeted: nil) { providers in
+                    handleDropFiles(providers, for: note)
+                }
             }
 
             // Backlinks drawer
@@ -546,7 +686,26 @@ public struct NotesView: View {
     }
 
     private func moreMenu(_ note: Note) -> some View {
-        Menu {
+        let taskStatus = asrManager.getStatus(for: note.id)
+        let isTranscribing = taskStatus.state == .uploading || taskStatus.state == .transcribing || taskStatus.state == .writing
+
+        return Menu {
+            if note.audioTranscript {
+                Button(currentBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "开始转写 / 重试" : "重新转写") {
+                    triggerTranscription(for: note, isRetranscribe: !currentBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+                .disabled(isTranscribing)
+
+                if let audioRelPath = note.audioFile, let v = state.vault {
+                    Button("在 Finder 中显示音频") {
+                        let fullPath = (v.rootPath as NSString).appendingPathComponent(audioRelPath)
+                        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: fullPath)])
+                    }
+                }
+
+                Divider()
+            }
+
             Button("复制绝对路径") {
                 copyNotePath(note)
             }
@@ -567,10 +726,170 @@ public struct NotesView: View {
         .fixedSize()
     }
 
+    // MARK: - Resizer Divider Handle
+
+    private var dividerHandle: some View {
+        ZStack {
+            Color.clear
+                .frame(width: 8)
+
+            Rectangle()
+                .fill(
+                    isDividerDragging || isDividerHovered
+                        ? state.effectiveAccentColor.opacity(0.8)
+                        : Color(nsColor: .separatorColor).opacity(0.6)
+                )
+                .frame(width: 1)
+        }
+        .frame(width: 8)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isDividerHovered = hovering
+            if hovering && !hasPushedCursor {
+                NSCursor.resizeLeftRight.push()
+                hasPushedCursor = true
+            } else if !hovering && hasPushedCursor && !isDividerDragging {
+                NSCursor.pop()
+                hasPushedCursor = false
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 1)
+                .onChanged { value in
+                    isDividerDragging = true
+                    if dragStartWidth == nil {
+                        dragStartWidth = state.notesListWidth
+                    }
+                    let base = dragStartWidth ?? state.notesListWidth
+                    let target = base + value.translation.width
+                    state.notesListWidth = min(max(target, 200), 500)
+                }
+                .onEnded { _ in
+                    isDividerDragging = false
+                    dragStartWidth = nil
+                    if !isDividerHovered && hasPushedCursor {
+                        NSCursor.pop()
+                        hasPushedCursor = false
+                    }
+                    state.savePreferences()
+                }
+        )
+        .onTapGesture(count: 2) {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                state.notesListWidth = 280
+                state.savePreferences()
+            }
+        }
+    }
+
     // MARK: - Actions
+
+    private func handleCreateAudioNote() {
+        guard let v = state.vault else { return }
+        isNotesCollapsed = false
+        if state.isNotesListCollapsed {
+            state.isNotesListCollapsed = false
+            state.savePreferences()
+        }
+
+        let apiKey = (try? DefaultKeychainStore.shared.get(
+            service: ASRConstants.keychainService,
+            account: ASRConstants.keychainAccount
+        ))?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let key = apiKey, !key.isEmpty else {
+            showMissingKeyAlert = true
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.title = "选择要转写的音频文件"
+        panel.allowedContentTypes = [
+            UTType(filenameExtension: "mp3") ?? .audio,
+            UTType(filenameExtension: "m4a") ?? .audio
+        ]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        if panel.runModal() == .OK, let fileURL = panel.url {
+            do {
+                let relPath = try v.importFile(sourceURL: fileURL)
+                let stem = fileURL.deletingPathExtension().lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines)
+                let title = stem.isEmpty ? "音频逐字稿" : stem
+
+                let note = try v.createNote(
+                    title: title,
+                    body: "",
+                    tags: [],
+                    draft: false,
+                    audioFile: relPath,
+                    audioTranscript: true
+                )
+
+                state.selectedNoteId = note.id
+                isNotesCollapsed = false
+                state.rescanVault()
+
+                let fullAudioURL = URL(fileURLWithPath: (v.rootPath as NSString).appendingPathComponent(relPath))
+                AudioPlayerManager.shared.loadAudio(url: fullAudioURL, relativePath: relPath)
+
+                triggerTranscription(for: note, isRetranscribe: false)
+            } catch {
+                print("Failed to create audio note: \(error)")
+            }
+        }
+    }
+
+    private func triggerTranscription(for note: Note, isRetranscribe: Bool) {
+        guard let v = state.vault, let audioRelPath = note.audioFile else { return }
+
+        let apiKey = (try? DefaultKeychainStore.shared.get(
+            service: ASRConstants.keychainService,
+            account: ASRConstants.keychainAccount
+        ))?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let key = apiKey, !key.isEmpty else {
+            showMissingKeyAlert = true
+            return
+        }
+
+        let fullAudioURL = URL(fileURLWithPath: (v.rootPath as NSString).appendingPathComponent(audioRelPath))
+
+        asrManager.startTask(
+            noteId: note.id,
+            audioURL: fullAudioURL,
+            isRetranscribe: isRetranscribe,
+            apiKey: key,
+            onSave: { [weak state] transcript in
+                guard let v = state?.vault else { return }
+                var updated = note
+                updated.body = transcript
+                _ = try v.updateNote(updated)
+                currentBody = transcript
+                state?.rescanVault()
+            }
+        )
+    }
+
+    private func handleConfirmReplace(_ note: Note) {
+        asrManager.confirmReplace(noteId: note.id) { [weak state] newBody in
+            guard let v = state?.vault else { return }
+            var updated = note
+            updated.body = newBody
+            _ = try v.updateNote(updated)
+            currentBody = newBody
+            state?.rescanVault()
+        }
+    }
 
     private func handleCreateDraft() {
         guard let v = state.vault else { return }
+        isDraftsCollapsed = false
+        if state.isNotesListCollapsed {
+            state.isNotesListCollapsed = false
+            state.savePreferences()
+        }
         do {
             let note = try v.createNote(title: "", body: "", tags: [], draft: true)
             state.selectedNoteId = note.id
@@ -582,6 +901,11 @@ public struct NotesView: View {
 
     private func handleCreateFormalNote() {
         guard let v = state.vault else { return }
+        isNotesCollapsed = false
+        if state.isNotesListCollapsed {
+            state.isNotesListCollapsed = false
+            state.savePreferences()
+        }
         do {
             let note = try v.createNote(title: "未命名笔记", body: "", tags: [], draft: false)
             state.selectedNoteId = note.id
@@ -815,5 +1139,219 @@ public struct NotesView: View {
             }
         }
         return handled
+    }
+}
+
+// MARK: - Notes Sidebar Toggle Button
+
+public struct NotesSidebarToggleButton: View {
+    let collapsed: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    public init(collapsed: Bool, action: @escaping () -> Void) {
+        self.collapsed = collapsed
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isHovered ? .primary : .secondary)
+                .frame(width: 24, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(collapsed ? "展开笔记列表" : "收起笔记列表")
+    }
+}
+
+// MARK: - Audio Player Toolbar View
+
+public struct AudioPlayerToolbarView: View {
+    let note: Note
+    let accentColor: Color
+    let accentOnColor: Color
+    @ObservedObject var asrManager: ASRManager
+    @ObservedObject private var audioPlayer = AudioPlayerManager.shared
+    let onConfirmReplace: () -> Void
+
+    @State private var isDraggingAudioSlider: Bool = false
+    @State private var dragPositionMs: Double = 0
+
+    public init(
+        note: Note,
+        accentColor: Color,
+        accentOnColor: Color,
+        asrManager: ASRManager,
+        onConfirmReplace: @escaping () -> Void
+    ) {
+        self.note = note
+        self.accentColor = accentColor
+        self.accentOnColor = accentOnColor
+        self.asrManager = asrManager
+        self.onConfirmReplace = onConfirmReplace
+    }
+
+    private func formatDisplayTime(_ ms: Int) -> String {
+        let totalSec = max(0, ms / 1000)
+        let hours = totalSec / 3600
+        let minutes = (totalSec % 3600) / 60
+        let seconds = totalSec % 60
+        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    public var body: some View {
+        let taskStatus = asrManager.getStatus(for: note.id)
+        let isTranscribing = taskStatus.state == .uploading || taskStatus.state == .transcribing || taskStatus.state == .writing
+        let fileName = (note.audioFile as NSString?)?.lastPathComponent ?? "音频文件"
+
+        VStack(spacing: 8) {
+            // Row 1: Header (icon + filename + status tag)
+            HStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(accentColor)
+                    Text(fileName)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.primary)
+                }
+
+                if isTranscribing {
+                    HStack(spacing: 5) {
+                        ProgressView()
+                            .controlSize(.mini)
+                        Text(taskStatus.stageMessage)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.secondary.opacity(0.1)))
+                } else if taskStatus.state == .failed {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.roseBadgeText)
+                        Text(taskStatus.error ?? taskStatus.stageMessage)
+                            .font(.system(size: 11))
+                            .foregroundColor(.roseBadgeText)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.roseBadgeBg))
+                }
+
+                Spacer()
+            }
+
+            // Warning Banner (> 2 hours)
+            if let warning = taskStatus.warning, !warning.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 11))
+                        .foregroundColor(.amberBadgeText)
+                    Text(warning)
+                        .font(.system(size: 11))
+                        .foregroundColor(.amberBadgeText)
+                    Spacer()
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 4).fill(Color.amberBadgeBg))
+            }
+
+            // Pending Confirmation Banner (Replace transcript?)
+            if taskStatus.state == .pendingConfirmation {
+                HStack(spacing: 8) {
+                    Image(systemName: "info.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(accentColor)
+                    Text("重新转写已完成，是否替换现有逐字稿？")
+                        .font(.system(size: 11, weight: .medium))
+                    Spacer()
+
+                    Button("保留原稿") {
+                        asrManager.discardCandidate(noteId: note.id)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 4).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
+
+                    Button("替换逐字稿") {
+                        onConfirmReplace()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(accentColor))
+                    .foregroundColor(accentOnColor)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(RoundedRectangle(cornerRadius: 6).fill(accentColor.opacity(0.08)))
+            }
+
+            // Row 2: Audio Player Controls (Play/Pause + Slider + Time)
+            HStack(spacing: 10) {
+                Button(action: { audioPlayer.togglePlayPause() }) {
+                    ZStack {
+                        Circle()
+                            .fill(accentColor)
+                            .frame(width: 28, height: 28)
+                        Image(systemName: audioPlayer.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(accentOnColor)
+                            .offset(x: audioPlayer.isPlaying ? 0 : 1)
+                    }
+                }
+                .buttonStyle(.plain)
+
+                // Scrubber Slider
+                Slider(
+                    value: Binding(
+                        get: {
+                            isDraggingAudioSlider ? dragPositionMs : Double(audioPlayer.currentPositionMs)
+                        },
+                        set: { newVal in
+                            dragPositionMs = newVal
+                        }
+                    ),
+                    in: 0...Double(max(audioPlayer.durationMs, 1000)),
+                    onEditingChanged: { editing in
+                        isDraggingAudioSlider = editing
+                        if !editing {
+                            let ms = Int(dragPositionMs)
+                            audioPlayer.seek(toMilliseconds: ms)
+                            PataTranscriptLocator.scrollToSentence(in: note.body, targetMs: ms)
+                        }
+                    }
+                )
+
+                // Time Display: 00:01:23 / 00:45:00
+                HStack(spacing: 2) {
+                    Text(formatDisplayTime(isDraggingAudioSlider ? Int(dragPositionMs) : audioPlayer.currentPositionMs))
+                    Text("/")
+                        .foregroundColor(.secondary.opacity(0.6))
+                    Text(formatDisplayTime(audioPlayer.durationMs))
+                }
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 10)
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))
     }
 }

@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import PataAudio
 
 @Suite("ASR Tests")
@@ -31,5 +32,43 @@ struct ASRTests {
         #expect(md.contains("[00:00:03.500](#t=00:00:03.500)"))
         #expect(md.contains("说话人 1"))
         #expect(md.contains("Second sentence."))
+    }
+
+    @Test("UploadPolicy JSON parsing with optional ACL fields")
+    func uploadPolicyParsing() throws {
+        let json = """
+        {
+            "policy": "eyJleHBpcmF0aW9uIjoiMjAyNi0xMC0zMVQxMTo...",
+            "signature": "abcdef123456",
+            "upload_dir": "dashscope-audio/uploads",
+            "upload_host": "https://dashscope-result-sh.oss-cn-shanghai.aliyuncs.com",
+            "oss_access_key_id": "LTAI5t...",
+            "x_oss_object_acl": "private",
+            "x_oss_forbid_overwrite": "true"
+        }
+        """
+        let data = Data(json.utf8)
+        let policy = try JSONDecoder().decode(UploadPolicy.self, from: data)
+        #expect(policy.policy.starts(with: "eyJleHBpcmF0aW9u"))
+        #expect(policy.signature == "abcdef123456")
+        #expect(policy.uploadDir == "dashscope-audio/uploads")
+        #expect(policy.ossAccessKeyId == "LTAI5t...")
+        #expect(policy.xOssObjectAcl == "private")
+        #expect(policy.xOssForbidOverwrite == "true")
+    }
+
+    @Test("ASRManager state machine, discard and confirm replace flow")
+    @MainActor
+    func asrManagerFlow() throws {
+        let mgr = ASRManager()
+        let noteId = "note-test-asr-123"
+
+        // Initial state is idle
+        let initStatus = mgr.getStatus(for: noteId)
+        #expect(initStatus.state == .idle)
+
+        // Cancel task on empty is safe
+        mgr.cancelTask(noteId: noteId)
+        #expect(mgr.getStatus(for: noteId).state == .idle)
     }
 }

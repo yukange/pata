@@ -137,12 +137,14 @@ struct ImageProviderTests {
         #expect(img?.size.height == 1)
     }
 
-    @Test("PataEmbeddedImageProvider fingerprint updates with noteWidth")
-    func imageProviderFingerprintTracksWidth() {
+    @Test("PataEmbeddedImageProvider fingerprint remains stable on size changes to prevent TextKit layout thrashing")
+    func imageProviderFingerprintStableAcrossResize() {
         let p1 = PataEmbeddedImageProvider(vaultPath: "/v", noteFilePath: "/v/n.md", noteWidth: 600)
         let p2 = PataEmbeddedImageProvider(vaultPath: "/v", noteFilePath: "/v/n.md", noteWidth: 800)
+        let pDiff = PataEmbeddedImageProvider(vaultPath: "/v", noteFilePath: "/v/other.md", noteWidth: 800)
 
-        #expect(p1.fingerprint() != p2.fingerprint())
+        #expect(p1.fingerprint() == p2.fingerprint())
+        #expect(p1.fingerprint() != pDiff.fingerprint())
     }
 
     @Test("PataImageCache stores and invalidates correctly")

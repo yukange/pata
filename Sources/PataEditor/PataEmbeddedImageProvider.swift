@@ -64,7 +64,7 @@ public final class PataEmbeddedImageProvider: EmbeddedImageProvider, @unchecked 
     public func fingerprint() -> AnyHashable {
         lock.lock()
         defer { lock.unlock() }
-        return "\(vaultPath ?? ""):\(noteFilePath ?? ""):\(Int(noteWidth)):\(version)"
+        return "\(vaultPath ?? ""):\(noteFilePath ?? ""):\(version)"
     }
 
     public func image(for reference: EmbeddedImageRequest) -> NSImage? {

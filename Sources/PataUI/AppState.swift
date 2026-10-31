@@ -47,6 +47,8 @@ public final class AppState: ObservableObject {
 
     // Notes Context
     @Published public var selectedNoteId: String?
+    @Published public var notesListWidth: CGFloat = 280
+    @Published public var isNotesListCollapsed: Bool = false
 
     // Tag View Context
     @Published public var selectedTag: String?
@@ -96,6 +98,8 @@ public final class AppState: ObservableObject {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("vault.json")
     }()
+    private var savePreferencesWorkItem: DispatchWorkItem? = nil
+    private let preferencesSaveQueue = DispatchQueue(label: "com.pata.preferences-io", qos: .utility)
 
     public init() {
         loadPreferences()
@@ -120,6 +124,12 @@ public final class AppState: ObservableObject {
         if let sidebar = json["is_sidebar_visible"] as? Bool {
             self.isSidebarVisible = sidebar
         }
+        if let nWidth = json["notes_list_width"] as? CGFloat, nWidth >= 200, nWidth <= 500 {
+            self.notesListWidth = nWidth
+        }
+        if let nCollapsed = json["is_notes_list_collapsed"] as? Bool {
+            self.isNotesListCollapsed = nCollapsed
+        }
 
         if let vPath = json["vault_path"] as? String, !vPath.isEmpty {
             openVault(path: vPath, persist: false)
@@ -141,20 +151,35 @@ public final class AppState: ObservableObject {
             "accent_color": accentColorHex,
             "inspector_width": inspectorWidth,
             "is_sidebar_visible": isSidebarVisible,
+            "notes_list_width": notesListWidth,
+            "is_notes_list_collapsed": isNotesListCollapsed,
             "mcp_enabled": mcpStatus.enabled
         ]
         if let v = vault {
             dict["vault_path"] = v.rootPath
         }
 
-        if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted]) {
-            try? data.write(to: configURL)
+        let targetURL = configURL
+        savePreferencesWorkItem?.cancel()
+        let item = DispatchWorkItem { [dict, targetURL] in
+            if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted]) {
+                try? data.write(to: targetURL)
+            }
         }
+        savePreferencesWorkItem = item
+        preferencesSaveQueue.asyncAfter(deadline: .now() + 0.2, execute: item)
     }
 
     public func toggleSidebar() {
         withAnimation(.easeInOut(duration: 0.2)) {
             self.isSidebarVisible.toggle()
+        }
+        self.savePreferences()
+    }
+
+    public func toggleNotesList() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            self.isNotesListCollapsed.toggle()
         }
         self.savePreferences()
     }

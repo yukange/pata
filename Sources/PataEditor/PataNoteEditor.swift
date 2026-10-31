@@ -2,6 +2,145 @@ import SwiftUI
 import AppKit
 import MarkdownEngine
 import PataCore
+import ObjectiveC
+
+// MARK: - Bus Notification Names for Transcript Navigation
+
+public extension Notification.Name {
+    static let pataEditorScrollToRange = Notification.Name("PataEditorScrollToRange")
+    static let pataEditorClearHighlights = Notification.Name("PataEditorClearHighlights")
+}
+
+// MARK: - Timestamp Parsing & Transcript Locator
+
+public enum PataTimestampParser: Sendable {
+    public static func parseMilliseconds(_ str: String) -> Int? {
+        var clean = str.trimmingCharacters(in: .whitespacesAndNewlines)
+        if clean.contains("#t=") {
+            clean = clean.components(separatedBy: "#t=").last ?? clean
+        }
+        if let queryIdx = clean.firstIndex(of: "?") {
+            clean = String(clean[..<queryIdx])
+        }
+        if let slashIdx = clean.firstIndex(of: "/") {
+            clean = String(clean[..<slashIdx])
+        }
+        let parts = clean.components(separatedBy: ":")
+        guard parts.count == 3 else { return nil }
+        guard let h = Int(parts[0]), let m = Int(parts[1]) else { return nil }
+        let secParts = parts[2].components(separatedBy: ".")
+        guard let s = Int(secParts[0]) else { return nil }
+        let ms: Int
+        if secParts.count > 1 {
+            let frac = secParts[1].prefix(3)
+            ms = (Int(frac) ?? 0) * (frac.count == 1 ? 100 : (frac.count == 2 ? 10 : 1))
+        } else {
+            ms = 0
+        }
+        return (h * 3600 + m * 60 + s) * 1000 + ms
+    }
+}
+
+public enum PataTranscriptLocator: Sendable {
+    public static func findSentenceRange(in body: String, targetMs: Int) -> NSRange? {
+        let lines = body.components(separatedBy: "\n")
+        var bestRange: NSRange? = nil
+        var bestMs = -1
+        var firstTimedRange: NSRange? = nil
+
+        var currentOffset = 0
+        for line in lines {
+            let lineLength = (line as NSString).length
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[") && trimmed.contains("](#t=") {
+                if let tPart = trimmed.components(separatedBy: "#t=").dropFirst().first?.components(separatedBy: ")").first,
+                   let ms = PataTimestampParser.parseMilliseconds(tPart) {
+                    let r = NSRange(location: currentOffset, length: lineLength)
+                    if firstTimedRange == nil {
+                        firstTimedRange = r
+                    }
+                    if ms <= targetMs {
+                        if bestMs == -1 || ms >= bestMs {
+                            bestMs = ms
+                            bestRange = r
+                        }
+                    }
+                }
+            }
+            currentOffset += lineLength + 1
+        }
+
+        return bestRange ?? firstTimedRange
+    }
+
+    public static func scrollToSentence(in body: String, targetMs: Int) {
+        guard let range = findSentenceRange(in: body, targetMs: targetMs) else { return }
+        NotificationCenter.default.post(
+            name: .pataEditorScrollToRange,
+            object: nil,
+            userInfo: [
+                "currentIndex": 0,
+                "allRanges": [range]
+            ]
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            NotificationCenter.default.post(
+                name: .pataEditorClearHighlights,
+                object: nil
+            )
+        }
+    }
+}
+
+// MARK: - Swizzling for Audio Timestamp Links (#t=...)
+
+public struct PataEditorLinkHandler: Sendable {
+    @MainActor public static var onSeekAudio: ((Int) -> Void)?
+
+    private static let swizzleOnce: Void = {
+        let originalSelector = #selector(NSTextViewDelegate.textView(_:clickedOnLink:at:))
+        let swizzledSelector = #selector(NativeTextViewCoordinator.pata_textView(_:clickedOnLink:at:))
+
+        guard let originalMethod = class_getInstanceMethod(NativeTextViewCoordinator.self, originalSelector),
+              let swizzledMethod = class_getInstanceMethod(NativeTextViewCoordinator.self, swizzledSelector) else {
+            return
+        }
+
+        method_exchangeImplementations(originalMethod, swizzledMethod)
+    }()
+
+    public static func installSwizzleIfNeeded() {
+        _ = swizzleOnce
+    }
+}
+
+extension NativeTextViewCoordinator {
+    @objc func pata_textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+        let linkStr: String
+        if let url = link as? URL {
+            linkStr = url.absoluteString
+        } else if let nsUrl = link as? NSURL {
+            linkStr = nsUrl.absoluteString ?? ""
+        } else if let s = link as? String {
+            linkStr = s
+        } else {
+            linkStr = ""
+        }
+
+        let decoded = linkStr.removingPercentEncoding ?? linkStr
+        if decoded.contains("#t=") {
+            if let anchor = decoded.components(separatedBy: "#t=").last,
+               let ms = PataTimestampParser.parseMilliseconds(anchor) {
+                DispatchQueue.main.async {
+                    PataEditorLinkHandler.onSeekAudio?(ms)
+                }
+                return true
+            }
+        }
+
+        return self.pata_textView(textView, clickedOnLink: link, at: charIndex)
+    }
+}
 
 /// The unified Markdown IR (Instant Rendering) Note Editor component for Pata.
 /// Backed by TextKit 2 via MarkdownEngine to deliver 100% native trackpad tap-to-click,
@@ -22,26 +161,21 @@ public struct PataNoteEditor: View {
     public var listFiles: (() -> [FileResource])?
 
     @State private var imageReloadVersion: Int = 0
-    @State private var containerWidth: CGFloat = 0
 
     private static let defaultConfiguration: MarkdownEditorConfiguration = {
         var config = MarkdownEditorConfiguration.default
         config.extensions = [HighlightExtension(), StrikethroughExtension()]
-        config.imageEmbed.minimumWidth = 720
-        config.imageEmbed.fallbackMaxWidth = 720
+        config.services.bus.findScrollToRange = .pataEditorScrollToRange
+        config.services.bus.findClearHighlights = .pataEditorClearHighlights
         return config
     }()
 
     private var editorConfiguration: MarkdownEditorConfiguration {
         var config = Self.defaultConfiguration
-        let effectiveWidth = containerWidth > 0 ? containerWidth : 720
-        config.imageEmbed.minimumWidth = effectiveWidth
-        config.imageEmbed.fallbackMaxWidth = effectiveWidth
 
         let provider = PataEmbeddedImageProvider(
             vaultPath: vaultPath,
             noteFilePath: noteFilePath,
-            noteWidth: effectiveWidth,
             onImageLoaded: {
                 DispatchQueue.main.async {
                     imageReloadVersion += 1
@@ -49,6 +183,17 @@ public struct PataNoteEditor: View {
             }
         )
         config.services.images = provider
+
+        if isReadOnlyTranscript {
+            // Transcript notes are read-only long-form documents.
+            // 1. readingWidth keeps the text column fixed and centered, bypassing TextKit 2 re-wrap during window resize & sidebar collapse animations.
+            // 2. Disabling overscroll eliminates typing padding calculations for read-only texts.
+            // 3. Disable table live-resizing to prevent CPU spikes during continuous window frame changes.
+            config.readingWidth = 780
+            config.overscroll = OverscrollPolicy(percent: 0, maxPoints: 0, minPoints: 0)
+            config.rendersTablesDuringLiveResize = false
+        }
+
         return config
     }
 
@@ -78,6 +223,9 @@ public struct PataNoteEditor: View {
         self.onOpenLink = onOpenLink
         self.listNoteRefs = listNoteRefs
         self.listFiles = listFiles
+
+        PataEditorLinkHandler.installSwizzleIfNeeded()
+        PataEditorLinkHandler.onSeekAudio = onSeekAudio
     }
 
     public var body: some View {
@@ -100,25 +248,15 @@ public struct PataNoteEditor: View {
                 ]
             )
         )
-        .background(
-            GeometryReader { proxy in
-                Color.clear
-                    .onAppear {
-                        updateContainerWidth(proxy.size.width)
-                    }
-                    .onChange(of: proxy.size.width) { _, newWidth in
-                        updateContainerWidth(newWidth)
-                    }
-            }
-        )
+        .onAppear {
+            PataEditorLinkHandler.onSeekAudio = onSeekAudio
+        }
+        .onChange(of: noteId) { _, _ in
+            PataEditorLinkHandler.onSeekAudio = onSeekAudio
+        }
         .onChange(of: text) { _, newText in
             onTextChange?(newText)
         }
-    }
-
-    private func updateContainerWidth(_ width: CGFloat) {
-        guard width > 0, abs(containerWidth - width) > 1.0 else { return }
-        containerWidth = width
     }
 
     private var effectiveOnPasteImage: ((NSPasteboard) -> String?)? {
@@ -139,7 +277,7 @@ public struct PataNoteEditor: View {
         // 1. Audio seek timestamp: e.g. "files/audio.mp3#t=00:01:23.456" or "#t=00:01:23.456"
         if target.contains("#t=") {
             if let anchor = target.components(separatedBy: "#t=").last,
-               let ms = parseTimestampMs(anchor) {
+               let ms = PataTimestampParser.parseMilliseconds(anchor) {
                 onSeekAudio?(ms)
                 return
             }
@@ -155,15 +293,5 @@ public struct PataNoteEditor: View {
 
         // 3. App / Note / File link
         onOpenLink?(target)
-    }
-
-    private func parseTimestampMs(_ str: String) -> Int? {
-        let parts = str.components(separatedBy: ":")
-        guard parts.count == 3 else { return nil }
-        guard let h = Int(parts[0]), let m = Int(parts[1]) else { return nil }
-        let secParts = parts[2].components(separatedBy: ".")
-        guard let s = Int(secParts[0]) else { return nil }
-        let ms = secParts.count > 1 ? (Int(secParts[1].prefix(3)) ?? 0) : 0
-        return (h * 3600 + m * 60 + s) * 1000 + ms
     }
 }

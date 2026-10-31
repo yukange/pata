@@ -64,34 +64,43 @@ public final class DefaultKeychainStore: KeychainStore, @unchecked Sendable {
 
         let data = Data(trimmed.utf8)
 
-        // Try update first
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
 
-        let updateAttributes: [String: Any] = [
+        // Delete any existing item first so that stale ACLs bound to previous CDHashes are cleared.
+        SecItemDelete(query as CFDictionary)
+
+        var addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
             kSecValueData as String: data
         ]
 
-        let updateStatus = SecItemUpdate(query as CFDictionary, updateAttributes as CFDictionary)
-        if updateStatus == errSecSuccess {
-            return
+        #if os(macOS)
+        var access: SecAccess?
+        // Passing nil for trustedlist indicates that any application (e.g. newly rebuilt binaries
+        // with different ad-hoc CDHashes) is allowed access without prompting the user for password each time.
+        if SecAccessCreate(service as CFString, nil, &access) == errSecSuccess, let access = access {
+            addQuery[kSecAttrAccess as String] = access
         }
+        #endif
 
-        if updateStatus == errSecItemNotFound {
-            // Add new item
-            var addQuery = query
-            addQuery[kSecValueData as String] = data
-            let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-            guard addStatus == errSecSuccess else {
-                throw KeychainError.writeFailed(addStatus)
-            }
-            return
+        var addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        #if os(macOS)
+        if addStatus != errSecSuccess && addQuery[kSecAttrAccess as String] != nil {
+            // Fallback without kSecAttrAccess if environment restricts SecAccess
+            addQuery.removeValue(forKey: kSecAttrAccess as String)
+            addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         }
+        #endif
 
-        throw KeychainError.writeFailed(updateStatus)
+        guard addStatus == errSecSuccess else {
+            throw KeychainError.writeFailed(addStatus)
+        }
     }
 
     public func delete(service: String, account: String) throws {

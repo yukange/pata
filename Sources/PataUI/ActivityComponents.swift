@@ -270,4 +270,16 @@ extension Color {
     public static var stoneTagBg: Color {
         Color(red: 4/255, green: 120/255, blue: 87/255).opacity(0.1)
     }
+    public static var roseBadgeText: Color {
+        Color(red: 225/255, green: 29/255, blue: 72/255)
+    }
+    public static var roseBadgeBg: Color {
+        Color(red: 225/255, green: 29/255, blue: 72/255).opacity(0.12)
+    }
+    public static var amberBadgeText: Color {
+        Color(red: 217/255, green: 119/255, blue: 6/255)
+    }
+    public static var amberBadgeBg: Color {
+        Color(red: 217/255, green: 119/255, blue: 6/255).opacity(0.12)
+    }
 }
