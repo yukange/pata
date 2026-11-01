@@ -74,12 +74,20 @@ public protocol Entity: Sendable {
     var type: EntityType { get }
     var id: String { get }
     var body: String { get set }
+    /// Unknown metadata values encoded as standalone YAML fragments.
     var extra: [String: String] { get set }
+    /// The file version read with this snapshot; never persisted or exposed over MCP.
+    var baseline: FileBaseline? { get set }
     func clone() -> any Entity
 }
 
 /// Task represents a task item.
 public struct Task: Entity, Codable, Sendable, Identifiable, Equatable {
+    public var baseline: FileBaseline? = nil
+    private enum CodingKeys: String, CodingKey {
+        case id, title, description, status, completedAt, due, tags, noteIds, noteRefs
+        case createdAt, createdBy, updatedAt, statusEvents, extra, body, activities
+    }
     public var type: EntityType { .task }
     public var id: String
     public var title: String
@@ -141,6 +149,10 @@ public struct Task: Entity, Codable, Sendable, Identifiable, Equatable {
 
 /// Note represents a markdown note (formal or draft).
 public struct Note: Entity, Codable, Sendable, Identifiable, Equatable {
+    public var baseline: FileBaseline? = nil
+    private enum CodingKeys: String, CodingKey {
+        case id, draft, title, tags, audioFile, audioTranscript, createdAt, createdBy, updatedAt, extra, body
+    }
     public var type: EntityType { .note }
     public var id: String
     public var draft: Bool
@@ -187,6 +199,10 @@ public struct Note: Entity, Codable, Sendable, Identifiable, Equatable {
 
 /// DayPlan represents a daily plan stored in plans/YYYY-MM-DD.md.
 public struct DayPlan: Entity, Codable, Sendable, Identifiable, Equatable {
+    public var baseline: FileBaseline? = nil
+    private enum CodingKeys: String, CodingKey {
+        case date, taskIds, extra, body, activities
+    }
     public var type: EntityType { .dayPlan }
     public var id: String { date }
     public var date: String // YYYY-MM-DD

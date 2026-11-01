@@ -59,7 +59,14 @@ public enum AudioPreprocessor {
 
     /// Prepares audio for DashScope speaker diarization (ensuring mono audio).
     /// If multi-channel, uses afconvert to generate a temporary mono copy.
-    public static func prepareAudioForTranscription(url: URL) -> (targetURL: URL, warning: String?, cleanup: () -> Void) {
+    public static func prepareAudioForTranscription(url: URL) async -> (targetURL: URL, warning: String?, cleanup: @Sendable () -> Void) {
+        await _Concurrency.Task.detached(priority: .userInitiated) {
+            prepareAudioSynchronously(url: url)
+        }.value
+    }
+
+    private static func prepareAudioSynchronously(url: URL) -> (targetURL: URL, warning: String?, cleanup: @Sendable () -> Void) {
+        assert(!Thread.isMainThread)
         let info = inspectAudio(url: url)
         var warning: String? = nil
         if info.durationSec > 7200 {
@@ -83,7 +90,7 @@ public enum AudioPreprocessor {
             proc.waitUntilExit()
 
             if proc.terminationStatus == 0 && FileManager.default.fileExists(atPath: monoURL.path) {
-                let cleanup: () -> Void = {
+                let cleanup: @Sendable () -> Void = {
                     _ = try? FileManager.default.removeItem(at: tempDir)
                 }
                 return (monoURL, warning, cleanup)

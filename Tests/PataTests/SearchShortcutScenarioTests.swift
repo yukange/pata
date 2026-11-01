@@ -57,4 +57,63 @@ struct SearchShortcutScenarioTests {
         #expect(!results.isEmpty)
         #expect(results.first?.id == "t-search-001")
     }
+
+    @Test("Search opens a hidden task inspector for tasks and task activities")
+    func opensTaskInspectorFromSearch() throws {
+        let fixture = try AuditVaultFixture()
+        let state = AppState(loadPreferences: false)
+        state.openVault(path: fixture.vault.rootPath, persist: false)
+        let vault = try #require(state.vault)
+        let task = try vault.createTask(title: "search-route")
+        _ = try vault.createActivity(taskId: task.id, body: "search-route")
+        let results = vault.index.searchAll("search-route")
+        #expect(results.count == 2)
+        for result in results {
+            state.showSettings = true
+            state.showSearch = true
+            state.isInspectorVisible = false
+            state.selectedTaskId = nil
+            state.openSearchResult(result)
+            #expect(state.selectedTaskId == task.id)
+            #expect(state.isInspectorVisible)
+            #expect(!state.showSearch)
+            #expect(!state.showSettings)
+        }
+    }
+
+    @Test("Search opens the owning DayPlan for a standalone activity")
+    func opensStandaloneActivityDay() throws {
+        let fixture = try AuditVaultFixture()
+        let state = AppState(loadPreferences: false)
+        state.openVault(path: fixture.vault.rootPath, persist: false)
+        let vault = try #require(state.vault)
+        _ = try vault.createActivity(date: "2025-01-03", body: "historical-search-record")
+        var result = try #require(vault.index.searchAll("historical-search-record").first)
+        result.time = Date() // Older records may carry a timestamp from a different day.
+        state.currentNav = .tasks
+        state.showSettings = true
+        state.showSearch = true
+        state.openSearchResult(result)
+        #expect(state.currentNav == .today)
+        #expect(state.todayDateString == "2025-01-03")
+        #expect(!state.showSearch)
+        #expect(!state.showSettings)
+    }
+
+    @Test("Keyboard results follow visible group order and omit hidden rows")
+    func keyboardResultsMatchVisibleRows() {
+        let results = [EntityType.file, .activity, .note, .task].flatMap { type in
+            (0..<7).map { index in
+                EntityRef(type: type, id: "\(type.rawValue)-\(index)", path: "", time: Date())
+            }
+        }
+        let displayed = SearchOverlay.displayedResults(results)
+        #expect(displayed.map(\.id) == [
+            "task-0", "task-1", "task-2", "task-3", "task-4",
+            "note-0", "note-1", "note-2", "note-3", "note-4",
+            "activity-0", "activity-1", "activity-2", "activity-3", "activity-4",
+            "file-0", "file-1", "file-2", "file-3", "file-4"
+        ])
+        #expect(SearchOverlay.displayedResults([]).isEmpty)
+    }
 }

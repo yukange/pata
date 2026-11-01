@@ -11,7 +11,6 @@ public struct SettingsView: View {
     @State private var apiKeyInput: String = ""
     @State private var isEditingKey: Bool = false
     @State private var keyMessage: String = ""
-    @State private var autoCheckUpdates: Bool = true
     @State private var copiedPath: Bool = false
     @State private var showColorPopover: Bool = false
 
@@ -75,8 +74,6 @@ public struct SettingsView: View {
                     // Section 4: 语音转写
                     transcriptionSection
 
-                    // Section 5: 软件更新
-                    updaterSection
                 }
                 .padding(24)
                 .frame(maxWidth: 680)
@@ -421,31 +418,6 @@ public struct SettingsView: View {
                         .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
                     }
                 }
-            }
-        }
-        .padding(18)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
-    }
-
-    // MARK: - Section 5: 软件更新
-
-    private var updaterSection: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("软件更新")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.primary)
-
-            HStack {
-                Text("自动检查更新")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.primary)
-
-                Spacer()
-
-                Toggle("", isOn: $autoCheckUpdates)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
             }
         }
         .padding(18)

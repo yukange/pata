@@ -90,10 +90,7 @@ struct ConcurrencyScenarioTests {
                 if i % 2 == 0 {
                     _ = try vault.createActivity(taskId: task.id, body: "并行评论 \(i)")
                 } else {
-                    if var current = vault.index.getTask(task.id) {
-                        current.description = "最新说明版本 \(i)"
-                        _ = try vault.updateTask(current)
-                    }
+                    _ = try vault.modifyTask(id: task.id) { $0.description = "最新说明版本 \(i)" }
                 }
             } catch {
                 Issue.record("Mutation error in iteration \(i): \(error)")

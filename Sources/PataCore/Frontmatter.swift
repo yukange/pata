@@ -26,7 +26,7 @@ public struct Frontmatter {
 
         for i in 1..<lines.count {
             let line = lines[i]
-            if line.trimmingCharacters(in: .whitespaces) == "---" {
+            if line == "---" {
                 closingFound = true
                 bodyStartIdx = i + 1
                 break
@@ -212,7 +212,7 @@ public struct Frontmatter {
         ]
         for (k, v) in dict {
             if !knownKeys.contains(k) {
-                extra[k] = String(describing: v)
+                extra[k] = try Yams.dump(object: v, width: -1)
             }
         }
 
@@ -285,7 +285,7 @@ public struct Frontmatter {
         ]
         for (k, v) in dict {
             if !knownKeys.contains(k) {
-                extra[k] = String(describing: v)
+                extra[k] = try Yams.dump(object: v, width: -1)
             }
         }
 
@@ -322,7 +322,7 @@ public struct Frontmatter {
         let knownKeys: Set<String> = ["type", "date", "task_ids"]
         for (k, v) in dict {
             if !knownKeys.contains(k) {
-                extra[k] = String(describing: v)
+                extra[k] = try Yams.dump(object: v, width: -1)
             }
         }
 
@@ -339,6 +339,7 @@ public struct Frontmatter {
 
     /// Serializes an Entity into frontmatter + markdown body bytes.
     public static func serializeMarkdown(_ entity: any Entity) throws -> String {
+        try SchemaValidator.validateEntity(entity)
         var dict: [String: Any] = [
             "type": entity.type.rawValue
         ]
@@ -434,12 +435,13 @@ public struct Frontmatter {
         }
 
         // Add extra fields
-        for (k, v) in entity.extra {
-            dict[k] = v
+        // Unknown values are stored as YAML fragments, preserving mappings and scalar types.
+        for (k, v) in entity.extra where dict[k] == nil {
+            dict[k] = try Yams.load(yaml: v) ?? NSNull()
         }
 
         let yamlStr = try Yams.dump(object: dict, width: -1)
-        var result = "---\n\(yamlStr.trimmingCharacters(in: .whitespacesAndNewlines))\n---\n"
+        var result = "---\n\(yamlStr)---\n"
 
         if !finalBody.isEmpty {
             result.append("\n\(finalBody)")

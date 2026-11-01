@@ -1,6 +1,6 @@
 # Pata · Agent 项目指引
 
-**项目名称：啪嗒 / Pata。** 阶段 1～17 已完成。**当前产品为纯 macOS 原生 Swift 应用（SwiftUI / AppKit + Swift Core + SwiftPM），无 Go / Wails / React / Vditor 运行时。**
+**项目名称：啪嗒 / Pata。** 阶段 1～16 为既有交付；阶段 17 原生迁移主体已完成，原生更新与正式发布验收仍待完成。**当前产品为纯 macOS 原生 Swift 应用（SwiftUI / AppKit + Swift Core + SwiftPM），无 Go / Wails / React / Vditor 运行时。**
 
 ## 开始阅读
 
@@ -37,12 +37,12 @@
 
 - **增加复杂度前先取得共识**：在为推测性或极低概率的竞态条件、安全边界情况增加复杂度之前，必须先向用户说明具体会出现什么问题、发生的可能性，以及新增实现和维护复杂度的成本，并取得用户明确同意。不得为了理论上的健壮性擅自扩大任务范围。
 
-## 阶段 17 · 纯 Swift 原生重构（已完成）
+## 阶段 17 · 纯 Swift 原生重构（主体完成，更新与正式发布待完成）
 
 - 目标与验收单一入口：[017 idea](docs/17-swift-native-rewrite/idea.md) / [017 proposal](docs/17-swift-native-rewrite/proposal.md)。**已全量迁移为纯 Swift 原生应用，旧版 Go / Wails / React 栈已退出维护并移除**。
 - 架构全面采用 SwiftUI/AppKit + Swift Core（PataCore、PataEditor、PataAudio、PataKeychain、PataMCP、PataUI、PataApp），以 SwiftPM 构建管理。
 - [schema.md](docs/02-foundation/schema.md) 仍是唯一生效存储协议。**Note 正文**使用标准 Markdown 相对链接；**Task/Activity** 内 `[[名称]]` 为纯文本且通过本作用域 `note_refs` 绑定 ID。
-- 保留 MCP Tools/Task URI、Agent 来源、MP3 逐字稿/Keychain、应用内更新以及草稿/文件冲突保护。
+- 保留 MCP Tools/Task URI、Agent 来源、MP3 逐字稿/Keychain 以及草稿/文件冲突保护。原生应用内更新尚未恢复，无效更新开关已移除；CI 仅上传开发产物，正式发布须另经 Developer ID 签名、公证和 Gatekeeper 验证。
 - 自动化测试与构建单一入口为 `swift test` 与 `scripts/build_swift_app.sh`。
 ## 前端工程约束（阶段 12）
 

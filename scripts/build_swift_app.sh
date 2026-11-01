@@ -19,14 +19,15 @@ if [ -d "$CLT_PLUGIN_DIR" ]; then
 fi
 
 if [ "$CONFIG" = "release" ] || [ "$CONFIG" = "--release" ]; then
-    swift build -c release "${SWIFT_FLAGS[@]}"
-    BIN_PATH="$(find .build -path "*Release/Pata" -type f -perm +111 | head -n 1)"
+    BUILD_CONFIGURATION="release"
 else
-    swift build "${SWIFT_FLAGS[@]}"
-    BIN_PATH="$(find .build -path "*Debug/Pata" -type f -perm +111 | head -n 1)"
+    BUILD_CONFIGURATION="debug"
 fi
+swift build -c "$BUILD_CONFIGURATION" "${SWIFT_FLAGS[@]}"
+BIN_DIR="$(swift build -c "$BUILD_CONFIGURATION" "${SWIFT_FLAGS[@]}" --show-bin-path)"
+BIN_PATH="$BIN_DIR/Pata"
 
-if [ -z "$BIN_PATH" ]; then
+if [ ! -x "$BIN_PATH" ]; then
     echo "Error: Pata binary not found after build!"
     exit 1
 fi
@@ -53,6 +54,7 @@ if [ -f "build/darwin/Info.plist" ]; then
 fi
 
 echo "==> Ad-hoc signing App Bundle..."
-codesign --force --deep --sign - "$APP_DIR" 2>/dev/null || true
+codesign --force --deep --sign - "$APP_DIR"
+codesign --verify --deep --strict "$APP_DIR"
 
 echo "==> Done! App bundle successfully built at $APP_DIR ($(du -sh "$APP_DIR" | cut -f1))"

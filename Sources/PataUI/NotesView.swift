@@ -9,6 +9,7 @@ import PataEditor
 public struct NotesView: View {
     @ObservedObject var state: AppState
     @StateObject private var asrManager = ASRManager.shared
+    @ObservedObject private var editor: NoteEditingSession
 
     @State private var isDraftsCollapsed: Bool = false
     @State private var isNotesCollapsed: Bool = false
@@ -20,18 +21,28 @@ public struct NotesView: View {
     @State private var showMissingKeyAlert: Bool = false
 
     // Editing state
-    @State private var currentTitle: String = ""
-    @State private var currentBody: String = ""
-    @State private var currentTags: [String] = []
+    private var currentTitle: String {
+        get { editor.note?.title ?? "" }
+        nonmutating set { editor.edit { $0.title = newValue } }
+    }
+    private var currentBody: String {
+        get { editor.note?.body ?? "" }
+        nonmutating set { editor.edit { if !$0.audioTranscript { $0.body = newValue } } }
+    }
+    private var currentTags: [String] {
+        get { editor.note?.tags ?? [] }
+        nonmutating set { editor.edit { $0.tags = newValue } }
+    }
     @State private var newTagInput: String = ""
     @State private var showTagPopover: Bool = false
     @State private var isNamingDraft: Bool = false
     @State private var backlinksOpen: Bool = false
     @State private var isEditorFocused: Bool = false
-    @State private var autoSaveWorkItem: DispatchWorkItem? = nil
+    @State private var showReloadConfirmation = false
 
     public init(state: AppState) {
         self.state = state
+        self.editor = state.noteEditor
     }
 
     private var allNotes: [Note] {
@@ -48,6 +59,7 @@ public struct NotesView: View {
 
     private var currentNote: Note? {
         guard let id = state.selectedNoteId else { return nil }
+        if editor.note?.id == id { return editor.note }
         return state.vault?.index.getNote(id)
     }
 
@@ -70,29 +82,43 @@ public struct NotesView: View {
             }
 
             // Right Column: Note Editor or Empty State
-            rightColumn
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .textBackgroundColor))
+            VStack(spacing: 0) {
+                if let error = editor.error {
+                    HStack {
+                        Text(error).font(.callout).foregroundStyle(.red).textSelection(.enabled)
+                        Spacer()
+                        Button("重试保存") { editor.save() }
+                        Button("处理未保存的修改…") { showReloadConfirmation = true }
+                    }
+                    .padding(12)
+                }
+                rightColumn
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(nsColor: .textBackgroundColor))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             syncCurrentNoteState()
         }
         .onChange(of: state.selectedNoteId) {
-            flushAutoSave()
             syncCurrentNoteState()
         }
-        .onChange(of: currentBody) { _, newBody in
-            guard let note = currentNote, note.body != newBody else { return }
-            scheduleAutoSave(for: note, body: newBody)
-        }
         .onDisappear {
-            flushAutoSave()
+            editor.save()
             AudioPlayerManager.shared.stop()
             if hasPushedCursor {
                 NSCursor.pop()
                 hasPushedCursor = false
             }
+        }
+        .confirmationDialog("放弃未保存的本地修改？", isPresented: $showReloadConfirmation) {
+            Button("放弃修改并重新载入", role: .destructive) { editor.reload() }
+            Button("放弃修改并关闭笔记", role: .destructive) {
+                editor.discard()
+                state.selectedNoteId = nil
+            }
+            Button("取消", role: .cancel) {}
         }
         .alert("需配置语音转写 API Key", isPresented: $showMissingKeyAlert) {
             Button("前往设置") {
@@ -105,13 +131,7 @@ public struct NotesView: View {
     }
 
     private func selectNote(_ note: Note) {
-        guard state.selectedNoteId != note.id else { return }
-        flushAutoSave()
-
-        // Atomically synchronize state before triggering view re-evaluation to eliminate redundant text formatting passes
-        currentTitle = note.title
-        currentBody = note.body
-        currentTags = note.tags
+        guard state.selectedNoteId != note.id, editor.save() else { return }
         isNamingDraft = false
         state.selectedNoteId = note.id
 
@@ -124,10 +144,9 @@ public struct NotesView: View {
     }
 
     private func syncCurrentNoteState() {
-        if let note = currentNote {
-            if currentTitle != note.title { currentTitle = note.title }
-            if currentBody != note.body { currentBody = note.body }
-            if currentTags != note.tags { currentTags = note.tags }
+        let selected = state.selectedNoteId.flatMap { state.vault?.index.getNote($0) }
+        guard editor.select(selected, in: state.vault) else { return }
+        if let note = editor.note {
             isNamingDraft = false
 
             if note.audioTranscript, let audioRelPath = note.audioFile, let v = state.vault {
@@ -479,8 +498,8 @@ public struct NotesView: View {
                             }
                         }
 
-                        TextField("无标题笔记", text: $currentTitle, onCommit: {
-                            saveNoteTitle(note)
+                        TextField("无标题笔记", text: Binding(get: { currentTitle }, set: { currentTitle = $0 }), onCommit: {
+                            editor.save()
                         })
                         .font(.system(size: 24, weight: .bold))
                         .textFieldStyle(.plain)
@@ -620,7 +639,7 @@ public struct NotesView: View {
             } else {
                 PataNoteEditor(
                     noteId: note.id,
-                    text: $currentBody,
+                    text: Binding(get: { currentBody }, set: { currentBody = $0 }),
                     isReadOnlyTranscript: note.audioTranscript,
                     isFocused: $isEditorFocused,
                     vaultPath: state.vault?.rootPath,
@@ -785,7 +804,7 @@ public struct NotesView: View {
     // MARK: - Actions
 
     private func handleCreateAudioNote() {
-        guard let v = state.vault else { return }
+        guard let v = state.vault, editor.save() else { return }
         isNotesCollapsed = false
         if state.isNotesListCollapsed {
             state.isNotesListCollapsed = false
@@ -861,30 +880,21 @@ public struct NotesView: View {
             audioURL: fullAudioURL,
             isRetranscribe: isRetranscribe,
             apiKey: key,
-            onSave: { [weak state] transcript in
-                guard let v = state?.vault else { return }
-                var updated = note
-                updated.body = transcript
-                _ = try v.updateNote(updated)
-                currentBody = transcript
-                state?.rescanVault()
+            onSave: { [weak state, v] transcript in
+                try state?.saveTranscript(transcript, noteId: note.id, audioFile: audioRelPath, in: v)
             }
         )
     }
 
     private func handleConfirmReplace(_ note: Note) {
-        asrManager.confirmReplace(noteId: note.id) { [weak state] newBody in
-            guard let v = state?.vault else { return }
-            var updated = note
-            updated.body = newBody
-            _ = try v.updateNote(updated)
-            currentBody = newBody
-            state?.rescanVault()
+        guard let vault = state.vault, let audioFile = note.audioFile else { return }
+        asrManager.confirmReplace(noteId: note.id) { [weak state, vault] newBody in
+            try state?.saveTranscript(newBody, noteId: note.id, audioFile: audioFile, in: vault)
         }
     }
 
     private func handleCreateDraft() {
-        guard let v = state.vault else { return }
+        guard let v = state.vault, editor.save() else { return }
         isDraftsCollapsed = false
         if state.isNotesListCollapsed {
             state.isNotesListCollapsed = false
@@ -900,7 +910,7 @@ public struct NotesView: View {
     }
 
     private func handleCreateFormalNote() {
-        guard let v = state.vault else { return }
+        guard let v = state.vault, editor.save() else { return }
         isNotesCollapsed = false
         if state.isNotesListCollapsed {
             state.isNotesListCollapsed = false
@@ -916,60 +926,14 @@ public struct NotesView: View {
     }
 
     private func convertCurrentDraft(_ note: Note) {
-        guard let v = state.vault else { return }
+        guard let v = state.vault, editor.save() else { return }
         do {
-            _ = try v.convertDraftToNote(id: note.id, newTitle: currentTitle.isEmpty ? "未命名笔记" : currentTitle, tags: currentTags)
+            let converted = try v.convertDraftToNote(id: note.id, newTitle: currentTitle.isEmpty ? "未命名笔记" : currentTitle, tags: currentTags)
+            editor.acceptSavedNote(converted, in: v)
             isNamingDraft = false
             state.rescanVault()
         } catch {
             print("Convert draft error: \(error)")
-        }
-    }
-
-    private func saveNoteTitle(_ note: Note) {
-        guard let v = state.vault else { return }
-        var updated = note
-        updated.title = currentTitle
-        do {
-            _ = try v.updateNote(updated)
-            state.rescanVault()
-        } catch {
-            print("Update note title error: \(error)")
-        }
-    }
-
-    private func scheduleAutoSave(for note: Note, body: String) {
-        autoSaveWorkItem?.cancel()
-        let noteId = note.id
-        let item = DispatchWorkItem { [weak state] in
-            guard let s = state, let v = s.vault, let n = v.index.getNote(noteId) else { return }
-            if n.body != body {
-                var updated = n
-                updated.body = body
-                do {
-                    _ = try v.updateNote(updated)
-                } catch {
-                    print("Update note body error: \(error)")
-                }
-            }
-        }
-        autoSaveWorkItem = item
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: item)
-    }
-
-    private func flushAutoSave() {
-        if let item = autoSaveWorkItem {
-            item.cancel()
-            autoSaveWorkItem = nil
-            if let note = currentNote, note.body != currentBody, let v = state.vault {
-                var updated = note
-                updated.body = currentBody
-                do {
-                    _ = try v.updateNote(updated)
-                } catch {
-                    print("Flush note body error: \(error)")
-                }
-            }
         }
     }
 
@@ -979,29 +943,12 @@ public struct NotesView: View {
         currentTags.append(trimmed)
         newTagInput = ""
         showTagPopover = false
-
-        guard let v = state.vault else { return }
-        var updated = note
-        updated.tags = currentTags
-        do {
-            _ = try v.updateNote(updated)
-            state.rescanVault()
-        } catch {
-            print("Add tag error: \(error)")
-        }
+        editor.save()
     }
 
     private func removeTag(_ tag: String, from note: Note) {
         currentTags.removeAll { $0 == tag }
-        guard let v = state.vault else { return }
-        var updated = note
-        updated.tags = currentTags
-        do {
-            _ = try v.updateNote(updated)
-            state.rescanVault()
-        } catch {
-            print("Remove tag error: \(error)")
-        }
+        editor.save()
     }
 
     private func copyNotePath(_ note: Note) {
@@ -1020,7 +967,7 @@ public struct NotesView: View {
     }
 
     private func deleteNote(_ note: Note) {
-        guard let v = state.vault else { return }
+        guard let v = state.vault, editor.save() else { return }
         do {
             try v.deleteNote(id: note.id)
             if state.selectedNoteId == note.id {
@@ -1120,6 +1067,7 @@ public struct NotesView: View {
                     guard imageExtensions.contains(ext) else { return }
 
                     DispatchQueue.main.async {
+                        guard state.vault === v, editor.isEditing(noteId: note.id, in: v), !note.audioTranscript else { return }
                         do {
                             let relPath = try v.importFile(sourceURL: fileURL)
                             let notePath = v.resolveEntityPath(note)
@@ -1128,7 +1076,6 @@ public struct NotesView: View {
                             let markdownPath = Links.relativePath(from: noteDir, to: absImported)
                             let appendText = currentBody.isEmpty ? "![](\(markdownPath))\n" : "\n\n![](\(markdownPath))\n"
                             currentBody.append(appendText)
-                            scheduleAutoSave(for: note, body: currentBody)
                             state.objectWillChange.send()
                         } catch {
                             // ignore import error

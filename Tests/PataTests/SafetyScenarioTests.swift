@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Yams
 @testable import PataCore
 
 @Suite("BDD Feature: Safety, Concurrency Baseline & Conflict Protection")
@@ -182,7 +183,7 @@ struct SafetyScenarioTests {
         #expect(reparsed != nil)
         #expect(reparsed?.title == "更新后的已知标题")
         #expect(reparsed?.description == "正文内容保持不变。")
-        #expect(reparsed?.extra["custom_agent_id"] == "pi-007")
+        #expect(try Yams.load(yaml: reparsed?.extra["custom_agent_id"] ?? "null") as? String == "pi-007")
         #expect(reparsed?.extra["nested_attributes"]?.contains("ai_confidence") == true)
         #expect(reparsed?.extra["nested_attributes"]?.contains("ide_plugin") == true)
     }

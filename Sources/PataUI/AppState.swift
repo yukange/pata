@@ -28,9 +28,15 @@ public final class AppState: ObservableObject {
     public static let shared = AppState()
 
     // Navigation & Layout
-    @Published public var currentNav: NavigationItem = .today
+    @Published public var currentNav: NavigationItem = .today {
+        didSet {
+            if oldValue == .notes, currentNav != .notes, !noteEditor.save() { currentNav = oldValue }
+        }
+    }
     @Published public var isSidebarVisible: Bool = true
-    @Published public var showSettings: Bool = false
+    @Published public var showSettings: Bool = false {
+        didSet { if showSettings, !noteEditor.save() { showSettings = false } }
+    }
     @Published public var showSearch: Bool = false
 
     // Global Task Inspector
@@ -46,7 +52,17 @@ public final class AppState: ObservableObject {
     }()
 
     // Notes Context
-    @Published public var selectedNoteId: String?
+    public let noteEditor = NoteEditingSession()
+    @Published private var noteSelection: String?
+    public var selectedNoteId: String? {
+        get { noteSelection }
+        set {
+            guard newValue != noteSelection else { return }
+            let selected = newValue.flatMap { vault?.index.getNote($0) }
+            guard noteEditor.select(selected, in: vault) else { return }
+            noteSelection = newValue
+        }
+    }
     @Published public var notesListWidth: CGFloat = 280
     @Published public var isNotesListCollapsed: Bool = false
 
@@ -101,9 +117,11 @@ public final class AppState: ObservableObject {
     private var savePreferencesWorkItem: DispatchWorkItem? = nil
     private let preferencesSaveQueue = DispatchQueue(label: "com.pata.preferences-io", qos: .utility)
 
-    public init() {
-        loadPreferences()
-        checkASRKey()
+    public init(loadPreferences: Bool = true) {
+        if loadPreferences {
+            self.loadPreferences()
+            checkASRKey()
+        }
     }
 
     public func loadPreferences() {
@@ -191,24 +209,45 @@ public final class AppState: ObservableObject {
     }
 
     public func openVault(path: String, persist: Bool = true) {
+        guard noteEditor.save() else { return }
         do {
             let v = try Vault(rootPath: path)
-            v.onEvent = { [weak self] _ in
+            v.onEvent = { [weak self, weak v] _ in
                 DispatchQueue.main.async {
-                    self?.objectWillChange.send()
+                    guard let self, self.vault === v else { return }
+                    self.vaultHealthErrors = v?.index.listParseErrors() ?? []
+                    if let v, let id = self.selectedNoteId, let note = v.index.getNote(id) {
+                        self.noteEditor.acceptSavedNote(note, in: v)
+                    }
+                    self.objectWillChange.send()
                 }
             }
+            vault?.stopWatcher()
             v.startWatcher()
             self.vault = v
+            noteEditor.select(nil, in: v)
+            selectedNoteId = nil
+            selectedTaskId = nil
+            isInspectorVisible = false
             self.vaultStatus = v.rootPath
             self.vaultHealthErrors = v.index.listParseErrors()
             MCPServer.shared.setVault(v)
+            mcpStatus = MCPServer.shared.getStatus()
             if persist && !CommandLine.arguments.contains("--snapshot") {
                 savePreferences()
             }
         } catch {
             self.vaultStatus = "打开资料库失败: \(error.localizedDescription)"
         }
+    }
+
+    public func saveTranscript(_ body: String, noteId: String, audioFile: String, in vault: Vault) throws {
+        if noteEditor.isEditing(noteId: noteId, in: vault), !noteEditor.save() {
+            throw SchemaError.validationError(field: "note", reason: "请先保存当前编辑后再替换逐字稿")
+        }
+        let note = try vault.replaceTranscript(noteId: noteId, audioFile: audioFile, body: body)
+        noteEditor.acceptSavedNote(note, in: vault)
+        if self.vault === vault { objectWillChange.send() }
     }
 
     public func rescanVault() {
@@ -263,6 +302,36 @@ public final class AppState: ObservableObject {
     public func navigateToTask(taskId: String) {
         self.showSearch = false
         openTaskInspector(taskId: taskId)
+    }
+
+    func openSearchResult(_ item: EntityRef) {
+        showSearch = false
+        if item.type != .file { showSettings = false }
+        switch item.type {
+        case .task:
+            navigateToTask(taskId: item.id)
+        case .note:
+            navigateToNote(noteId: item.id)
+        case .activity:
+            guard let location = vault?.index.getActivityLocation(activityID: item.id) else { return }
+            switch location.ownerType {
+            case .task:
+                navigateToTask(taskId: location.ownerId)
+            case .dayPlan:
+                currentNav = .today
+                todayDateString = location.ownerId
+            default:
+                break
+            }
+        case .dayPlan:
+            currentNav = .today
+            todayDateString = item.id
+        case .file:
+            if let root = vault?.rootPath {
+                let fullPath = (root as NSString).appendingPathComponent(item.path)
+                NSWorkspace.shared.selectFile(fullPath, inFileViewerRootedAtPath: root)
+            }
+        }
     }
 
     public func navigateToTag(_ tag: String) {

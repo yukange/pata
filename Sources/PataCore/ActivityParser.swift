@@ -51,11 +51,11 @@ public struct ActivityParser {
                 }
 
             case .meta:
-                if trimmed == activityEndMeta {
+                if line == activityEndMeta {
                     state = .body
-                } else if trimmed == activityStartTag {
+                } else if line == activityStartTag {
                     throw SchemaError.parseError("nested activity start tag at line \(lineNum)")
-                } else if trimmed == activityEndTag {
+                } else if line == activityEndTag {
                     throw SchemaError.parseError("unexpected activity end tag in metadata at line \(lineNum)")
                 } else {
                     metaLines.append(line)
@@ -133,7 +133,7 @@ public struct ActivityParser {
                     var extra: [String: String] = [:]
                     for (k, v) in loaded {
                         if k != "id" && k != "at" && k != "by" && k != "tags" && k != "note_refs" {
-                            extra[k] = String(describing: v)
+                            extra[k] = try Yams.dump(object: v, width: -1)
                         }
                     }
 
@@ -184,14 +184,12 @@ public struct ActivityParser {
             if !act.noteRefs.isEmpty {
                 metaDict["note_refs"] = act.noteRefs
             }
-            for (k, v) in act.extra {
-                metaDict[k] = v
+            for (k, v) in act.extra where metaDict[k] == nil {
+                metaDict[k] = try Yams.load(yaml: v) ?? NSNull()
             }
 
             let metaYaml = try Yams.dump(object: metaDict, width: -1)
-            let trimmedYaml = metaYaml.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            var block = "\(activityStartTag)\n\(trimmedYaml)\n\(activityEndMeta)\n"
+            var block = "\(activityStartTag)\n\(metaYaml)\(activityEndMeta)\n"
 
             if !act.body.isEmpty {
                 let normalized = act.body.replacingOccurrences(of: "\r\n", with: "\n")

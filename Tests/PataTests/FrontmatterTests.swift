@@ -1,6 +1,7 @@
 import Testing
 @testable import PataCore
 import Foundation
+import Yams
 
 @Suite("Frontmatter Tests")
 struct FrontmatterTests {
@@ -36,7 +37,7 @@ struct FrontmatterTests {
         #expect(pTask.statusEvents.count == 1)
         #expect(pTask.statusEvents[0].action == .completed)
         #expect(pTask.statusEvents[0].by == SourceAgent)
-        #expect(pTask.extra["unknown_custom_field"] == "custom_value")
+        #expect(try Yams.load(yaml: pTask.extra["unknown_custom_field"] ?? "null") as? String == "custom_value")
     }
 
     @Test("Draft Note Parsing")

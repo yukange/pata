@@ -20,7 +20,8 @@ rm -rf "$DEST"
 cp -R "$APP_SRC" "$DEST"
 
 echo "==> Signing installed app bundle..."
-codesign --force --deep --sign - "$DEST" 2>/dev/null || true
+codesign --force --deep --sign - "$DEST"
+codesign --verify --deep --strict "$DEST"
 
 echo "==> Registering with macOS LaunchServices..."
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$DEST" 2>/dev/null || true

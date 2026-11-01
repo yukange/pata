@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import AVFoundation
 @testable import PataAudio
 
 @Suite("ASR Tests")
@@ -55,6 +56,28 @@ struct ASRTests {
         #expect(policy.ossAccessKeyId == "LTAI5t...")
         #expect(policy.xOssObjectAcl == "private")
         #expect(policy.xOssForbidOverwrite == "true")
+    }
+
+    @Test("Audio preparation can be awaited from MainActor and produces a mono copy")
+    @MainActor
+    func preparesStereoAudioOffMainThread() async throws {
+        let fixture = try AuditVaultFixture()
+        let url = fixture.directory.appendingPathComponent("stereo.wav")
+        let format = try #require(AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2))
+        let buffer = try #require(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 44100))
+        buffer.frameLength = 44100
+        let channels = try #require(buffer.floatChannelData)
+        for channel in 0..<2 { channels[channel].initialize(repeating: 0, count: 44100) }
+        do {
+            let file = try AVAudioFile(forWriting: url, settings: format.settings)
+            try file.write(from: buffer)
+        }
+        let prepared = await AudioPreprocessor.prepareAudioForTranscription(url: url)
+        defer { prepared.cleanup() }
+        #expect(prepared.targetURL != url)
+        let mono = try AVAudioFile(forReading: prepared.targetURL)
+        #expect(mono.processingFormat.channelCount == 1)
+        #expect(FileManager.default.fileExists(atPath: url.path))
     }
 
     @Test("ASRManager state machine, discard and confirm replace flow")

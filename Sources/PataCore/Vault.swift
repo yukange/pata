@@ -1,4 +1,5 @@
 import Foundation
+import CoreServices
 
 public struct VaultEvent: Sendable {
     public var op: String // "create", "update", "delete", "error"
@@ -23,9 +24,15 @@ public final class Vault: @unchecked Sendable {
 
     public var onEvent: (@Sendable (VaultEvent) -> Void)?
 
-    private let mutationLock = NSLock()
-    private var isWatching = false
-    private var watcherSources: [DispatchSourceFileSystemObject] = []
+    private let mutationLock = NSRecursiveLock()
+    private let watcherLock = NSLock()
+    private var watcherStream: FSEventStreamRef?
+    private let watcherQueue = DispatchQueue(label: "com.pata.vault-watcher", qos: .utility)
+
+    private final class WatcherContext {
+        weak var vault: Vault?
+        init(_ vault: Vault) { self.vault = vault }
+    }
 
     public init(rootPath: String) throws {
         let absRoot = URL(fileURLWithPath: rootPath).standardized.path
@@ -35,7 +42,7 @@ public final class Vault: @unchecked Sendable {
 
         try FileManager.default.createDirectory(atPath: absRoot, withIntermediateDirectories: true)
         for dir in ["tasks", "notes", "plans", "files"] {
-            let p = (absRoot as NSString).appendingPathComponent(dir)
+            let p = try Safety.safeResolveVaultPath(vaultRoot: absRoot, targetPath: dir).absPath
             try FileManager.default.createDirectory(atPath: p, withIntermediateDirectories: true)
         }
 
@@ -53,6 +60,7 @@ public final class Vault: @unchecked Sendable {
         defer { mutationLock.unlock() }
 
         index.vaultRoot = rootPath
+        index.beginScan()
         var seenPaths = Set<String>()
 
         // 1. Scan tasks/
@@ -154,7 +162,7 @@ public final class Vault: @unchecked Sendable {
     }
 
     public func resolveEntityPath(_ entity: any Entity) -> String {
-        if let existing = index.idToFile[entity.id] {
+        if let existing = index.path(for: entity.id) {
             return existing
         }
         let filename = ULID.formatEntityFilename(entity)
@@ -168,6 +176,11 @@ public final class Vault: @unchecked Sendable {
         default:
             return (rootPath as NSString).appendingPathComponent("\(filename)")
         }
+    }
+
+    private func checkedEntityPath(_ entity: any Entity) throws -> String {
+        try SchemaValidator.validateEntity(entity)
+        return try Safety.safeResolveVaultPath(vaultRoot: rootPath, targetPath: resolveEntityPath(entity)).absPath
     }
 
     // MARK: - Task CRUD
@@ -195,7 +208,7 @@ public final class Vault: @unchecked Sendable {
             statusEvents.append(StatusEvent(action: .completed, at: now, by: source))
         }
 
-        let task = Task(
+        var task = Task(
             id: id,
             title: title,
             description: description,
@@ -214,9 +227,10 @@ public final class Vault: @unchecked Sendable {
             activities: []
         )
 
-        let targetPath = resolveEntityPath(task)
+        let targetPath = try checkedEntityPath(task)
         let md = try Frontmatter.serializeMarkdown(task)
         let baseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: nil, tracker: tracker)
+        task.baseline = baseline
         index.updateEntity(task, path: targetPath, baseline: baseline)
 
         onEvent?(VaultEvent(op: "create", path: targetPath, entityId: id, type: .task))
@@ -229,21 +243,26 @@ public final class Vault: @unchecked Sendable {
 
         var t = task
         t.updatedAt = Date()
-
-        // Preserve any concurrent activities added to this task in the index
-        if let existing = index.getTask(t.id), t.activities.count < existing.activities.count {
-            t.activities = existing.activities
-        }
-
-        let targetPath = resolveEntityPath(t)
-        let base = baseline ?? index.getBaseline(absPath: targetPath)
+        let targetPath = try checkedEntityPath(t)
+        let base = baseline ?? task.baseline
 
         let md = try Frontmatter.serializeMarkdown(t)
         let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
+        t.baseline = newBaseline
         index.updateEntity(t, path: targetPath, baseline: newBaseline)
 
         onEvent?(VaultEvent(op: "update", path: targetPath, entityId: t.id, type: .task))
         return t
+    }
+
+    public func modifyTask(id: String, _ changes: (inout Task) -> Void) throws -> Task {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
+        guard var task = index.getTask(id) else {
+            throw SchemaError.validationError(field: "id", reason: "task '\(id)' not found")
+        }
+        changes(&task)
+        return try updateTask(task)
     }
 
     public func setTaskStatus(id: String, status: TaskStatus, source: String? = nil) throws -> Task {
@@ -271,10 +290,11 @@ public final class Vault: @unchecked Sendable {
             task.statusEvents.append(StatusEvent(action: .reopened, at: now, by: source))
         }
 
-        let targetPath = resolveEntityPath(task)
+        let targetPath = try checkedEntityPath(task)
         let base = index.getBaseline(absPath: targetPath)
         let md = try Frontmatter.serializeMarkdown(task)
         let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
+        task.baseline = newBaseline
         index.updateEntity(task, path: targetPath, baseline: newBaseline)
 
         onEvent?(VaultEvent(op: "update", path: targetPath, entityId: id, type: .task))
@@ -285,20 +305,20 @@ public final class Vault: @unchecked Sendable {
         mutationLock.lock()
         defer { mutationLock.unlock() }
 
-        guard let path = index.idToFile[id] else { return }
+        guard let path = index.path(for: id) else { return }
 
-        // Remove file
-        try? FileManager.default.removeItem(atPath: path)
+        // Remove the index entry only after the file was removed successfully.
+        _ = try Safety.safeResolveVaultPath(vaultRoot: rootPath, targetPath: path)
+        try FileManager.default.removeItem(atPath: path)
         index.removeFile(absPath: path)
 
         // Clean task ID from all DayPlans
-        for (_, var plan) in index.dayPlans {
+        for var plan in index.listDayPlans() {
             if plan.taskIds.contains(id) {
                 plan.taskIds.removeAll { $0 == id }
-                let planPath = resolveEntityPath(plan)
-                let base = index.getBaseline(absPath: planPath)
-                if let md = try? Frontmatter.serializeMarkdown(plan),
-                   let newBase = try? Safety.safeWrite(targetPath: planPath, data: Data(md.utf8), baseline: base, tracker: tracker) {
+                if let planPath = try? checkedEntityPath(plan),
+                   let md = try? Frontmatter.serializeMarkdown(plan),
+                   let newBase = try? Safety.safeWrite(targetPath: planPath, data: Data(md.utf8), baseline: plan.baseline, tracker: tracker) {
                     index.updateEntity(plan, path: planPath, baseline: newBase)
                 }
             }
@@ -324,7 +344,7 @@ public final class Vault: @unchecked Sendable {
         let id = ULID.generateEntityID(type: .note)
         let now = Date()
 
-        let note = Note(
+        var note = Note(
             id: id,
             draft: draft,
             title: title,
@@ -338,9 +358,10 @@ public final class Vault: @unchecked Sendable {
             body: body
         )
 
-        let targetPath = resolveEntityPath(note)
+        let targetPath = try checkedEntityPath(note)
         let md = try Frontmatter.serializeMarkdown(note)
         let baseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: nil, tracker: tracker)
+        note.baseline = baseline
         index.updateEntity(note, path: targetPath, baseline: baseline)
 
         onEvent?(VaultEvent(op: "create", path: targetPath, entityId: id, type: .note))
@@ -354,15 +375,26 @@ public final class Vault: @unchecked Sendable {
         var n = note
         n.updatedAt = Date()
 
-        let targetPath = resolveEntityPath(n)
-        let base = baseline ?? index.getBaseline(absPath: targetPath)
+        let targetPath = try checkedEntityPath(n)
+        let base = baseline ?? note.baseline
 
         let md = try Frontmatter.serializeMarkdown(n)
         let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
+        n.baseline = newBaseline
         index.updateEntity(n, path: targetPath, baseline: newBaseline)
 
         onEvent?(VaultEvent(op: "update", path: targetPath, entityId: n.id, type: .note))
         return n
+    }
+
+    public func replaceTranscript(noteId: String, audioFile: String, body: String) throws -> Note {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
+        guard var note = index.getNote(noteId), note.audioTranscript, note.audioFile == audioFile else {
+            throw SchemaError.validationError(field: "audio_file", reason: "原逐字稿笔记已删除或音频关联已改变")
+        }
+        note.body = body
+        return try updateNote(note)
     }
 
     /// In-place conversion from Draft to Formal Note.
@@ -385,11 +417,12 @@ public final class Vault: @unchecked Sendable {
         note.tags = tags
         note.updatedAt = Date()
 
-        let targetPath = resolveEntityPath(note)
+        let targetPath = try checkedEntityPath(note)
         let base = index.getBaseline(absPath: targetPath)
 
         let md = try Frontmatter.serializeMarkdown(note)
         let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
+        note.baseline = newBaseline
         index.updateEntity(note, path: targetPath, baseline: newBaseline)
 
         onEvent?(VaultEvent(op: "update", path: targetPath, entityId: id, type: .note))
@@ -400,8 +433,9 @@ public final class Vault: @unchecked Sendable {
         mutationLock.lock()
         defer { mutationLock.unlock() }
 
-        guard let path = index.idToFile[id] else { return }
-        try? FileManager.default.removeItem(atPath: path)
+        guard let path = index.path(for: id) else { return }
+        _ = try Safety.safeResolveVaultPath(vaultRoot: rootPath, targetPath: path)
+        try FileManager.default.removeItem(atPath: path)
         index.removeFile(absPath: path)
 
         onEvent?(VaultEvent(op: "delete", path: path, entityId: id, type: .note))
@@ -413,7 +447,7 @@ public final class Vault: @unchecked Sendable {
         mutationLock.lock()
         defer { mutationLock.unlock() }
 
-        if let existing = index.dayPlans[date] {
+        if let existing = index.getDayPlan(date: date) {
             return existing
         }
         return DayPlan(date: date, taskIds: [], extra: [:], body: "", activities: [])
@@ -423,18 +457,22 @@ public final class Vault: @unchecked Sendable {
         mutationLock.lock()
         defer { mutationLock.unlock() }
 
-        let targetPath = resolveEntityPath(plan)
-        let base = baseline ?? index.getBaseline(absPath: targetPath)
+        var plan = plan
+        let targetPath = try checkedEntityPath(plan)
+        let base = baseline ?? plan.baseline
 
         let md = try Frontmatter.serializeMarkdown(plan)
         let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
         index.updateEntity(plan, path: targetPath, baseline: newBaseline)
 
         onEvent?(VaultEvent(op: "update", path: targetPath, entityId: plan.date, type: .dayPlan))
+        plan.baseline = newBaseline
         return plan
     }
 
     public func addTaskToPlan(date: String, taskId: String) throws {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
         var plan = getDayPlan(date: date)
         if !plan.taskIds.contains(taskId) {
             plan.taskIds.append(taskId)
@@ -443,6 +481,8 @@ public final class Vault: @unchecked Sendable {
     }
 
     public func removeTaskFromPlan(date: String, taskId: String) throws {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
         var plan = getDayPlan(date: date)
         plan.taskIds.removeAll { $0 == taskId }
         _ = try updateDayPlan(plan)
@@ -464,7 +504,7 @@ public final class Vault: @unchecked Sendable {
         let activityId = ULID.generateActivityID()
         let now = Date()
 
-        let act = Activity(
+        var act = Activity(
             id: activityId,
             at: now,
             by: source,
@@ -481,7 +521,7 @@ public final class Vault: @unchecked Sendable {
             task.activities.append(act)
             task.updatedAt = now
 
-            let targetPath = resolveEntityPath(task)
+            let targetPath = try checkedEntityPath(task)
             let base = index.getBaseline(absPath: targetPath)
             let md = try Frontmatter.serializeMarkdown(task)
             let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
@@ -498,10 +538,26 @@ public final class Vault: @unchecked Sendable {
                 planDate = formatter.string(from: now)
             }
 
-            var plan = index.dayPlans[planDate] ?? DayPlan(date: planDate, taskIds: [], extra: [:], body: "", activities: [])
+            guard SchemaValidator.validateDateFormat(planDate) else {
+                throw SchemaError.validationError(field: "date", reason: "must be YYYY-MM-DD")
+            }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.dateFormat = "yyyy-MM-dd"
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = .current
+            let time = calendar.dateComponents([.hour, .minute, .second], from: now)
+            guard let day = formatter.date(from: planDate),
+                  let hour = time.hour, let minute = time.minute, let second = time.second,
+                  let timestamp = calendar.date(bySettingHour: hour, minute: minute, second: second, of: day) else {
+                throw SchemaError.validationError(field: "date", reason: "invalid local date")
+            }
+            act.at = timestamp
+            var plan = index.getDayPlan(date: planDate) ?? DayPlan(date: planDate, taskIds: [], extra: [:], body: "", activities: [])
             plan.activities.append(act)
 
-            let targetPath = resolveEntityPath(plan)
+            let targetPath = try checkedEntityPath(plan)
             let base = index.getBaseline(absPath: targetPath)
             let md = try Frontmatter.serializeMarkdown(plan)
             let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
@@ -543,7 +599,7 @@ public final class Vault: @unchecked Sendable {
             task.updatedAt = now
 
             let updatedAct = task.activities[idx]
-            let targetPath = resolveEntityPath(task)
+            let targetPath = try checkedEntityPath(task)
             let base = index.getBaseline(absPath: targetPath)
             let md = try Frontmatter.serializeMarkdown(task)
             let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
@@ -565,7 +621,7 @@ public final class Vault: @unchecked Sendable {
             if let r = noteRefs { plan.activities[idx].noteRefs = r }
 
             let updatedAct = plan.activities[idx]
-            let targetPath = resolveEntityPath(plan)
+            let targetPath = try checkedEntityPath(plan)
             let base = index.getBaseline(absPath: targetPath)
             let md = try Frontmatter.serializeMarkdown(plan)
             let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
@@ -591,7 +647,7 @@ public final class Vault: @unchecked Sendable {
             task.activities.removeAll { $0.id == id }
             task.updatedAt = Date()
 
-            let targetPath = resolveEntityPath(task)
+            let targetPath = try checkedEntityPath(task)
             let base = index.getBaseline(absPath: targetPath)
             let md = try Frontmatter.serializeMarkdown(task)
             let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
@@ -603,7 +659,7 @@ public final class Vault: @unchecked Sendable {
             guard var plan = index.getDayPlan(date: loc.ownerId) else { return }
             plan.activities.removeAll { $0.id == id }
 
-            let targetPath = resolveEntityPath(plan)
+            let targetPath = try checkedEntityPath(plan)
             let base = index.getBaseline(absPath: targetPath)
             let md = try Frontmatter.serializeMarkdown(plan)
             let newBaseline = try Safety.safeWrite(targetPath: targetPath, data: Data(md.utf8), baseline: base, tracker: tracker)
@@ -625,6 +681,10 @@ public final class Vault: @unchecked Sendable {
         defer { mutationLock.unlock() }
 
         let originalName = destFilename ?? sourceURL.lastPathComponent
+        guard !originalName.isEmpty, originalName == (originalName as NSString).lastPathComponent,
+              originalName != ".", originalName != ".." else {
+            throw SchemaError.validationError(field: "filename", reason: "must be a filename")
+        }
         let baseExt = (originalName as NSString).pathExtension
         let baseStem = (originalName as NSString).deletingPathExtension
 
@@ -641,6 +701,7 @@ public final class Vault: @unchecked Sendable {
             counter += 1
         }
 
+        _ = try Safety.safeResolveVaultPath(vaultRoot: rootPath, targetPath: candidatePath)
         try FileManager.default.copyItem(at: sourceURL, to: URL(fileURLWithPath: candidatePath))
 
         let attrs = try FileManager.default.attributesOfItem(atPath: candidatePath)
@@ -664,7 +725,7 @@ public final class Vault: @unchecked Sendable {
     /// Imports raw file data into `files/` without overwriting existing files.
     /// Returns the vault-relative path (e.g. "files/image_20261030_123456.png").
     public func importFileData(_ data: Data, filename: String) throws -> String {
-        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(filename)
+        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
         try data.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
         return try importFile(sourceURL: tempURL, destFilename: filename)
@@ -673,45 +734,43 @@ public final class Vault: @unchecked Sendable {
     // MARK: - File System Watcher
 
     public func startWatcher() {
-        guard !isWatching else { return }
-        isWatching = true
-
-        let dirs = ["tasks", "notes", "plans", "files"]
-        for dir in dirs {
-            let path = (rootPath as NSString).appendingPathComponent(dir)
-            let fd = open(path, O_EVTONLY)
-            guard fd >= 0 else { continue }
-
-            let source = DispatchSource.makeFileSystemObjectSource(
-                fileDescriptor: fd,
-                eventMask: [.write, .link, .rename],
-                queue: DispatchQueue.global(qos: .utility)
-            )
-
-            source.setEventHandler { [weak self] in
-                guard let self = self else { return }
-                if self.tracker.hasRecentWrites(inDirectory: path, window: 2.0) {
-                    return
-                }
-                try? self.rescan()
-                self.onEvent?(VaultEvent(op: "update", path: path))
+        watcherLock.lock()
+        defer { watcherLock.unlock() }
+        guard watcherStream == nil else { return }
+        let info = Unmanaged.passRetained(WatcherContext(self)).toOpaque()
+        var context = FSEventStreamContext(version: 0, info: info, retain: nil, release: {
+            if let info = $0 { Unmanaged<WatcherContext>.fromOpaque(info).release() }
+        }, copyDescription: nil)
+        let paths = ["tasks", "notes", "plans", "files"].map { (rootPath as NSString).appendingPathComponent($0) }
+        let flags = FSEventStreamCreateFlags(kFSEventStreamCreateFlagFileEvents | kFSEventStreamCreateFlagWatchRoot)
+        guard let stream = FSEventStreamCreate(nil, { _, info, _, _, _, _ in
+            guard let info, let vault = Unmanaged<WatcherContext>.fromOpaque(info).takeUnretainedValue().vault else { return }
+            do {
+                try vault.rescan()
+                vault.onEvent?(VaultEvent(op: "update", path: vault.rootPath))
+            } catch {
+                vault.onEvent?(VaultEvent(op: "error", path: vault.rootPath, err: error))
             }
-
-            source.setCancelHandler {
-                close(fd)
-            }
-
-            source.resume()
-            watcherSources.append(source)
+        }, &context, paths as CFArray, FSEventStreamEventId(kFSEventStreamEventIdSinceNow), 0.15, flags) else {
+            Unmanaged<WatcherContext>.fromOpaque(info).release()
+            return
         }
+        FSEventStreamSetDispatchQueue(stream, watcherQueue)
+        guard FSEventStreamStart(stream) else {
+            FSEventStreamInvalidate(stream)
+            FSEventStreamRelease(stream)
+            return
+        }
+        watcherStream = stream
     }
 
     public func stopWatcher() {
-        guard isWatching else { return }
-        isWatching = false
-        for s in watcherSources {
-            s.cancel()
-        }
-        watcherSources.removeAll()
+        watcherLock.lock()
+        defer { watcherLock.unlock() }
+        guard let stream = watcherStream else { return }
+        FSEventStreamStop(stream)
+        FSEventStreamInvalidate(stream)
+        FSEventStreamRelease(stream)
+        watcherStream = nil
     }
 }

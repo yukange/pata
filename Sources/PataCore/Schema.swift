@@ -51,11 +51,15 @@ public struct SchemaValidator {
         }
     }
 
-    private static func validateDateFormat(_ d: String) -> Bool {
+    public static func validateDateFormat(_ d: String) -> Bool {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        return formatter.date(from: d) != nil
+        formatter.isLenient = false
+        guard d.utf8.count == 10, let date = formatter.date(from: d) else { return false }
+        return formatter.string(from: date) == d
     }
 
     private static func validateTask(_ t: Task, path: String) throws {

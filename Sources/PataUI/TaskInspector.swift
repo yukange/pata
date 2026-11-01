@@ -373,13 +373,17 @@ public struct TaskInspector: View {
     private func addTag(_ t: Task, _ tagName: String) {
         let clean = tagName.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
         guard !clean.isEmpty else { return }
-        var updated = t
-        if !updated.tags.contains(where: { $0.lowercased() == clean.lowercased() }) {
-            updated.tags.append(clean)
-            try? state.vault?.updateTask(updated)
+        do {
+            _ = try state.vault?.modifyTask(id: t.id) { task in
+                if !task.tags.contains(where: { $0.lowercased() == clean.lowercased() }) {
+                    task.tags.append(clean)
+                }
+            }
             state.objectWillChange.send()
+            cancelAddTag()
+        } catch {
+            descSaveError = "标签保存失败: \(error.localizedDescription)"
         }
-        cancelAddTag()
     }
 
     private func cancelAddTag() {
@@ -432,10 +436,8 @@ public struct TaskInspector: View {
             guard let s = state, let v = s.vault else { return }
             guard let t = v.index.getTask(targetTaskId) else { return }
             if t.title != clean {
-                var updated = t
-                updated.title = clean
                 do {
-                    _ = try v.updateTask(updated)
+                    _ = try v.modifyTask(id: targetTaskId) { $0.title = clean }
                     DispatchQueue.main.async {
                         self.titleSaveError = nil
                     }
@@ -461,10 +463,8 @@ public struct TaskInspector: View {
             return
         }
         if t.title != clean {
-            var updated = t
-            updated.title = clean
             do {
-                _ = try v.updateTask(updated)
+                _ = try v.modifyTask(id: targetTaskId) { $0.title = clean }
                 titleSaveError = nil
             } catch {
                 titleSaveError = "标题保存失败: \(error.localizedDescription)"
@@ -520,10 +520,8 @@ public struct TaskInspector: View {
             guard let s = state, let v = s.vault else { return }
             guard let t = v.index.getTask(targetTaskId) else { return }
             if t.description != newText {
-                var updated = t
-                updated.description = newText
                 do {
-                    _ = try v.updateTask(updated)
+                    _ = try v.modifyTask(id: targetTaskId) { $0.description = newText }
                     DispatchQueue.main.async {
                         self.descSaveError = nil
                     }
@@ -544,10 +542,8 @@ public struct TaskInspector: View {
         let targetTaskId = currentEditingTaskId.isEmpty ? taskId : currentEditingTaskId
         guard let v = state.vault, let t = v.index.getTask(targetTaskId) else { return }
         if t.description != descDraft {
-            var updated = t
-            updated.description = descDraft
             do {
-                _ = try v.updateTask(updated)
+                _ = try v.modifyTask(id: targetTaskId) { $0.description = descDraft }
                 descSaveError = nil
             } catch {
                 descSaveError = "保存失败: \(error.localizedDescription)"
@@ -564,6 +560,7 @@ public struct TaskInspector: View {
         let author: String
         let icon: String
         let text: String
+        var noteRefs: [String: String] = [:]
     }
 
     private func timelineEntries(for t: Task) -> [TaskTimelineItem] {
@@ -611,7 +608,8 @@ public struct TaskInspector: View {
                 isSystemEvent: false,
                 author: act.by == "agent" ? "Agent" : "我",
                 icon: act.by == "agent" ? "cpu" : "person.fill",
-                text: act.body
+                text: act.body,
+                noteRefs: act.noteRefs
             ))
         }
 
@@ -744,7 +742,7 @@ public struct TaskInspector: View {
                         }
                         .padding(.top, 2)
                     } else {
-                        ActivityTextView(text: item.text, state: state)
+                        ActivityTextView(text: item.text, state: state, noteRefs: item.noteRefs)
                             .padding(.top, 1)
                     }
                 }
@@ -793,10 +791,14 @@ public struct TaskInspector: View {
     }
 
     private func removeTag(_ t: Task, _ tag: String) {
-        var updated = t
-        updated.tags.removeAll { $0.lowercased() == tag.lowercased() }
-        try? state.vault?.updateTask(updated)
-        state.objectWillChange.send()
+        do {
+            _ = try state.vault?.modifyTask(id: t.id) { task in
+                task.tags.removeAll { $0.lowercased() == tag.lowercased() }
+            }
+            state.objectWillChange.send()
+        } catch {
+            descSaveError = "标签保存失败: \(error.localizedDescription)"
+        }
     }
 
     private func submitActivity(_ bodyText: String? = nil) {

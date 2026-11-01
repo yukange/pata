@@ -147,6 +147,27 @@ struct ImageProviderTests {
         #expect(p1.fingerprint() != pDiff.fingerprint())
     }
 
+    @Test("Local image cache keys include the owning note directory")
+    func imageCacheDoesNotCrossNoteDirectories() throws {
+        let fixture = try AuditVaultFixture()
+        let root = URL(fileURLWithPath: fixture.vault.rootPath)
+        let firstDirectory = root.appendingPathComponent("notes/one")
+        let secondDirectory = root.appendingPathComponent("notes/two")
+        try FileManager.default.createDirectory(at: firstDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: secondDirectory, withIntermediateDirectories: true)
+        let name = "\(UUID().uuidString).png"
+        let data = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")!
+        try data.write(to: firstDirectory.appendingPathComponent(name))
+        let first = PataEmbeddedImageProvider(vaultPath: root.path, noteFilePath: firstDirectory.appendingPathComponent("a.md").path)
+        let second = PataEmbeddedImageProvider(vaultPath: root.path, noteFilePath: secondDirectory.appendingPathComponent("b.md").path)
+        let request = EmbeddedImageRequest(name: name)
+        let firstImage = try #require(first.image(for: request))
+        #expect(second.image(for: request) == nil)
+        try data.write(to: secondDirectory.appendingPathComponent(name))
+        let secondImage = try #require(second.image(for: request))
+        #expect(firstImage !== secondImage)
+    }
+
     @Test("PataImageCache stores and invalidates correctly")
     func imageCacheLifecycle() {
         let key = "test_key_\(UUID().uuidString)"

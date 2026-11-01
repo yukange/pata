@@ -88,7 +88,8 @@ public final class PataEmbeddedImageProvider: EmbeddedImageProvider, @unchecked 
         }
 
         let cacheKey = raw
-        if let cached = PataImageCache.shared.image(forKey: cacheKey) {
+        if raw.hasPrefix("data:") || raw.hasPrefix("http://") || raw.hasPrefix("https://"),
+           let cached = PataImageCache.shared.image(forKey: cacheKey) {
             return cached
         }
 
@@ -155,6 +156,8 @@ public final class PataEmbeddedImageProvider: EmbeddedImageProvider, @unchecked 
 
         for path in candidates {
             if FileManager.default.fileExists(atPath: path) {
+                let cacheKey = URL(fileURLWithPath: path).standardized.path
+                if let cached = PataImageCache.shared.image(forKey: cacheKey) { return cached }
                 if let img = NSImage(contentsOfFile: path) ?? (try? Data(contentsOf: URL(fileURLWithPath: path))).flatMap({ NSImage(data: $0) }) {
                     ensureValidImageSize(img)
                     PataImageCache.shared.setImage(img, forKey: cacheKey)

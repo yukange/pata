@@ -18,20 +18,10 @@ public struct SearchOverlay: View {
         return v.index.searchAll(query)
     }
 
-    private var tasks: [EntityRef] {
-        allResults.filter { $0.type == .task }
-    }
-
-    private var notes: [EntityRef] {
-        allResults.filter { $0.type == .note }
-    }
-
-    private var activities: [EntityRef] {
-        allResults.filter { $0.type == .activity }
-    }
-
-    private var files: [EntityRef] {
-        allResults.filter { $0.type == .file }
+    static func displayedResults(_ results: [EntityRef]) -> [EntityRef] {
+        [EntityType.task, .note, .activity, .file].flatMap { type in
+            results.filter { $0.type == type }.prefix(5)
+        }
     }
 
     private var isDarkMode: Bool {
@@ -48,6 +38,14 @@ public struct SearchOverlay: View {
     }
 
     public var body: some View {
+        let results = allResults
+        let displayedResults = Self.displayedResults(results)
+        let selectedID = displayedResults.indices.contains(selectedIndex) ? displayedResults[selectedIndex].id : nil
+        let tasks = results.filter { $0.type == .task }
+        let notes = results.filter { $0.type == .note }
+        let activities = results.filter { $0.type == .activity }
+        let files = results.filter { $0.type == .file }
+
         ZStack {
             // Backdrop
             Color.black.opacity(0.3)
@@ -68,9 +66,18 @@ public struct SearchOverlay: View {
                         .font(.system(size: 14))
                         .textFieldStyle(.plain)
                         .focused($isFieldFocused)
+                        .onKeyPress(keys: [.upArrow, .downArrow], phases: [.down, .repeat]) { press in
+                            guard !displayedResults.isEmpty,
+                                  press.modifiers.intersection([.command, .control, .option, .shift]).isEmpty,
+                                  (NSApp.keyWindow?.firstResponder as? NSTextView)?.hasMarkedText() != true else {
+                                return .ignored
+                            }
+                            selectedIndex = min(max(selectedIndex + (press.key == .downArrow ? 1 : -1), 0), displayedResults.count - 1)
+                            return .handled
+                        }
                         .onSubmit {
-                            if let first = allResults.first {
-                                openItem(first)
+                            if displayedResults.indices.contains(selectedIndex) {
+                                state.openSearchResult(displayedResults[selectedIndex])
                             }
                         }
 
@@ -114,7 +121,7 @@ public struct SearchOverlay: View {
                         Spacer()
                     }
                     .frame(height: 220)
-                } else if allResults.isEmpty {
+                } else if results.isEmpty {
                     // No Results Found
                     VStack(spacing: 6) {
                         Spacer()
@@ -129,55 +136,54 @@ public struct SearchOverlay: View {
                     .frame(height: 180)
                 } else {
                     // Grouped Search Results
-                    ScrollView {
-                        VStack(spacing: 12) {
-                            // Tasks Section
-                            if !tasks.isEmpty {
-                                resultSection(title: "任务", count: tasks.count, icon: "checkmark.square", iconColor: Color(red: 4/255, green: 120/255, blue: 87/255)) {
-                                    ForEach(tasks.prefix(5), id: \.id) { task in
-                                        resultRow(task, icon: "checkmark.square", iconColor: Color(red: 4/255, green: 120/255, blue: 87/255)) {
-                                            openItem(task)
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(spacing: 12) {
+                                // Tasks Section
+                                if !tasks.isEmpty {
+                                    resultSection(title: "任务", count: tasks.count, icon: "checkmark.square", iconColor: Color(red: 4/255, green: 120/255, blue: 87/255)) {
+                                        ForEach(displayedResults.filter { $0.type == .task }) { task in
+                                            resultRow(task, icon: "checkmark.square", iconColor: Color(red: 4/255, green: 120/255, blue: 87/255), isSelected: task.id == selectedID)
+                                        }
+                                    }
+                                }
+
+                                // Notes Section
+                                if !notes.isEmpty {
+                                    resultSection(title: "笔记", count: notes.count, icon: "doc.text", iconColor: .blue) {
+                                        ForEach(displayedResults.filter { $0.type == .note }) { note in
+                                            resultRow(note, icon: "doc.text", iconColor: .blue, isSelected: note.id == selectedID)
+                                        }
+                                    }
+                                }
+
+                                // Activities Section
+                                if !activities.isEmpty {
+                                    resultSection(title: "记录", count: activities.count, icon: "bubble.left", iconColor: .orange) {
+                                        ForEach(displayedResults.filter { $0.type == .activity }) { act in
+                                            resultRow(act, icon: "bubble.left", iconColor: .orange, isSelected: act.id == selectedID)
+                                        }
+                                    }
+                                }
+
+                                // Files Section
+                                if !files.isEmpty {
+                                    resultSection(title: "文件资源", count: files.count, icon: "paperclip", iconColor: .blue) {
+                                        ForEach(displayedResults.filter { $0.type == .file }) { file in
+                                            resultRow(file, icon: "paperclip", iconColor: .blue, isSelected: file.id == selectedID)
                                         }
                                     }
                                 }
                             }
-
-                            // Notes Section
-                            if !notes.isEmpty {
-                                resultSection(title: "笔记", count: notes.count, icon: "doc.text", iconColor: .blue) {
-                                    ForEach(notes.prefix(5), id: \.id) { note in
-                                        resultRow(note, icon: "doc.text", iconColor: .blue) {
-                                            openItem(note)
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Activities Section
-                            if !activities.isEmpty {
-                                resultSection(title: "记录", count: activities.count, icon: "bubble.left", iconColor: .orange) {
-                                    ForEach(activities.prefix(5), id: \.id) { act in
-                                        resultRow(act, icon: "bubble.left", iconColor: .orange) {
-                                            openItem(act)
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Files Section
-                            if !files.isEmpty {
-                                resultSection(title: "文件资源", count: files.count, icon: "paperclip", iconColor: .blue) {
-                                    ForEach(files.prefix(5), id: \.id) { file in
-                                        resultRow(file, icon: "paperclip", iconColor: .blue) {
-                                            openItem(file)
-                                        }
-                                    }
-                                }
+                            .padding(.vertical, 8)
+                        }
+                        .frame(maxHeight: 340)
+                        .onChange(of: selectedIndex) {
+                            if let id = displayedResults.indices.contains(selectedIndex) ? displayedResults[selectedIndex].id : nil {
+                                proxy.scrollTo(id, anchor: .center)
                             }
                         }
-                        .padding(.vertical, 8)
                     }
-                    .frame(maxHeight: 340)
                 }
 
                 Divider()
@@ -237,31 +243,12 @@ public struct SearchOverlay: View {
                 isFieldFocused = true
             }
         }
-        .onExitCommand {
-            state.toggleSearch()
+        .onChange(of: query) { selectedIndex = 0 }
+        .onChange(of: displayedResults.map(\.id)) {
+            selectedIndex = min(selectedIndex, max(0, displayedResults.count - 1))
         }
-    }
-
-    private func openItem(_ item: EntityRef) {
-        state.toggleSearch()
-        switch item.type {
-        case .task:
-            state.selectedTaskId = item.id
-        case .note:
-            state.currentNav = .notes
-            state.selectedNoteId = item.id
-        case .activity:
-            if let tid = item.taskId {
-                state.selectedTaskId = tid
-            }
-        case .dayPlan:
-            state.currentNav = .today
-            state.todayDateString = item.id
-        case .file:
-            if let root = state.vault?.rootPath {
-                let fullPath = (root as NSString).appendingPathComponent(item.path)
-                NSWorkspace.shared.selectFile(fullPath, inFileViewerRootedAtPath: root)
-            }
+        .onExitCommand {
+            state.showSearch = false
         }
     }
 
@@ -297,8 +284,8 @@ public struct SearchOverlay: View {
         }
     }
 
-    private func resultRow(_ item: EntityRef, icon: String, iconColor: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    private func resultRow(_ item: EntityRef, icon: String, iconColor: Color, isSelected: Bool) -> some View {
+        Button(action: { state.openSearchResult(item) }) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
                     .font(.system(size: 12))
@@ -327,8 +314,10 @@ public struct SearchOverlay: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color.clear))
+            .background(RoundedRectangle(cornerRadius: 6).fill(isSelected ? Color.accentColor.opacity(0.12) : Color.clear))
         }
         .buttonStyle(.plain)
+        .id(item.id)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

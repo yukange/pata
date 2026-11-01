@@ -139,6 +139,7 @@ public struct TodayView: View {
         let taskId: String?
         let text: String
         let tags: [String]
+        var noteRefs: [String: String] = [:]
     }
 
     private var timelineItems: [TimelineItem] {
@@ -160,7 +161,8 @@ public struct TodayView: View {
                 taskTitle: nil,
                 taskId: nil,
                 text: act.body,
-                tags: act.tags
+                tags: act.tags,
+                noteRefs: act.noteRefs
             ))
         }
 
@@ -178,7 +180,8 @@ public struct TodayView: View {
                         taskTitle: t.title,
                         taskId: t.id,
                         text: act.body,
-                        tags: act.tags
+                        tags: act.tags,
+                        noteRefs: act.noteRefs
                     ))
                 }
             }
@@ -873,7 +876,7 @@ public struct TodayView: View {
             }
 
             if !item.text.isEmpty {
-                ActivityTextView(text: item.text, state: state)
+                ActivityTextView(text: item.text, state: state, noteRefs: item.noteRefs)
                     .padding(.top, 2)
             }
 

@@ -192,6 +192,24 @@ public final class MemoryIndex: @unchecked Sendable {
         return activityLocs[activityID]
     }
 
+    public func path(for id: String) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return idToFile[id]
+    }
+
+    public func beginScan() {
+        lock.lock()
+        defer { lock.unlock() }
+        parseErrors.removeAll()
+    }
+
+    public func listDayPlans() -> [DayPlan] {
+        lock.lock()
+        defer { lock.unlock() }
+        return Array(dayPlans.values)
+    }
+
     public func getBaseline(absPath: String) -> FileBaseline? {
         lock.lock()
         defer { lock.unlock() }
@@ -558,8 +576,11 @@ public final class MemoryIndex: @unchecked Sendable {
 
         // Check for duplicate entity ID collision across different files
         if let existingPath = idToFile[entity.id], existingPath != absPath {
-            parseErrors.append("duplicate entity ID collision: ID '\(entity.id)' already mapped to \(existingPath), ignoring conflicting file at \(absPath)")
-            return
+            if FileManager.default.fileExists(atPath: existingPath) {
+                parseErrors.append("duplicate entity ID collision: ID '\(entity.id)' already mapped to \(existingPath), ignoring conflicting file at \(absPath)")
+                return
+            }
+            removeFile(absPath: existingPath)
         }
 
         // Clean up previous activity locations for this file
@@ -571,16 +592,19 @@ public final class MemoryIndex: @unchecked Sendable {
 
         switch entity.type {
         case .task:
-            guard let task = entity as? Task else { return }
+            guard var task = entity as? Task else { return }
+            task.baseline = baseline
             tasks[task.id] = task
             for act in task.activities {
                 activityLocs[act.id] = ActivityLocation(ownerType: .task, ownerId: task.id, path: absPath)
             }
         case .note:
-            guard let note = entity as? Note else { return }
+            guard var note = entity as? Note else { return }
+            note.baseline = baseline
             notes[note.id] = note
         case .dayPlan:
-            guard let plan = entity as? DayPlan else { return }
+            guard var plan = entity as? DayPlan else { return }
+            plan.baseline = baseline
             dayPlans[plan.date] = plan
             for act in plan.activities {
                 activityLocs[act.id] = ActivityLocation(ownerType: .dayPlan, ownerId: plan.date, path: absPath)

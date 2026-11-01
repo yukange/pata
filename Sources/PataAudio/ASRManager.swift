@@ -44,8 +44,9 @@ public final class ASRManager: ObservableObject {
         let task = _Concurrency.Task {
             do {
                 // 1. Audio pre-processing & mono check
-                let (targetAudioURL, warning, cleanup) = AudioPreprocessor.prepareAudioForTranscription(url: audioURL)
+                let (targetAudioURL, warning, cleanup) = await AudioPreprocessor.prepareAudioForTranscription(url: audioURL)
                 defer { cleanup() }
+                try _Concurrency.Task.checkCancellation()
 
                 await MainActor.run {
                     self.statuses[noteId] = ASRTaskStatus(

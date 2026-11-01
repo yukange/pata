@@ -22,8 +22,8 @@ public final class MCPServer: @unchecked Sendable {
     public static let shared = MCPServer()
 
     private let host = "127.0.0.1"
-    private let port: UInt16 = 17373
-    private let endpointStr = "http://127.0.0.1:17373/mcp"
+    private var port: UInt16 = 17373
+    private var endpointStr: String { "http://\(host):\(port)/mcp" }
 
     private let lock = NSLock()
     private var listener: NWListener?
@@ -31,13 +31,25 @@ public final class MCPServer: @unchecked Sendable {
     private var running = false
     private var enabled = false
     private var errorMessage = ""
+    private var vaultChanged = false
 
     public init() {}
+
+    init(port: UInt16) { self.port = port }
 
     public func setVault(_ vault: Vault?) {
         lock.lock()
         defer { lock.unlock() }
-        currentVault = vault
+        if let currentVault, currentVault !== vault {
+            listener?.cancel()
+            listener = nil
+            running = false
+            enabled = false
+            vaultChanged = true
+            self.currentVault = nil
+        } else {
+            currentVault = vault
+        }
     }
 
     public func getStatus() -> MCPStatus {
@@ -47,7 +59,7 @@ public final class MCPServer: @unchecked Sendable {
             enabled: enabled,
             running: running,
             endpoint: running ? endpointStr : "",
-            vaultChanged: false,
+            vaultChanged: vaultChanged,
             error: errorMessage
         )
     }
@@ -59,34 +71,34 @@ public final class MCPServer: @unchecked Sendable {
         if running { return }
         currentVault = vault
         errorMessage = ""
+        vaultChanged = false
 
         let parameters = NWParameters.tcp
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
             throw NSError(domain: "MCP", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid port"])
         }
 
-        let newListener = try NWListener(using: parameters, on: nwPort)
+        parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(host), port: nwPort)
+        let newListener = try NWListener(using: parameters)
         newListener.newConnectionHandler = { [weak self] connection in
             self?.handleConnection(connection)
         }
 
-        newListener.stateUpdateHandler = { [weak self] state in
-            guard let self = self else { return }
+        newListener.stateUpdateHandler = { [weak self, weak newListener] state in
+            guard let self, let newListener else { return }
+            self.lock.lock()
+            defer { self.lock.unlock() }
+            guard self.listener === newListener else { return }
             switch state {
             case .ready:
-                self.lock.lock()
+                if let port = newListener.port { self.port = port.rawValue }
                 self.running = true
                 self.enabled = true
-                self.lock.unlock()
             case .failed(let err):
-                self.lock.lock()
                 self.running = false
                 self.errorMessage = "MCP 启动失败: \(err.localizedDescription)"
-                self.lock.unlock()
             case .cancelled:
-                self.lock.lock()
                 self.running = false
-                self.lock.unlock()
             default:
                 break
             }
@@ -106,28 +118,67 @@ public final class MCPServer: @unchecked Sendable {
         listener = nil
         running = false
         enabled = false
+        currentVault = nil
         errorMessage = ""
     }
 
     // MARK: - Connection & HTTP Handling
 
     private func handleConnection(_ connection: NWConnection) {
+        lock.lock()
+        let vault = currentVault
+        lock.unlock()
+        guard let vault else { connection.cancel(); return }
         connection.start(queue: DispatchQueue.global(qos: .userInitiated))
-        readHTTPRequest(connection: connection)
+        readHTTPRequest(connection: connection, vault: vault)
     }
 
-    private func readHTTPRequest(connection: NWConnection) {
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 4 * 1024 * 1024) { [weak self] content, _, isComplete, error in
-            guard let self = self else { return }
-            if let data = content, !data.isEmpty {
-                self.processHTTPData(data, connection: connection)
-            } else if isComplete || error != nil {
-                connection.cancel()
+    static let maximumRequestSize = 4 * 1024 * 1024
+
+    static func completeHTTPRequest(_ data: Data) throws -> Data? {
+        guard data.count <= maximumRequestSize else { throw URLError(.dataLengthExceedsMaximum) }
+        guard let boundary = data.range(of: Data("\r\n\r\n".utf8)) else { return nil }
+        guard let header = String(data: data[..<boundary.lowerBound], encoding: .utf8) else {
+            throw URLError(.badServerResponse)
+        }
+        var length: Int?
+        for line in header.components(separatedBy: "\r\n").dropFirst() {
+            let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { throw URLError(.badServerResponse) }
+            let key = parts[0].trimmingCharacters(in: .whitespaces).lowercased()
+            if key == "transfer-encoding" { throw URLError(.badServerResponse) }
+            if key == "content-length" {
+                guard length == nil, let value = Int(parts[1].trimmingCharacters(in: .whitespaces)),
+                      value >= 0, value <= maximumRequestSize else { throw URLError(.badServerResponse) }
+                length = value
+            }
+        }
+        guard let length = length ?? (header.hasPrefix("OPTIONS ") ? 0 : nil),
+              length <= maximumRequestSize - boundary.upperBound else { throw URLError(.badServerResponse) }
+        let total = boundary.upperBound + length
+        return data.count >= total ? Data(data.prefix(total)) : nil
+    }
+
+    private func readHTTPRequest(connection: NWConnection, vault: Vault, buffered: Data = Data()) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 64 * 1024) { [weak self] content, _, isComplete, error in
+            guard let self else { connection.cancel(); return }
+            var data = buffered
+            if let content { data.append(content) }
+            do {
+                if let request = try Self.completeHTTPRequest(data) {
+                    self.processHTTPData(request, connection: connection, vault: vault)
+                } else if isComplete || error != nil {
+                    connection.cancel()
+                } else {
+                    self.readHTTPRequest(connection: connection, vault: vault, buffered: data)
+                }
+            } catch {
+                self.sendHTTPResponse(connection: connection, status: 400, body: "Invalid HTTP Request")
             }
         }
     }
 
-    private func processHTTPData(_ data: Data, connection: NWConnection) {
+    private func processHTTPData(_ data: Data, connection: NWConnection, vault: Vault) {
         guard let rawStr = String(data: data, encoding: .utf8) else {
             sendHTTPResponse(connection: connection, status: 400, body: "Bad Request")
             return
@@ -176,7 +227,7 @@ public final class MCPServer: @unchecked Sendable {
         // 1. Origin header must be absent (forbidden if present to prevent browser DNS rebinding)
         // 2. Host header must match 127.0.0.1:17373
         // 3. Path must be /mcp
-        if hasOrigin || hostHeader != "127.0.0.1:17373" {
+        if hasOrigin || hostHeader != "\(host):\(port)" {
             sendHTTPResponse(connection: connection, status: 403, body: "Forbidden")
             return
         }
@@ -197,7 +248,7 @@ public final class MCPServer: @unchecked Sendable {
             return
         }
 
-        let responseJSON = handleMCPRequestData(bodyData)
+        let responseJSON = handleMCPRequestData(bodyData, expectedVault: vault)
         sendHTTPResponse(connection: connection, status: 200, json: responseJSON)
     }
 
@@ -223,7 +274,7 @@ public final class MCPServer: @unchecked Sendable {
 
     // MARK: - JSON-RPC 2.0 Dispatch
 
-    func handleMCPRequestData(_ data: Data) -> Data {
+    func handleMCPRequestData(_ data: Data, expectedVault: Vault? = nil) -> Data {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let method = json["method"] as? String else {
             return makeJSONRPCError(id: nil, code: -32700, message: "Parse error")
@@ -233,11 +284,10 @@ public final class MCPServer: @unchecked Sendable {
         let params = json["params"] as? [String: Any] ?? [:]
 
         lock.lock()
-        guard let vault = currentVault else {
-            lock.unlock()
-            return makeJSONRPCError(id: id, code: -32000, message: "请先选择并打开资料库")
+        defer { lock.unlock() }
+        guard let vault = currentVault, expectedVault == nil || expectedVault === vault else {
+            return makeJSONRPCError(id: id, code: -32000, message: "请先选择资料库并重新启用 MCP")
         }
-        lock.unlock()
 
         switch method {
         case "initialize":
@@ -470,17 +520,19 @@ public final class MCPServer: @unchecked Sendable {
             }
 
         case "pata_create_note":
-            let title = (args["title"] as? String) ?? ""
+            let title = try requiredString("title", in: args)
             let body = (args["body"] as? String) ?? ""
             let tags = (args["tags"] as? [String]) ?? []
             let note = try vault.createNote(title: title, body: body, tags: tags, source: SourceAgent)
             return try encodeData(note)
 
         case "pata_create_task":
-            let title = (args["title"] as? String) ?? ""
+            let title = try requiredString("title", in: args)
             let desc = (args["description"] as? String) ?? ""
             let statusStr = (args["status"] as? String) ?? "todo"
-            let status = TaskStatus(rawValue: statusStr) ?? .todo
+            guard let status = TaskStatus(rawValue: statusStr), status != .doing else {
+                throw SchemaError.validationError(field: "status", reason: "must be todo or done")
+            }
             let due = args["due"] as? String
             let tags = (args["tags"] as? [String]) ?? []
             let task = try vault.createTask(title: title, description: desc, status: status, due: due, tags: tags, source: SourceAgent)
@@ -489,7 +541,7 @@ public final class MCPServer: @unchecked Sendable {
         case "pata_append_activity":
             let taskId = args["task_id"] as? String
             let date = args["date"] as? String
-            let body = (args["body"] as? String) ?? ""
+            let body = try requiredString("body", in: args)
             let tags = (args["tags"] as? [String]) ?? []
             let act = try vault.createActivity(taskId: taskId, date: date, body: body, tags: tags, source: SourceAgent)
             return try encodeData(act)
@@ -505,6 +557,13 @@ public final class MCPServer: @unchecked Sendable {
         default:
             throw NSError(domain: "MCP", code: -32601, userInfo: [NSLocalizedDescriptionKey: "Tool not found: \(name)"])
         }
+    }
+
+    private func requiredString(_ key: String, in args: [String: Any]) throws -> String {
+        guard let value = args[key] as? String, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw SchemaError.validationError(field: key, reason: "must be a nonempty string")
+        }
+        return value
     }
 
     private func resolveTaskURI(_ ref: String) throws -> String {
@@ -529,9 +588,11 @@ public final class MCPServer: @unchecked Sendable {
         let slice = Array(items[start..<end])
         let next = end < items.count ? end : -1
 
+        let encodedItems = try JSONEncoder().encode(slice)
+        let jsonItems = try JSONSerialization.jsonObject(with: encodedItems)
         let result: [String: Any] = [
             "data": [
-                "items": slice,
+                "items": jsonItems,
                 "total": items.count,
                 "next_offset": next
             ]
