@@ -204,19 +204,19 @@ public struct AppShell: View {
 
             // Center: Segmented Navigation Tabs
             HStack(spacing: 4) {
-                TopNavTabButton(title: "Today", icon: "calendar", isSelected: !state.showSettings && state.currentNav == .today) {
+                TopNavTabButton(title: "Today", icon: "calendar", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .today) {
                     state.showSettings = false
                     state.currentNav = .today
                 }
-                TopNavTabButton(title: "Tasks", icon: "checkmark.square", isSelected: !state.showSettings && state.currentNav == .tasks) {
+                TopNavTabButton(title: "Tasks", icon: "checkmark.square", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .tasks) {
                     state.showSettings = false
                     state.currentNav = .tasks
                 }
-                TopNavTabButton(title: "Notes", icon: "doc.text", isSelected: !state.showSettings && state.currentNav == .notes) {
+                TopNavTabButton(title: "Notes", icon: "doc.text", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .notes) {
                     state.showSettings = false
                     state.currentNav = .notes
                 }
-                TopNavTabButton(title: "Tags", icon: "number", isSelected: !state.showSettings && state.currentNav == .tags) {
+                TopNavTabButton(title: "Tags", icon: "number", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .tags) {
                     state.showSettings = false
                     state.currentNav = .tags
                 }
@@ -230,7 +230,7 @@ public struct AppShell: View {
                     state.toggleSearch()
                 }
 
-                SettingsHeaderButton(showSettings: state.showSettings) {
+                SettingsHeaderButton(accentColor: state.effectiveAccentColor, showSettings: state.showSettings) {
                     state.showSettings.toggle()
                 }
             }
@@ -301,15 +301,15 @@ public struct AppShell: View {
 
             // Navigation Items
             VStack(spacing: 2) {
-                SidebarNavRowButton(title: "Today", icon: "calendar", isSelected: !state.showSettings && state.currentNav == .today) {
+                SidebarNavRowButton(title: "Today", icon: "calendar", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .today) {
                     state.showSettings = false
                     state.currentNav = .today
                 }
-                SidebarNavRowButton(title: "Tasks", icon: "checkmark.square", isSelected: !state.showSettings && state.currentNav == .tasks) {
+                SidebarNavRowButton(title: "Tasks", icon: "checkmark.square", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .tasks) {
                     state.showSettings = false
                     state.currentNav = .tasks
                 }
-                SidebarNavRowButton(title: "Notes", icon: "doc.text", isSelected: !state.showSettings && state.currentNav == .notes) {
+                SidebarNavRowButton(title: "Notes", icon: "doc.text", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .notes) {
                     state.showSettings = false
                     state.currentNav = .notes
                 }
@@ -368,7 +368,7 @@ public struct AppShell: View {
                 .fill(borderColor)
                 .frame(height: 1)
 
-            SidebarBottomSettingsButton {
+            SidebarBottomSettingsButton(accentColor: state.effectiveAccentColor, isSelected: state.showSettings) {
                 state.showSettings = true
             }
         }
@@ -474,6 +474,7 @@ public struct SidebarToggleButton: View {
 struct TopNavTabButton: View {
     let title: String
     let icon: String
+    let accentColor: Color
     let isSelected: Bool
     let action: () -> Void
     @State private var isHovered = false
@@ -488,10 +489,10 @@ struct TopNavTabButton: View {
             }
             .padding(.horizontal, 10)
             .frame(height: 28)
-            .foregroundColor(isSelected ? .primary : .secondary)
+            .foregroundColor(isSelected ? accentColor.onAccent : .secondary)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.primary.opacity(0.08) : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
+                    .fill(isSelected ? accentColor : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
             )
             .contentShape(Rectangle())
         }
@@ -543,6 +544,7 @@ struct SearchHeaderButton: View {
 }
 
 struct SettingsHeaderButton: View {
+    let accentColor: Color
     let showSettings: Bool
     let action: () -> Void
     @State private var isHovered = false
@@ -551,11 +553,11 @@ struct SettingsHeaderButton: View {
         Button(action: action) {
             Image(systemName: "gearshape")
                 .font(.system(size: 13))
-                .foregroundColor(showSettings ? .primary : .secondary)
+                .foregroundColor(showSettings ? accentColor.onAccent : .secondary)
                 .frame(width: 28, height: 28)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(showSettings ? Color.primary.opacity(0.12) : (isHovered ? Color.primary.opacity(0.08) : Color.black.opacity(0.0001)))
+                        .fill(showSettings ? accentColor : (isHovered ? Color.primary.opacity(0.08) : Color.black.opacity(0.0001)))
                 )
                 .contentShape(Rectangle())
         }
@@ -570,6 +572,7 @@ struct SettingsHeaderButton: View {
 struct SidebarNavRowButton: View {
     let title: String
     let icon: String
+    let accentColor: Color
     let isSelected: Bool
     let action: () -> Void
     @State private var isHovered = false
@@ -583,12 +586,12 @@ struct SidebarNavRowButton: View {
                     .font(.system(size: 13, weight: isSelected ? .medium : .regular))
                 Spacer()
             }
-            .foregroundColor(isSelected ? .primary : .secondary)
+            .foregroundColor(isSelected ? accentColor.onAccent : .secondary)
             .padding(.horizontal, 10)
             .frame(height: 32)
             .background(
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.primary.opacity(0.08) : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
+                    .fill(isSelected ? accentColor : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
             )
             .contentShape(Rectangle())
         }
@@ -638,6 +641,8 @@ struct SidebarTagRowButton: View {
 }
 
 struct SidebarBottomSettingsButton: View {
+    let accentColor: Color
+    let isSelected: Bool
     let action: () -> Void
     @State private var isHovered = false
 
@@ -650,10 +655,10 @@ struct SidebarBottomSettingsButton: View {
                     .font(.system(size: 13))
                 Spacer()
             }
-            .foregroundColor(.secondary)
+            .foregroundColor(isSelected ? accentColor.onAccent : .secondary)
             .padding(.horizontal, 14)
             .frame(height: 44)
-            .background(isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001))
+            .background(isSelected ? accentColor : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

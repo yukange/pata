@@ -414,6 +414,21 @@ public final class MCPServer: @unchecked Sendable {
                     ]
                 ],
                 [
+                    "name": "pata_update_note",
+                    "description": "Update an existing note by ID. Read it with pata_read first, then provide the complete title, body, and tags; all fields are required and replace their current values. Keeps the note's creation source and draft state. Audio transcript bodies remain read-only. Saves through Pata Core with conflict protection.",
+                    "inputSchema": [
+                        "type": "object",
+                        "properties": [
+                            "id": ["type": "string", "description": "Note ID from pata_read or pata_list"],
+                            "title": ["type": "string", "description": "Full replacement title; empty only for a draft"],
+                            "body": ["type": "string", "description": "Full replacement Markdown body; an empty string clears it"],
+                            "tags": ["type": "array", "items": ["type": "string"], "description": "Full replacement tags; an empty array removes all tags"]
+                        ],
+                        "required": ["id", "title", "body", "tags"],
+                        "additionalProperties": false
+                    ]
+                ],
+                [
                     "name": "pata_create_task",
                     "description": "Create a task. status is todo or done; omit it for todo. due is an optional YYYY-MM-DD date.",
                     "inputSchema": [
@@ -577,6 +592,26 @@ public final class MCPServer: @unchecked Sendable {
             let tags = (args["tags"] as? [String]) ?? []
             let note = try vault.createNote(title: title, body: body, tags: tags, source: SourceAgent)
             return try encodeData(note)
+
+        case "pata_update_note":
+            guard Set(args.keys).isSubset(of: ["id", "title", "body", "tags"]) else {
+                throw SchemaError.validationError(field: "arguments", reason: "仅支持 id、title、body 和 tags")
+            }
+            let id = try requiredString("id", in: args).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let title = args["title"] as? String,
+                  let body = args["body"] as? String,
+                  let tags = args["tags"] as? [String] else {
+                throw SchemaError.validationError(field: "title/body/tags", reason: "必须提供完整的标题、正文和标签数组")
+            }
+            guard var note = vault.index.getNote(id) else {
+                throw NSError(domain: "MCP", code: 404, userInfo: [NSLocalizedDescriptionKey: "笔记不存在: \(id)"])
+            }
+            note.title = note.draft ? "" : title.trimmingCharacters(in: .whitespacesAndNewlines)
+            note.tags = note.draft ? [] : tags
+            if !note.audioTranscript {
+                note.body = body
+            }
+            return try encodeData(vault.updateNote(note))
 
         case "pata_create_task":
             let title = try requiredString("title", in: args)

@@ -43,7 +43,7 @@ Search across tasks, notes, and activity. Drop in attachments and preview them w
 
 Enable **Settings → MCP** in Pata and copy the connection instructions into your MCP-compatible client.
 
-Your agent can find and create tasks and notes, append activity, and complete or reopen tasks. Pata marks agent-created records so you can see who did what.
+Your agent can find and create tasks and notes, edit note titles, bodies, and tags, append activity, and complete or reopen tasks. Pata marks agent-created records so you can see who did what.
 
 From a task's details menu, choose **Copy for Agent** and paste the short reference (`pata://task/{id}`) into an agent already connected to Pata MCP. Agents can fetch a referenced Note by its stable ID from an Activity's `note_refs` via `pata_read`.
 
