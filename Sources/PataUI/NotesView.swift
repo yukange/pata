@@ -537,7 +537,7 @@ public struct NotesView: View {
                     // Metadata Row: Author & Tags
                     HStack(spacing: 12) {
                         HStack(spacing: 4) {
-                            Image(systemName: note.createdBy == "agent" ? "cpu" : "person")
+                            Image(systemName: note.createdBy == "agent" ? "sparkles" : "person")
                                 .font(.system(size: 11))
                             Text(note.createdBy == "agent" ? "智能体创建" : "由我创建")
                                 .font(.system(size: 11))

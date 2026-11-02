@@ -863,7 +863,7 @@ public struct TodayView: View {
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
 
-                Image(systemName: item.author.contains("Agent") ? "cpu" : "person.fill")
+                Image(systemName: item.author.contains("Agent") ? "sparkles" : "person.fill")
                     .font(.system(size: 10))
                     .foregroundColor(.secondary)
 

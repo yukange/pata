@@ -589,7 +589,7 @@ public struct TaskInspector: View {
             at: t.createdAt,
             isSystemEvent: true,
             author: t.createdBy == "agent" ? "由 Agent 创建" : "由我创建",
-            icon: t.createdBy == "agent" ? "cpu" : "person.fill",
+            icon: t.createdBy == "agent" ? "sparkles" : "person.fill",
             text: ""
         ))
 
@@ -612,7 +612,7 @@ public struct TaskInspector: View {
                 at: ev.at,
                 isSystemEvent: true,
                 author: authorStr,
-                icon: ev.by == "agent" ? "cpu" : "person.fill",
+                icon: ev.by == "agent" ? "sparkles" : "person.fill",
                 text: ""
             ))
         }
@@ -624,7 +624,7 @@ public struct TaskInspector: View {
                 at: act.at,
                 isSystemEvent: false,
                 author: act.by == "agent" ? "Agent" : "我",
-                icon: act.by == "agent" ? "cpu" : "person.fill",
+                icon: act.by == "agent" ? "sparkles" : "person.fill",
                 text: act.body,
                 noteRefs: act.noteRefs
             ))
