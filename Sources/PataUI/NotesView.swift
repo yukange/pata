@@ -22,23 +22,26 @@ public struct NotesView: View {
 
     // Editing state
     private var currentTitle: String {
-        get { editor.note?.title ?? "" }
+        get { editor.note?.title ?? currentNote?.title ?? "" }
         nonmutating set { editor.edit { $0.title = newValue } }
     }
     private var currentBody: String {
-        get { editor.note?.body ?? "" }
+        get { editor.note?.body ?? currentNote?.body ?? "" }
         nonmutating set { editor.edit { if !$0.audioTranscript { $0.body = newValue } } }
     }
     private var currentTags: [String] {
-        get { editor.note?.tags ?? [] }
+        get { editor.note?.tags ?? currentNote?.tags ?? [] }
         nonmutating set { editor.edit { $0.tags = newValue } }
     }
     @State private var newTagInput: String = ""
     @State private var showTagPopover: Bool = false
     @State private var isNamingDraft: Bool = false
+    @FocusState private var isTitleFocused: Bool
     @State private var backlinksOpen: Bool = false
     @State private var isEditorFocused: Bool = false
+    @State private var scrollToAudioMs: Int? = nil
     @State private var showReloadConfirmation = false
+    @State private var hoveredNoteId: String? = nil
 
     public init(state: AppState) {
         self.state = state
@@ -134,13 +137,6 @@ public struct NotesView: View {
         guard state.selectedNoteId != note.id, editor.save() else { return }
         isNamingDraft = false
         state.selectedNoteId = note.id
-
-        if note.audioTranscript, let audioRelPath = note.audioFile, let v = state.vault {
-            let fullAudioURL = URL(fileURLWithPath: (v.rootPath as NSString).appendingPathComponent(audioRelPath))
-            AudioPlayerManager.shared.loadAudio(url: fullAudioURL, relativePath: audioRelPath)
-        } else {
-            AudioPlayerManager.shared.stop()
-        }
     }
 
     private func syncCurrentNoteState() {
@@ -324,6 +320,7 @@ public struct NotesView: View {
 
     private func draftRow(_ draft: Note) -> some View {
         let isSelected = state.selectedNoteId == draft.id
+        let isHovered = hoveredNoteId == draft.id
         let excerpt = getDraftExcerpt(draft.body)
 
         return Button(action: {
@@ -346,9 +343,21 @@ public struct NotesView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color.stoneSelectedBg : Color.clear))
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.stoneSelectedBg : (isHovered ? Color.primary.opacity(0.04) : Color.clear))
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering {
+                hoveredNoteId = draft.id
+            } else if hoveredNoteId == draft.id {
+                hoveredNoteId = nil
+            }
+        }
         .contextMenu {
             Button("复制绝对路径") {
                 copyNotePath(draft)
@@ -365,6 +374,7 @@ public struct NotesView: View {
 
     private func formalNoteRow(_ note: Note) -> some View {
         let isSelected = state.selectedNoteId == note.id
+        let isHovered = hoveredNoteId == note.id
 
         return Button(action: {
             selectNote(note)
@@ -386,9 +396,21 @@ public struct NotesView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color.stoneSelectedBg : Color.clear))
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(isSelected ? Color.stoneSelectedBg : (isHovered ? Color.primary.opacity(0.04) : Color.clear))
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering {
+                hoveredNoteId = note.id
+            } else if hoveredNoteId == note.id {
+                hoveredNoteId = nil
+            }
+        }
         .contextMenu {
             Button("复制绝对路径") {
                 copyNotePath(note)
@@ -463,32 +485,7 @@ public struct NotesView: View {
 
     private func noteEditorView(_ note: Note) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            if note.draft && !isNamingDraft {
-                // Draft Mode: Floating action bar
-                HStack(alignment: .center) {
-                    if state.isNotesListCollapsed {
-                        NotesSidebarToggleButton(collapsed: true) {
-                            state.toggleNotesList()
-                        }
-                    }
-
-                    Spacer()
-
-                    Button(action: { isNamingDraft = true }) {
-                        Text("转为笔记")
-                            .font(.system(size: 12, weight: .medium))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor), lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-
-                    moreMenu(note)
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-            } else {
+            if !note.draft || isNamingDraft {
                 // Formal Note Mode or Draft Naming Header
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .center, spacing: 10) {
@@ -499,10 +496,15 @@ public struct NotesView: View {
                         }
 
                         TextField("无标题笔记", text: Binding(get: { currentTitle }, set: { currentTitle = $0 }), onCommit: {
-                            editor.save()
+                            if isNamingDraft {
+                                convertCurrentDraft(note)
+                            } else {
+                                editor.save()
+                            }
                         })
                         .font(.system(size: 24, weight: .bold))
                         .textFieldStyle(.plain)
+                        .focused($isTitleFocused)
 
                         Spacer()
 
@@ -563,6 +565,13 @@ public struct NotesView: View {
                         }
 
                         if isNamingDraft {
+                            Button("取消") {
+                                isNamingDraft = false
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+
                             Button("确认转为笔记") {
                                 convertCurrentDraft(note)
                             }
@@ -587,6 +596,9 @@ public struct NotesView: View {
                     asrManager: asrManager,
                     onConfirmReplace: {
                         handleConfirmReplace(note)
+                    },
+                    onSeek: { ms in
+                        scrollToAudioMs = ms
                     }
                 )
                 Divider()
@@ -636,25 +648,35 @@ public struct NotesView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
+            } else if note.audioTranscript {
+                PataTranscriptViewer(
+                    body: currentBody,
+                    accentColor: state.effectiveAccentColor,
+                    scrollToMs: $scrollToAudioMs,
+                    onSeekAudio: { ms in
+                        AudioPlayerManager.shared.seek(toMilliseconds: ms, autoPlay: true)
+                    }
+                )
+                .id(note.id)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 PataNoteEditor(
                     noteId: note.id,
                     text: Binding(get: { currentBody }, set: { currentBody = $0 }),
-                    isReadOnlyTranscript: note.audioTranscript,
+                    isReadOnlyTranscript: false,
                     isFocused: $isEditorFocused,
                     vaultPath: state.vault?.rootPath,
                     noteFilePath: state.vault?.resolveEntityPath(note),
                     onPasteImage: { pasteboard in
                         handlePasteImage(pasteboard, note: note)
                     },
-                    onSeekAudio: { ms in
-                        AudioPlayerManager.shared.seek(toMilliseconds: ms, autoPlay: true)
-                    },
                     onOpenLink: { target in
                         handleOpenLink(target)
                     }
                 )
+                .id(note.id)
                 .padding(.horizontal, 16)
+                .padding(.top, note.draft && !isNamingDraft ? (state.isNotesListCollapsed ? 36 : 16) : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onDrop(of: [.fileURL], isTargeted: nil) { providers in
                     handleDropFiles(providers, for: note)
@@ -700,6 +722,64 @@ public struct NotesView: View {
                 }
                 .padding(.horizontal, 24)
                 .padding(.vertical, 8)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if note.draft && !isNamingDraft {
+                HStack(spacing: 8) {
+                    Button(action: {
+                        isNamingDraft = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            isTitleFocused = true
+                        }
+                    }) {
+                        Text("转为笔记")
+                            .font(.system(size: 12, weight: .medium))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color(nsColor: .separatorColor).opacity(0.8), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    moreMenu(note)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 2)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color(nsColor: .separatorColor).opacity(0.8), lineWidth: 1)
+                        )
+                }
+                .padding(.trailing, 24)
+                .padding(.top, 16)
+            }
+        }
+        .overlay(alignment: .topLeading) {
+            if note.draft && !isNamingDraft && state.isNotesListCollapsed {
+                NotesSidebarToggleButton(collapsed: true) {
+                    state.toggleNotesList()
+                }
+                .padding(4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(nsColor: .separatorColor).opacity(0.8), lineWidth: 1)
+                )
+                .padding(.leading, 24)
+                .padding(.top, 16)
             }
         }
     }
@@ -1128,6 +1208,7 @@ public struct AudioPlayerToolbarView: View {
     @ObservedObject var asrManager: ASRManager
     @ObservedObject private var audioPlayer = AudioPlayerManager.shared
     let onConfirmReplace: () -> Void
+    var onSeek: ((Int) -> Void)? = nil
 
     @State private var isDraggingAudioSlider: Bool = false
     @State private var dragPositionMs: Double = 0
@@ -1137,13 +1218,15 @@ public struct AudioPlayerToolbarView: View {
         accentColor: Color,
         accentOnColor: Color,
         asrManager: ASRManager,
-        onConfirmReplace: @escaping () -> Void
+        onConfirmReplace: @escaping () -> Void,
+        onSeek: ((Int) -> Void)? = nil
     ) {
         self.note = note
         self.accentColor = accentColor
         self.accentOnColor = accentOnColor
         self.asrManager = asrManager
         self.onConfirmReplace = onConfirmReplace
+        self.onSeek = onSeek
     }
 
     private func formatDisplayTime(_ ms: Int) -> String {
@@ -1281,6 +1364,7 @@ public struct AudioPlayerToolbarView: View {
                         if !editing {
                             let ms = Int(dragPositionMs)
                             audioPlayer.seek(toMilliseconds: ms)
+                            onSeek?(ms)
                             PataTranscriptLocator.scrollToSentence(in: note.body, targetMs: ms)
                         }
                     }

@@ -63,6 +63,8 @@ public struct TasksView: View {
                             return .handled
                         }
 
+                    let canSubmit = !quickCreateText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+
                     Button(action: submitQuickCreate) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
@@ -70,12 +72,16 @@ public struct TasksView: View {
                             Text("快速创建")
                                 .font(.system(size: 12, weight: .medium))
                         }
-                        .foregroundColor(state.effectiveAccentOnColor)
+                        .foregroundColor(canSubmit ? state.effectiveAccentOnColor : Color.secondary.opacity(0.6))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(state.effectiveAccentColor))
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(canSubmit ? state.effectiveAccentColor : Color(nsColor: .separatorColor).opacity(0.3))
+                        )
                     }
                     .buttonStyle(.plain)
+                    .disabled(!canSubmit)
                     .padding(.trailing, 6)
                 }
                 .frame(height: 36)

@@ -1,6 +1,9 @@
 import SwiftUI
 import AppKit
 import MarkdownEngine
+#if canImport(MarkdownEngineCodeBlocks)
+import MarkdownEngineCodeBlocks
+#endif
 import PataCore
 import ObjectiveC
 
@@ -146,6 +149,38 @@ extension NativeTextViewCoordinator {
 /// Backed by TextKit 2 via MarkdownEngine to deliver 100% native trackpad tap-to-click,
 /// native IME (Doubao / ABC) marked-text composition, native undo/redo, dynamic inline markdown syntax rendering/hiding (IR mode),
 /// and lossless markdown roundtrip.
+// MARK: - Safe Fallback Syntax Highlighter
+
+public struct PataCodeSyntaxHighlighter: SyntaxHighlighter {
+    private let lightBg: NSColor
+    private let darkBg: NSColor
+
+    public init(
+        lightBackground: NSColor = NSColor(calibratedRed: 237/255, green: 233/255, blue: 227/255, alpha: 1.0),
+        darkBackground: NSColor = NSColor(calibratedRed: 40/255, green: 38/255, blue: 36/255, alpha: 1.0)
+    ) {
+        self.lightBg = lightBackground
+        self.darkBg = darkBackground
+    }
+
+    public func codeFont(size: CGFloat) -> NSFont {
+        NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
+    }
+
+    public func backgroundColor() -> NSColor {
+        NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            return isDark ? self.darkBg : self.lightBg
+        }
+    }
+
+    public func highlight(code: String, language: String?) -> NSAttributedString? {
+        nil
+    }
+
+    public var appearanceDidChangeNotification: Notification.Name? { nil }
+}
+
 public struct PataNoteEditor: View {
     public let noteId: String
     @Binding public var text: String
@@ -167,6 +202,44 @@ public struct PataNoteEditor: View {
         config.extensions = [HighlightExtension(), StrikethroughExtension()]
         config.services.bus.findScrollToRange = .pataEditorScrollToRange
         config.services.bus.findClearHighlights = .pataEditorClearHighlights
+
+        let lightBg = NSColor(calibratedRed: 237/255, green: 233/255, blue: 227/255, alpha: 1.0)
+        let darkBg = NSColor(calibratedRed: 40/255, green: 38/255, blue: 36/255, alpha: 1.0)
+
+        #if canImport(MarkdownEngineCodeBlocks)
+        let bundleName = "MarkdownEngine_MarkdownEngineCodeBlocks"
+        let hasBundle: Bool = {
+            if let resourceURL = Bundle.main.resourceURL {
+                let bundleURL = resourceURL.appendingPathComponent("\(bundleName).bundle")
+                if FileManager.default.fileExists(atPath: bundleURL.path) {
+                    return true
+                }
+            }
+            if Bundle.main.url(forResource: bundleName, withExtension: "bundle") != nil {
+                return true
+            }
+            return false
+        }()
+
+        if hasBundle {
+            let bridge = HighlightJSBridge(
+                lightBackground: lightBg,
+                darkBackground: darkBg
+            )
+            config.services.syntaxHighlighter = bridge
+        } else {
+            config.services.syntaxHighlighter = PataCodeSyntaxHighlighter(
+                lightBackground: lightBg,
+                darkBackground: darkBg
+            )
+        }
+        #else
+        config.services.syntaxHighlighter = PataCodeSyntaxHighlighter(
+            lightBackground: lightBg,
+            darkBackground: darkBg
+        )
+        #endif
+
         return config
     }()
 

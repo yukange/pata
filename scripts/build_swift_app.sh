@@ -53,6 +53,16 @@ if [ -f "build/darwin/Info.plist" ]; then
     cp "build/darwin/Info.plist" "$APP_DIR/Contents/Info.plist"
 fi
 
+# Copy SPM resource bundles into Contents/Resources
+shopt -s nullglob
+for bundle in "$BIN_DIR"/*.bundle; do
+    if [ -d "$bundle" ]; then
+        echo "==> Copying resource bundle: $(basename "$bundle")..."
+        cp -R "$bundle" "$APP_DIR/Contents/Resources/"
+    fi
+done
+shopt -u nullglob
+
 echo "==> Ad-hoc signing App Bundle..."
 codesign --force --deep --sign - "$APP_DIR"
 codesign --verify --deep --strict "$APP_DIR"

@@ -3,6 +3,7 @@ import Foundation
 @testable import PataCore
 @testable import PataAudio
 @testable import PataEditor
+@testable import PataUI
 
 @Suite("BDD Feature: Audio Transcript Voice Note Lifecycle")
 struct AudioNoteScenarioTests {
@@ -105,5 +106,48 @@ struct AudioNoteScenarioTests {
         #expect(parsed?.audioFile == relPath)
         #expect(parsed?.body.contains("[00:00:01.200](#t=00:00:01.200) 说话人 1") == true)
         #expect(parsed?.body.contains("大家好，今天开始周会。") == true)
+    }
+
+    @Test("TranscriptParser parses blocks and handles seeker index queries")
+    func testTranscriptParserLifecycle() {
+        let input = """
+        会议前言说明。
+
+        [00:00:01.200](#t=00:00:01.200) 说话人 1
+
+        大家好，今天开始周会。
+
+        [00:00:03.600](#t=00:00:03.600) 说话人 2
+
+        各项进展顺利。
+        """
+
+        let blocks = TranscriptParser.parse(input)
+        #expect(blocks.count == 3)
+
+        // Block 0: Preamble
+        #expect(blocks[0].timestampStr == nil)
+        #expect(blocks[0].timestampMs == nil)
+        #expect(blocks[0].speaker == nil)
+        #expect(blocks[0].text == "会议前言说明。")
+
+        // Block 1
+        #expect(blocks[1].timestampStr == "00:00:01.200")
+        #expect(blocks[1].timestampMs == 1200)
+        #expect(blocks[1].speaker == "说话人 1")
+        #expect(blocks[1].text == "大家好，今天开始周会。")
+
+        // Block 2
+        #expect(blocks[2].timestampStr == "00:00:03.600")
+        #expect(blocks[2].timestampMs == 3600)
+        #expect(blocks[2].speaker == "说话人 2")
+        #expect(blocks[2].text == "各项进展顺利。")
+
+        // Find block index queries
+        #expect(TranscriptParser.findBlockIndex(in: blocks, atTime: 500) == 1) // before first timed block -> defaults to first timed block
+        #expect(TranscriptParser.findBlockIndex(in: blocks, atTime: 1200) == 1)
+        #expect(TranscriptParser.findBlockIndex(in: blocks, atTime: 2000) == 1)
+        #expect(TranscriptParser.findBlockIndex(in: blocks, atTime: 3600) == 2)
+        #expect(TranscriptParser.findBlockIndex(in: blocks, atTime: 9999) == 2)
     }
 }

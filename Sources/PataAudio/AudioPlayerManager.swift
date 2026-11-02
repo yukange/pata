@@ -23,7 +23,7 @@ public final class AudioPlayerManager: ObservableObject {
     }
 
     public func loadAudio(url: URL, relativePath: String) {
-        if currentAudioPath == relativePath && player != nil {
+        if currentAudioPath == relativePath {
             return
         }
 
@@ -67,14 +67,20 @@ public final class AudioPlayerManager: ObservableObject {
     }
 
     private func cleanUpCurrentPlayer() {
-        pause()
+        if isPlaying {
+            pause()
+        }
         if let token = timeObserverToken, let p = player {
             p.removeTimeObserver(token)
             timeObserverToken = nil
         }
         player = nil
-        currentPositionMs = 0
-        durationMs = 0
+        if currentPositionMs != 0 {
+            currentPositionMs = 0
+        }
+        if durationMs != 0 {
+            durationMs = 0
+        }
     }
 
     public func play() {

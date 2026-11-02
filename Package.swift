@@ -51,7 +51,8 @@ let package = Package(
             name: "PataEditor",
             dependencies: [
                 "PataCore",
-                .product(name: "MarkdownEngine", package: "swift-markdown-engine")
+                .product(name: "MarkdownEngine", package: "swift-markdown-engine"),
+                .product(name: "MarkdownEngineCodeBlocks", package: "swift-markdown-engine")
             ],
             path: "Sources/PataEditor"
         ),
