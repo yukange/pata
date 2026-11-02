@@ -224,7 +224,9 @@ public struct TasksView: View {
 
     private func toggleStatus(_ task: Task) {
         let next: TaskStatus = task.status == .done ? .todo : .done
-        try? state.vault?.setTaskStatus(id: task.id, status: next)
+        if (try? state.vault?.setTaskStatus(id: task.id, status: next)) != nil {
+            LogoAnimationCoordinator.shared.playSuccess()
+        }
         state.objectWillChange.send()
     }
 
@@ -234,6 +236,7 @@ public struct TasksView: View {
 
         do {
             _ = try v.createTask(title: clean, status: .todo, tags: [])
+            LogoAnimationCoordinator.shared.playSuccess()
             quickCreateText = ""
             state.objectWillChange.send()
         } catch {

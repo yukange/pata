@@ -788,7 +788,9 @@ public struct TaskInspector: View {
         flushTitleAutoSave()
         flushDescriptionAutoSave()
         let next: TaskStatus = t.status == .done ? .todo : .done
-        try? state.vault?.setTaskStatus(id: t.id, status: next)
+        if (try? state.vault?.setTaskStatus(id: t.id, status: next)) != nil {
+            LogoAnimationCoordinator.shared.playSuccess()
+        }
         state.objectWillChange.send()
     }
 
@@ -810,6 +812,7 @@ public struct TaskInspector: View {
 
         do {
             _ = try v.createActivity(taskId: taskId, date: state.todayDateString, body: clean)
+            LogoAnimationCoordinator.shared.playSuccess()
             newActivityBody = ""
             state.objectWillChange.send()
         } catch {

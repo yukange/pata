@@ -14,9 +14,9 @@ echo "==> Stopping running pata instances..."
 killall pata 2>/dev/null || true
 sleep 0.5
 
-DEST="/Applications/pata.app"
+DEST="/Applications/Pata.app"
 echo "==> Installing to $DEST..."
-rm -rf "$DEST"
+rm -rf "$DEST" "/Applications/pata.app"
 cp -R "$APP_SRC" "$DEST"
 
 echo "==> Signing installed app bundle..."

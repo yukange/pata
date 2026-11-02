@@ -487,7 +487,9 @@ public struct TodayView: View {
 
     private func toggleStatus(_ task: Task) {
         let next: TaskStatus = task.status == .done ? .todo : .done
-        try? state.vault?.setTaskStatus(id: task.id, status: next)
+        if (try? state.vault?.setTaskStatus(id: task.id, status: next)) != nil {
+            LogoAnimationCoordinator.shared.playSuccess()
+        }
         state.objectWillChange.send()
     }
 
@@ -796,6 +798,7 @@ public struct TodayView: View {
         do {
             let t = try v.createTask(title: clean, status: .todo, tags: [])
             try v.addTaskToPlan(date: state.todayDateString, taskId: t.id)
+            LogoAnimationCoordinator.shared.playSuccess()
             quickCreateText = ""
             highlightedCandidateIndex = nil
             isDropdownVisible = false
@@ -917,6 +920,7 @@ public struct TodayView: View {
 
         do {
             _ = try v.createActivity(date: state.todayDateString, body: clean)
+            LogoAnimationCoordinator.shared.playSuccess()
             quickActivityText = ""
             state.objectWillChange.send()
         } catch {

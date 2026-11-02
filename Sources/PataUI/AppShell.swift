@@ -20,81 +20,6 @@ public class WindowDragView: NSView {
     }
 }
 
-public struct PataLogoView: View {
-    public init() {}
-
-    public var body: some View {
-        Canvas { context, size in
-            let w = size.width
-            let h = size.height
-
-            // Scale from 828 x 816 viewbox
-            let sx = w / 828.0
-            let sy = h / 816.0
-
-            context.scaleBy(x: sx, y: sy)
-
-            // Back card (Purple gradient)
-            var backPath = Path()
-            backPath.move(to: CGPoint(x: 166, y: 343))
-            backPath.addCurve(to: CGPoint(x: 204, y: 318), control1: CGPoint(x: 176, y: 330), control2: CGPoint(x: 188, y: 322))
-            backPath.addLine(to: CGPoint(x: 477, y: 365))
-            backPath.addCurve(to: CGPoint(x: 579, y: 475), control1: CGPoint(x: 517, y: 374), control2: CGPoint(x: 550, y: 414))
-            backPath.addCurve(to: CGPoint(x: 567, y: 586), control1: CGPoint(x: 604, y: 527), control2: CGPoint(x: 601, y: 566))
-            backPath.addLine(to: CGPoint(x: 344, y: 668))
-            backPath.addCurve(to: CGPoint(x: 243, y: 630), control1: CGPoint(x: 297, y: 683), control2: CGPoint(x: 265, y: 663))
-            backPath.addLine(to: CGPoint(x: 143, y: 408))
-            backPath.closeSubpath()
-
-            let purpleGrad = Gradient(colors: [
-                Color(red: 255/255, green: 157/255, blue: 64/255),
-                Color(red: 255/255, green: 93/255, blue: 174/255),
-                Color(red: 173/255, green: 80/255, blue: 240/255),
-                Color(red: 96/255, green: 111/255, blue: 251/255)
-            ])
-            context.fill(backPath, with: .linearGradient(purpleGrad, startPoint: CGPoint(x: 0, y: 80), endPoint: CGPoint(x: 800, y: 800)))
-
-            // Middle card (Yellow gradient)
-            var midPath = Path()
-            midPath.move(to: CGPoint(x: 211, y: 279))
-            midPath.addLine(to: CGPoint(x: 479, y: 326))
-            midPath.addCurve(to: CGPoint(x: 575, y: 441), control1: CGPoint(x: 523, y: 340), control2: CGPoint(x: 553, y: 380))
-            midPath.addCurve(to: CGPoint(x: 591, y: 562), control1: CGPoint(x: 597, y: 496), control2: CGPoint(x: 610, y: 532))
-            midPath.addLine(to: CGPoint(x: 405, y: 625))
-            midPath.addCurve(to: CGPoint(x: 295, y: 586), control1: CGPoint(x: 354, y: 642), control2: CGPoint(x: 320, y: 626))
-            midPath.closeSubpath()
-
-            let yellowGrad = Gradient(colors: [
-                Color(red: 255/255, green: 238/255, blue: 87/255),
-                Color(red: 255/255, green: 198/255, blue: 59/255),
-                Color(red: 255/255, green: 156/255, blue: 70/255)
-            ])
-            context.fill(midPath, with: .linearGradient(yellowGrad, startPoint: CGPoint(x: 80, y: 25), endPoint: CGPoint(x: 660, y: 800)))
-
-            // Front white leaf card
-            var frontPath = Path()
-            frontPath.move(to: CGPoint(x: 310, y: 224))
-            frontPath.addLine(to: CGPoint(x: 484, y: 279))
-            frontPath.addCurve(to: CGPoint(x: 560, y: 366), control1: CGPoint(x: 527, y: 295), control2: CGPoint(x: 539, y: 316))
-            frontPath.addCurve(to: CGPoint(x: 664, y: 487), control1: CGPoint(x: 607, y: 456), control2: CGPoint(x: 639, y: 470))
-            frontPath.addLine(to: CGPoint(x: 453, y: 583))
-            frontPath.addCurve(to: CGPoint(x: 342, y: 544), control1: CGPoint(x: 402, y: 592), control2: CGPoint(x: 366, y: 577))
-            frontPath.closeSubpath()
-
-            context.fill(frontPath, with: .color(Color.white.opacity(0.95)))
-            context.stroke(frontPath, with: .color(Color(red: 226/255, green: 218/255, blue: 240/255)), lineWidth: 3.5)
-
-            // Sparkles
-            let sparkGrad = Gradient(colors: [
-                Color(red: 255/255, green: 232/255, blue: 67/255),
-                Color(red: 255/255, green: 142/255, blue: 37/255)
-            ])
-            context.fill(Path(roundedRect: CGRect(x: 490, y: 143, width: 42, height: 103), cornerRadius: 21), with: .linearGradient(sparkGrad, startPoint: CGPoint(x: 490, y: 143), endPoint: CGPoint(x: 532, y: 246)))
-        }
-        .frame(width: 18, height: 18)
-    }
-}
-
 public struct AppShell: View {
     @StateObject private var state = AppState.shared
 
@@ -207,6 +132,9 @@ public struct AppShell: View {
         .preferredColorScheme(preferredColorScheme)
         .frame(minWidth: 1000, minHeight: 650)
         .ignoresSafeArea()
+        .onAppear {
+            LogoAnimationCoordinator.shared.playLaunch()
+        }
     }
 
     private var islandMainContent: some View {
@@ -255,11 +183,11 @@ public struct AppShell: View {
         HStack(spacing: 0) {
             // Left: Traffic lights clearance (86px) -> Logo -> "Pata" -> Expand sidebar button
             HStack(spacing: 8) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     PataLogoView()
 
                     Text("Pata")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 13.5, weight: .semibold))
                         .foregroundColor(.secondary)
                 }
                 .offset(y: -0.5)
@@ -318,11 +246,11 @@ public struct AppShell: View {
         VStack(alignment: .leading, spacing: 0) {
             // Top Header: Traffic Lights clearance (86px) + Logo + Title + Collapse Button
             HStack(spacing: 8) {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     PataLogoView()
 
                     Text("Pata")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 13.5, weight: .semibold))
                         .foregroundColor(.secondary)
                 }
                 .offset(y: -0.5)
