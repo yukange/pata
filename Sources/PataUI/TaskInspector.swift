@@ -93,7 +93,7 @@ public struct TaskInspector: View {
 
                         if let err = titleSaveError {
                             Text(err)
-                                .font(.system(size: 10))
+                                .font(.system(size: 11))
                                 .foregroundColor(.red)
                                 .lineLimit(1)
                                 .help(err)
@@ -229,7 +229,7 @@ public struct TaskInspector: View {
             if let due = t.due {
                 HStack(spacing: 4) {
                     Image(systemName: "calendar")
-                        .font(.system(size: 10))
+                        .font(.system(size: 11))
                     Text(isOverdue ? "\(due) (已逾期)" : "\(due) 截止")
                         .font(.system(size: 11, weight: isOverdue ? .medium : .regular))
                 }
@@ -329,7 +329,7 @@ public struct TaskInspector: View {
     private func tagCandidateDropdown(_ t: Task) -> some View {
         VStack(alignment: .leading, spacing: 1) {
             Text("已有标签")
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
@@ -681,7 +681,7 @@ public struct TaskInspector: View {
                                     editingActivityId = item.id
                                 }) {
                                     Image(systemName: "pencil")
-                                        .font(.system(size: 10))
+                                        .font(.system(size: 11))
                                         .foregroundColor(.secondary)
                                 }
                                 .buttonStyle(.plain)
@@ -691,7 +691,7 @@ public struct TaskInspector: View {
                                     deleteActivity(id: item.id)
                                 }) {
                                     Image(systemName: "trash")
-                                        .font(.system(size: 10))
+                                        .font(.system(size: 11))
                                         .foregroundColor(.secondary)
                                 }
                                 .buttonStyle(.plain)
@@ -704,7 +704,7 @@ public struct TaskInspector: View {
                     if editingActivityId == item.id {
                         VStack(alignment: .trailing, spacing: 6) {
                             TextEditor(text: $editingActivityDraft)
-                                .font(.system(size: 12))
+                                .font(.system(size: 14))
                                 .frame(minHeight: 48, maxHeight: 120)
                                 .scrollContentBackground(.hidden)
                                 .padding(6)

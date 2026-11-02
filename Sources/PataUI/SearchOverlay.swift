@@ -94,7 +94,7 @@ public struct SearchOverlay: View {
                         state.toggleSearch()
                     }
                     .buttonStyle(.plain)
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 14)
@@ -192,12 +192,12 @@ public struct SearchOverlay: View {
                 HStack(spacing: 16) {
                     HStack(spacing: 4) {
                         Text("↑")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
                         Text("↓")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
@@ -207,7 +207,7 @@ public struct SearchOverlay: View {
 
                     HStack(spacing: 4) {
                         Text("↵")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
@@ -217,7 +217,7 @@ public struct SearchOverlay: View {
 
                     HStack(spacing: 4) {
                         Text("ESC")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
                             .padding(.horizontal, 4)
                             .padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))

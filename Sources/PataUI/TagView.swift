@@ -277,7 +277,7 @@ public struct TagView: View {
             }
 
             Text(item.snippet ?? "（无正文内容）")
-                .font(.system(size: 13))
+                .font(.system(size: 14))
                 .foregroundColor(.primary)
                 .lineLimit(3)
                 .lineSpacing(2)

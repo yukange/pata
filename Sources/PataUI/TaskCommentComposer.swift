@@ -6,7 +6,7 @@ import AppKit
 public struct ActivityComposerBox: View {
     @Binding var text: String
     var placeholder: String = "记录进展..."
-    var fontSize: CGFloat = 12
+    var fontSize: CGFloat = 14
     var inputHeight: CGFloat = 52
     var buttonText: String = "发送 ⌘↵"
     @ObservedObject var state: AppState
@@ -15,7 +15,7 @@ public struct ActivityComposerBox: View {
     public init(
         text: Binding<String>,
         placeholder: String = "记录进展...",
-        fontSize: CGFloat = 12,
+        fontSize: CGFloat = 14,
         inputHeight: CGFloat = 52,
         buttonText: String = "发送 ⌘↵",
         state: AppState,
@@ -33,7 +33,7 @@ public struct ActivityComposerBox: View {
     public init(
         text: Binding<String>,
         placeholder: String = "记录进展...",
-        fontSize: CGFloat = 12,
+        fontSize: CGFloat = 14,
         inputHeight: CGFloat = 52,
         buttonText: String = "发送 ⌘↵",
         state: AppState,
@@ -73,7 +73,7 @@ public struct ActivityComposerBox: View {
             }) {
                 HStack(spacing: 4) {
                     Image(systemName: "paperplane.fill")
-                        .font(.system(size: 9))
+                        .font(.system(size: 11))
                     Text(buttonText)
                         .font(.system(size: 11, weight: .medium))
                 }

@@ -184,7 +184,7 @@ public final class DescriptionNSTextView: NSTextView {
 
     private func setup() {
         self.drawsBackground = false
-        self.font = .systemFont(ofSize: 13)
+        self.font = .systemFont(ofSize: 14)
         self.textColor = .labelColor
         self.focusRingType = .none
         self.isRichText = false
@@ -215,7 +215,7 @@ public final class DescriptionNSTextView: NSTextView {
         super.draw(dirtyRect)
         if string.isEmpty && (textStorage?.length ?? 0) == 0 && markedRange().length == 0 {
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: font ?? NSFont.systemFont(ofSize: 13),
+                .font: font ?? NSFont.systemFont(ofSize: 14),
                 .foregroundColor: NSColor.placeholderTextColor
             ]
             let rect = NSRect(

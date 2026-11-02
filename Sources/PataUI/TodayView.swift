@@ -656,7 +656,7 @@ public struct TodayView: View {
             HStack {
                 HStack(spacing: 4) {
                     Text("↵")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.system(size: 11, design: .monospaced))
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
                         .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
@@ -670,12 +670,12 @@ public struct TodayView: View {
                 HStack(spacing: 8) {
                     HStack(spacing: 3) {
                         Text("↑")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
                         Text("↓")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
@@ -686,12 +686,12 @@ public struct TodayView: View {
                     if !hasQuery {
                         HStack(spacing: 3) {
                             Text("←")
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(.system(size: 11, design: .monospaced))
                                 .padding(.horizontal, 3)
                                 .padding(.vertical, 1)
                                 .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
                             Text("→")
-                                .font(.system(size: 10, design: .monospaced))
+                                .font(.system(size: 11, design: .monospaced))
                                 .padding(.horizontal, 3)
                                 .padding(.vertical, 1)
                                 .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
@@ -702,7 +702,7 @@ public struct TodayView: View {
 
                     HStack(spacing: 3) {
                         Text("ESC")
-                            .font(.system(size: 9, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
                             .padding(.horizontal, 3)
                             .padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 3).fill(Color.stoneBadgeBg))
@@ -735,7 +735,7 @@ public struct TodayView: View {
             highlightedCandidateIndex = nil
         }) {
             Text(title)
-                .font(.system(size: 12, weight: candidateTab == tab ? .semibold : .regular))
+                .font(.system(size: 13, weight: candidateTab == tab ? .medium : .regular))
                 .foregroundColor(candidateTab == tab ? .primary : .secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)

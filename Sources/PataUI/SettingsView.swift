@@ -50,7 +50,7 @@ public struct SettingsView: View {
                     .foregroundColor(Color(nsColor: .separatorColor))
 
                 Text("应用设置")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
 
                 Spacer()

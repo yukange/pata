@@ -16,7 +16,7 @@ public struct ActivityTextView: View {
 
     public var body: some View {
         Text(attributedText)
-            .font(.system(size: 13))
+            .font(.system(size: 14))
             .foregroundColor(.primary)
             .lineSpacing(3)
             .textSelection(.enabled)

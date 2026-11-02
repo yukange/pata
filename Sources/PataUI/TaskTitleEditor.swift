@@ -162,7 +162,7 @@ public final class TitleNSTextView: NSTextView {
 
     private func setup() {
         self.drawsBackground = false
-        self.font = .systemFont(ofSize: 18, weight: .bold)
+        self.font = .systemFont(ofSize: 18, weight: .semibold)
         self.focusRingType = .none
         self.isRichText = false
         self.importsGraphics = false
@@ -221,7 +221,7 @@ public final class TitleNSTextView: NSTextView {
         super.draw(dirtyRect)
         if string.isEmpty && (textStorage?.length ?? 0) == 0 && markedRange().length == 0 {
             let attrs: [NSAttributedString.Key: Any] = [
-                .font: font ?? NSFont.systemFont(ofSize: 18, weight: .bold),
+                .font: font ?? NSFont.systemFont(ofSize: 18, weight: .semibold),
                 .foregroundColor: NSColor.placeholderTextColor
             ]
             let rect = NSRect(

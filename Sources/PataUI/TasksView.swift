@@ -68,7 +68,7 @@ public struct TasksView: View {
                     Button(action: submitQuickCreate) {
                         HStack(spacing: 4) {
                             Image(systemName: "plus")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: 11, weight: .semibold))
                             Text("快速创建")
                                 .font(.system(size: 12, weight: .medium))
                         }
@@ -129,7 +129,7 @@ public struct TasksView: View {
 
         return Button(action: { statusFilter = filterKey }) {
             Text(title)
-                .font(.system(size: 12, weight: isSelected ? .medium : .regular))
+                .font(.system(size: 13, weight: isSelected ? .medium : .regular))
                 .foregroundColor(isSelected ? .primary : .secondary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 4)

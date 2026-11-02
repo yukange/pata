@@ -275,13 +275,13 @@ public struct AppShell: View {
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Text("搜索")
-                        .font(.system(size: 12))
+                        .font(.system(size: 13))
                         .foregroundColor(.secondary)
 
                     Spacer()
 
                     Text("⌘K/⌘P")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                         .padding(.horizontal, 4)
                         .padding(.vertical, 1)
@@ -325,7 +325,7 @@ public struct AppShell: View {
                         .foregroundColor(.secondary)
                     Spacer()
                     Text("\(allTagsWithCounts.count)")
-                        .font(.system(size: 10, design: .monospaced))
+                        .font(.system(size: 11, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
                 .padding(.horizontal, 14)
@@ -514,13 +514,13 @@ struct SearchHeaderButton: View {
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                 Text("搜索")
-                    .font(.system(size: 12))
+                    .font(.system(size: 13))
                     .foregroundColor(.secondary)
 
                 Spacer()
 
                 Text("⌘K/⌘P")
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(.system(size: 11, design: .monospaced))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)

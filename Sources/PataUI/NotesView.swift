@@ -501,7 +501,7 @@ public struct NotesView: View {
                                 editor.save()
                             }
                         })
-                        .font(.system(size: 24, weight: .bold))
+                        .font(.system(size: 24, weight: .semibold))
                         .textFieldStyle(.plain)
                         .focused($isTitleFocused)
 
