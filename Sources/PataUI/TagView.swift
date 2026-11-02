@@ -9,13 +9,15 @@ public struct TagView: View {
         self.state = state
     }
 
-    private var activeTagName: String {
-        state.selectedTag ?? "架构设计"
+    private var activeTag: String? {
+        guard let tag = state.selectedTag?.trimmingCharacters(in: .whitespacesAndNewlines), !tag.isEmpty else { return nil }
+        return tag
     }
 
     private var items: [EntityRef] {
         guard let v = state.vault else { return [] }
-        return v.index.findByTag(activeTagName).sorted { $0.time > $1.time }
+        if let activeTag { return v.index.findByTag(activeTag) }
+        return v.index.listAllEntities()
     }
 
     private var taskCount: Int {
@@ -35,17 +37,7 @@ public struct TagView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Header with Tag Chip & Counts
                 HStack(spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "number")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text(activeTagName)
-                            .font(.system(size: 14, weight: .semibold))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.stoneTagBg))
-                    .foregroundColor(Color(red: 4/255, green: 120/255, blue: 87/255))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(red: 4/255, green: 120/255, blue: 87/255).opacity(0.3), lineWidth: 1))
+                    tagFilter
 
                     Text("共 \(items.count) 项（任务 \(taskCount) · 笔记 \(noteCount) · 记录 \(activityCount)）")
                         .font(.system(size: 12))
@@ -63,7 +55,7 @@ public struct TagView: View {
                         Image(systemName: "number")
                             .font(.system(size: 32))
                             .foregroundColor(.secondary.opacity(0.3))
-                        Text("暂无相关内容")
+                        Text(activeTag == nil ? "暂无任务、笔记或记录" : "该标签下暂无内容")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                         Spacer()
@@ -71,7 +63,7 @@ public struct TagView: View {
                     .frame(maxWidth: .infinity, minHeight: 200)
                     .background(RoundedRectangle(cornerRadius: 12).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
                 } else {
-                    VStack(spacing: 10) {
+                    LazyVStack(spacing: 10) {
                         ForEach(items, id: \.id) { item in
                             switch item.type {
                             case .task:
@@ -89,17 +81,42 @@ public struct TagView: View {
             }
             .padding(24)
             .frame(maxWidth: 900)
+            .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // 侧栏收起时仍可选择资料库中的真实标签。
+    private var tagFilter: some View {
+        Menu {
+            Button("全部") { state.selectedTag = nil }
+            Divider()
+            ForEach(state.vault?.index.listTags() ?? [], id: \.name) { tag in
+                Button("#\(tag.name)（\(tag.totalCount)）") { state.selectedTag = tag.name }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "number")
+                Text(activeTag ?? "全部").lineLimit(1)
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 6).fill(Color.stoneTagBg))
+            .foregroundColor(.emeraldColor)
+            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.emeraldColor.opacity(0.3), lineWidth: 1))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .accessibilityLabel("筛选标签")
     }
 
     // MARK: - Task Card
 
     private func taskCard(_ item: EntityRef) -> some View {
-        let isSelected = state.selectedTaskId == item.id
+        let isSelected = state.selectedTaskId == item.id && state.isInspectorVisible
 
         return Button(action: {
-            state.selectedTaskId = item.id
+            state.openTaskInspector(taskId: item.id)
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 // Header Row
@@ -171,8 +188,7 @@ public struct TagView: View {
 
     private func noteCard(_ item: EntityRef) -> some View {
         Button(action: {
-            state.currentNav = .notes
-            state.selectedNoteId = item.id
+            state.navigateToNote(noteId: item.id)
         }) {
             VStack(alignment: .leading, spacing: 8) {
                 // Header Row
@@ -282,25 +298,20 @@ public struct TagView: View {
                 .lineLimit(3)
                 .lineSpacing(2)
 
-            // Jump to task button
-            if let taskId = item.taskId {
-                HStack {
-                    Spacer()
-                    Button(action: {
-                        state.selectedTaskId = taskId
-                    }) {
-                        HStack(spacing: 3) {
-                            Text("查看任务")
-                                .font(.system(size: 11))
-                            Image(systemName: "arrow.up.right")
-                                .font(.system(size: 9))
-                        }
-                        .foregroundColor(.secondary)
+            HStack {
+                Spacer()
+                Button(action: { state.openSearchResult(item) }) {
+                    HStack(spacing: 3) {
+                        Text(item.taskId == nil ? "查看当日记录" : "查看任务")
+                            .font(.system(size: 11))
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 9))
                     }
-                    .buttonStyle(.plain)
+                    .foregroundColor(.secondary)
                 }
-                .padding(.top, 2)
+                .buttonStyle(.plain)
             }
+            .padding(.top, 2)
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))

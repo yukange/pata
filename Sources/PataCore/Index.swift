@@ -312,22 +312,30 @@ public final class MemoryIndex: @unchecked Sendable {
     }
 
     public func findByTag(_ tag: String) -> [EntityRef] {
+        entityReferences(tag: tag.lowercased())
+    }
+
+    /// 标签页的“全部”包含无标签内容，但不包含草稿、文件或 DayPlan 容器。
+    public func listAllEntities() -> [EntityRef] {
+        entityReferences(tag: nil)
+    }
+
+    private func entityReferences(tag target: String?) -> [EntityRef] {
         lock.lock()
         defer { lock.unlock() }
 
-        let target = tag.lowercased()
         var results: [EntityRef] = []
 
         // Tasks
         for (tid, task) in tasks {
             let path = idToFile[tid] ?? ""
-            if task.tags.contains(where: { $0.lowercased() == target }) {
+            if target == nil || task.tags.contains(where: { $0.lowercased() == target }) {
                 results.append(EntityRef(
                     type: .task,
                     id: tid,
                     title: task.title,
                     path: relPath(path),
-                    time: task.createdAt,
+                    time: target == nil ? task.updatedAt : task.createdAt,
                     status: task.status,
                     snippet: task.description
                 ))
@@ -337,13 +345,13 @@ public final class MemoryIndex: @unchecked Sendable {
             let taskHasTag = task.tags.contains(where: { $0.lowercased() == target })
             for act in task.activities {
                 let actHasTag = act.tags.contains(where: { $0.lowercased() == target })
-                if actHasTag || taskHasTag {
+                if target == nil || actHasTag || taskHasTag {
                     results.append(EntityRef(
                         type: .activity,
                         id: act.id,
                         title: task.title,
                         path: relPath(path),
-                        inherited: !actHasTag && taskHasTag,
+                        inherited: target != nil && !actHasTag && taskHasTag,
                         time: act.at,
                         snippet: act.body,
                         taskId: tid
@@ -354,7 +362,7 @@ public final class MemoryIndex: @unchecked Sendable {
 
         // Notes
         for (nid, note) in notes where !note.draft {
-            if note.tags.contains(where: { $0.lowercased() == target }) {
+            if target == nil || note.tags.contains(where: { $0.lowercased() == target }) {
                 let path = idToFile[nid] ?? ""
                 results.append(EntityRef(
                     type: .note,
@@ -371,7 +379,7 @@ public final class MemoryIndex: @unchecked Sendable {
         for (_, plan) in dayPlans {
             let path = idToFile[plan.date] ?? ""
             for act in plan.activities {
-                if act.tags.contains(where: { $0.lowercased() == target }) {
+                if target == nil || act.tags.contains(where: { $0.lowercased() == target }) {
                     results.append(EntityRef(
                         type: .activity,
                         id: act.id,
@@ -384,7 +392,11 @@ public final class MemoryIndex: @unchecked Sendable {
             }
         }
 
-        return results.sorted { $0.time > $1.time }
+        return results.sorted {
+            if $0.time != $1.time { return $0.time > $1.time }
+            if $0.type != $1.type { return $0.type.rawValue < $1.type.rawValue }
+            return $0.id < $1.id
+        }
     }
 
     // MARK: - Search

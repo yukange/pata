@@ -338,7 +338,7 @@ public struct AppShell: View {
                         SidebarTagRowButton(
                             tag: "全部",
                             count: nil,
-                            isSelected: !state.showSettings && state.currentNav == .tags && (state.selectedTag == nil || state.selectedTag == "全部")
+                            isSelected: !state.showSettings && state.currentNav == .tags && state.selectedTag == nil
                         ) {
                             state.showSettings = false
                             state.currentNav = .tags
@@ -349,7 +349,7 @@ public struct AppShell: View {
                             SidebarTagRowButton(
                                 tag: item.tag,
                                 count: item.count,
-                                isSelected: !state.showSettings && state.currentNav == .tags && state.selectedTag == item.tag
+                                isSelected: !state.showSettings && state.currentNav == .tags && state.selectedTag?.caseInsensitiveCompare(item.tag) == .orderedSame
                             ) {
                                 state.showSettings = false
                                 state.currentNav = .tags
