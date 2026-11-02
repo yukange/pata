@@ -30,9 +30,29 @@ jobs:
           fi
           echo "version=${CLEAN_VERSION}" >> $GITHUB_OUTPUT
 
+      - name: Select Xcode 16
+        run: |
+          XCODE_PATH=$(find /Applications -maxdepth 1 -name "Xcode_16*.app" | sort -V | tail -n 1)
+          if [ -n "$XCODE_PATH" ]; then
+            echo "Selecting $XCODE_PATH"
+            sudo xcode-select -s "$XCODE_PATH/Contents/Developer"
+          fi
+          xcodebuild -version
+          swift --version
+
       - name: Run Swift Unit Tests
         run: |
-          swift test
+          DEV_DIR="$(xcode-select -p)"
+          PLUGIN_FLAGS=()
+          for p in \
+            "$DEV_DIR/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins" \
+            "$DEV_DIR/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing" \
+            "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing"; do
+            if [ -d "$p" ]; then
+              PLUGIN_FLAGS+=("-Xswiftc" "-plugin-path" "-Xswiftc" "$p")
+            fi
+          done
+          swift test "${PLUGIN_FLAGS[@]}"
 
       - name: Build macOS Native App Bundle
         run: |

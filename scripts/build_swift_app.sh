@@ -7,16 +7,17 @@ cd "$ROOT_DIR"
 CONFIG="${1:-release}"
 echo "==> Building Pata Native macOS App with Swift ($CONFIG mode)..."
 
-XCODE_PLUGIN_DIR="/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins"
-CLT_PLUGIN_DIR="/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing"
-
+DEV_DIR="$(xcode-select -p 2>/dev/null || echo "")"
 SWIFT_FLAGS=()
-if [ -d "$XCODE_PLUGIN_DIR" ]; then
-    SWIFT_FLAGS+=("-Xswiftc" "-plugin-path" "-Xswiftc" "$XCODE_PLUGIN_DIR")
-fi
-if [ -d "$CLT_PLUGIN_DIR" ]; then
-    SWIFT_FLAGS+=("-Xswiftc" "-plugin-path" "-Xswiftc" "$CLT_PLUGIN_DIR")
-fi
+for p in \
+    "$DEV_DIR/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins" \
+    "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins" \
+    "$DEV_DIR/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/plugins/testing" \
+    "/Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing"; do
+    if [ -d "$p" ]; then
+        SWIFT_FLAGS+=("-Xswiftc" "-plugin-path" "-Xswiftc" "$p")
+    fi
+done
 
 if [ "$CONFIG" = "release" ] || [ "$CONFIG" = "--release" ]; then
     BUILD_CONFIGURATION="release"
