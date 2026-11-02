@@ -186,7 +186,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// Entrypoint
 if let idx = CommandLine.arguments.firstIndex(of: "--snapshot"), idx + 1 < CommandLine.arguments.count {
     let outDir = CommandLine.arguments[idx + 1]
     let app = NSApplication.shared
@@ -232,7 +231,6 @@ if let idx = CommandLine.arguments.firstIndex(of: "--snapshot"), idx + 1 < Comma
         print("Captured \(target), size: \(png.count) bytes")
     }
 
-    // 1. Today View (1440 x 940)
     state.showSettings = false
     state.showSearch = false
     state.isSidebarVisible = true
@@ -241,50 +239,41 @@ if let idx = CommandLine.arguments.firstIndex(of: "--snapshot"), idx + 1 < Comma
     state.selectedNoteId = nil
     capture(name: "today", width: 1440, height: 940)
 
-    // 2. Tasks View (1440 x 940)
     state.currentNav = .tasks
     state.isInspectorVisible = false
     capture(name: "tasks", width: 1440, height: 940)
 
-    // 2b. Tasks with Inspector (1440 x 940)
     state.selectedTaskId = "t-01m501"
     state.isInspectorVisible = true
     capture(name: "task_inspector", width: 1440, height: 940)
     state.isInspectorVisible = false
 
-    // 3. Notes List View (1440 x 940)
     state.currentNav = .notes
     state.selectedNoteId = nil
     state.isInspectorVisible = false
     capture(name: "notes", width: 1440, height: 940)
 
-    // 4. Note Editor View (1440 x 940)
     state.currentNav = .notes
     state.selectedNoteId = "n-01m501"
     capture(name: "note_editor", width: 1440, height: 940)
 
-    // 5. Tag View (# 架构设计) (1440 x 940)
     state.currentNav = .tags
     state.selectedTag = "架构设计"
     capture(name: "tags", width: 1440, height: 940)
 
-    // 6. Settings View (1440 x 940)
     state.showSettings = true
     capture(name: "settings", width: 1440, height: 940)
 
-    // 7. Collapsed Sidebar View (1440 x 940)
     state.showSettings = false
     state.currentNav = .today
     state.isSidebarVisible = false
     capture(name: "collapsed_sidebar", width: 1440, height: 940)
 
-    // 8. Search Overlay (1440 x 940)
     state.isSidebarVisible = true
     state.showSearch = true
     capture(name: "search", width: 1440, height: 940)
     state.showSearch = false
 
-    // 9. Dark Mode (Today, Tasks, Notes, Settings)
     state.themePreference = "dark"
     state.currentNav = .today
     capture(name: "today_dark", width: 1440, height: 940)

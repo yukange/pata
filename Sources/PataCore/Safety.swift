@@ -255,7 +255,6 @@ public struct Safety {
             throw PathSafetyError.pathEscapesVault(targetPath)
         }
 
-        // Relative path
         let relPath: String
         if candidate == absRoot {
             relPath = ""

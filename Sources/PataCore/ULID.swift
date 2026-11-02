@@ -53,7 +53,6 @@ public struct ULID: Sendable {
         result.reserveCapacity(26)
 
         // 128 bits = 26 5-bit groups (with 2 leading zero bits)
-        // Group indices:
         let bitLengths: [Int] = [3, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
         var bitOffset = 0
         for len in bitLengths {

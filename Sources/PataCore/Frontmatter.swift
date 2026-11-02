@@ -434,7 +434,6 @@ public struct Frontmatter {
             break
         }
 
-        // Add extra fields
         // Unknown values are stored as YAML fragments, preserving mappings and scalar types.
         for (k, v) in entity.extra where dict[k] == nil {
             dict[k] = try Yams.load(yaml: v) ?? NSNull()

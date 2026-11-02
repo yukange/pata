@@ -184,7 +184,6 @@ public final class MCPServer: @unchecked Sendable {
             return
         }
 
-        // Split headers and body
         let parts = rawStr.components(separatedBy: "\r\n\r\n")
         guard parts.count >= 2 else {
             sendHTTPResponse(connection: connection, status: 400, body: "Incomplete HTTP Request")
