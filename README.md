@@ -67,17 +67,18 @@ Tasks and notes work offline. Optional audio transcription sends the selected re
 
 ### Run from source
 
-Prepare Go, Node.js, Xcode Command Line Tools, and the matching Wails v3 CLI as described in [CONTRIBUTING.md](CONTRIBUTING.md#prerequisites), then:
+Requires macOS 14.0+ and Xcode / Swift 6.
 
 ```bash
 git clone https://github.com/yukange/pata.git
 cd pata
-go mod download
-npm --prefix frontend ci
-wails3 task dev
+./scripts/build_swift_app.sh
 ```
 
-Build a local macOS app with `wails3 task package`.
+Run tests:
+```bash
+swift test
+```
 
 ### Documentation
 
