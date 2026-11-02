@@ -585,7 +585,9 @@ public struct TodayView: View {
             }
         )
         .onPreferenceChange(InputWidthPreferenceKey.self) { width in
-            inputWidth = width
+            MainActor.assumeIsolated {
+                inputWidth = width
+            }
         }
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(borderColor, lineWidth: 1))
         .onChange(of: isInputFocused) { _, focused in
