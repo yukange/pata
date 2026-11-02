@@ -10,13 +10,13 @@ public final class AudioPlayerManager: ObservableObject {
     @Published public private(set) var durationMs: Int = 0
     @Published public private(set) var currentAudioPath: String?
 
-    private var player: AVPlayer?
-    private var timeObserverToken: Any?
+    private nonisolated(unsafe) var player: AVPlayer?
+    private nonisolated(unsafe) var timeObserverToken: Any?
     private var activeLoadId = UUID()
 
     public init() {}
 
-    isolated deinit {
+    deinit {
         if let token = timeObserverToken, let p = player {
             p.removeTimeObserver(token)
         }
