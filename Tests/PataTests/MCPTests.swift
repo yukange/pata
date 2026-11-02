@@ -50,7 +50,7 @@ struct MCPTests {
         #expect(toolsRes["error"] == nil)
         let toolsResult = toolsRes["result"] as? [String: Any]
         let tools = toolsResult?["tools"] as? [[String: Any]]
-        #expect(tools?.count == 7)
+        #expect(tools?.count == 8)
 
         // 3. Create task via pata_create_task
         let createRes = try sendRequest([
