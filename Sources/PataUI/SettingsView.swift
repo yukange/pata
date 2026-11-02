@@ -13,6 +13,8 @@ public struct SettingsView: View {
     @State private var keyMessage: String = ""
     @State private var copiedPath: Bool = false
     @State private var showColorPopover: Bool = false
+    @State private var copiedMCPPrompt: Bool = false
+    @State private var copyPromptTimer: DispatchWorkItem? = nil
 
     private let presetAccents = [
         (name: "蓝色", hex: "#007aff", color: Color(red: 0/255, green: 122/255, blue: 255/255)),
@@ -29,7 +31,6 @@ public struct SettingsView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
-            // Header: ← 返回 | 应用设置
             HStack(spacing: 12) {
                 Button(action: { state.showSettings = false }) {
                     HStack(spacing: 4) {
@@ -59,21 +60,12 @@ public struct SettingsView: View {
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.6))
             .overlay(Rectangle().frame(height: 1).foregroundColor(Color(nsColor: .separatorColor).opacity(0.6)), alignment: .bottom)
 
-            // Content Area - Single page vertically stacked
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Section 1: 外观
                     appearanceSection
-
-                    // Section 2: 存储
                     storageSection
-
-                    // Section 3: 智能体 MCP 服务
                     mcpSection
-
-                    // Section 4: 语音转写
                     transcriptionSection
-
                 }
                 .padding(24)
                 .frame(maxWidth: 680)
@@ -82,6 +74,9 @@ public struct SettingsView: View {
             .background(Color(nsColor: .windowBackgroundColor).opacity(0.3))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            state.refreshMCPStatus()
+        }
     }
 
     // MARK: - Section 1: 外观
@@ -92,7 +87,6 @@ public struct SettingsView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.primary)
 
-            // Theme Mode
             HStack {
                 Text("主题模式")
                     .font(.system(size: 12, weight: .medium))
@@ -112,7 +106,6 @@ public struct SettingsView: View {
 
             Divider()
 
-            // Accent Color
             HStack {
                 Text("主题强调色")
                     .font(.system(size: 12, weight: .medium))
@@ -121,7 +114,6 @@ public struct SettingsView: View {
                 Spacer()
 
                 HStack(spacing: 8) {
-                    // Follow System
                     Button(action: {
                         state.accentColorHex = ""
                         state.savePreferences()
@@ -143,7 +135,6 @@ public struct SettingsView: View {
                     .buttonStyle(.plain)
                     .help("跟随系统")
 
-                    // Presets
                     ForEach(presetAccents, id: \.hex) { preset in
                         Button(action: {
                             state.accentColorHex = preset.hex
@@ -162,7 +153,6 @@ public struct SettingsView: View {
                         .help(preset.name)
                     }
 
-                    // Custom Accent Color Picker
                     let isPreset = presetAccents.contains { $0.hex.lowercased() == state.accentColorHex.lowercased() }
                     let isCustomSelected = !state.accentColorHex.isEmpty && !isPreset
                     let customColor = isCustomSelected ? (Color(hex: state.accentColorHex) ?? .accentColor) : Color.stoneBadgeBg
@@ -302,40 +292,150 @@ public struct SettingsView: View {
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
     }
 
-    // MARK: - Section 3: 智能体 MCP 服务
+    // MARK: - Section 3: MCP 服务
+
+    private var mcpAgentPrompt: String {
+        let endpoint = state.mcpStatus.endpoint.isEmpty ? "http://127.0.0.1:17373/mcp" : state.mcpStatus.endpoint
+        return "帮我在当前客户端配置中新增名为 pata 的 MCP 服务，使用 Streamable HTTP 传输协议，连接地址为 \(endpoint)，仅增量修改并保留原有配置，最后通过列出工具验证接入是否成功。"
+    }
+
+    private func copyMCPAgentPrompt() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(mcpAgentPrompt, forType: .string)
+        copiedMCPPrompt = true
+        copyPromptTimer?.cancel()
+        let item = DispatchWorkItem {
+            copiedMCPPrompt = false
+        }
+        copyPromptTimer = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: item)
+    }
 
     private var mcpSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("智能体 MCP 服务")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.primary)
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("MCP 服务")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.primary)
 
-            Text("提供本地 stdio/HTTP MCP 协议端点，供 Claude Code、Cursor 等外部 AI 工具接入读写 Pata 数据。")
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .lineSpacing(2)
-
-            HStack {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(Color(red: 4/255, green: 120/255, blue: 87/255))
-                        .frame(width: 8, height: 8)
-                    Text("服务运行中 · 端口 8808")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(state.mcpStatus.running ? Color(red: 16/255, green: 185/255, blue: 129/255) : Color.secondary.opacity(0.5))
+                            .frame(width: 7, height: 7)
+                        Text(state.mcpStatus.running ? "运行中 · 127.0.0.1:17373" : "未启动")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(state.mcpStatus.running ? .primary : .secondary)
+                    }
                 }
 
                 Spacer()
 
-                Button("停止服务") {
-                    // MCP control
+                HStack(spacing: 8) {
+                    if state.mcpStatus.enabled && !state.mcpStatus.running {
+                        Button(action: { state.cancelMCPAutoStart() }) {
+                            Text("取消自动启动")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor).opacity(0.8), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    Button(action: {
+                        if state.mcpStatus.running {
+                            state.stopMCPServer()
+                        } else {
+                            state.startMCPServer()
+                        }
+                    }) {
+                        Text(state.mcpStatus.running ? "停止服务" : "启动服务")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(state.mcpStatus.running ? .secondary : .primary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor).opacity(0.8), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-                .font(.system(size: 12))
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
+            }
+
+            if state.mcpStatus.vaultChanged {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.orange)
+                    Text("资料库已更换。请停止并重新启动服务，允许 Agent 访问当前资料库。")
+                        .font(.system(size: 12))
+                        .foregroundColor(.orange)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.08)))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+            }
+
+            if !state.mcpStatus.error.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.red)
+                    Text(state.mcpStatus.error)
+                        .font(.system(size: 12))
+                        .foregroundColor(.red)
+                }
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.red.opacity(0.08)))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.red.opacity(0.3), lineWidth: 1))
+            }
+
+            if state.mcpStatus.running {
+                Divider()
+                    .padding(.vertical, 2)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Agent 接入")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.primary)
+                            Text("在支持 MCP 的客户端中配置接入")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button(action: copyMCPAgentPrompt) {
+                            HStack(spacing: 4) {
+                                Image(systemName: copiedMCPPrompt ? "checkmark" : "doc.on.doc")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(copiedMCPPrompt ? .green : .secondary)
+                                Text(copiedMCPPrompt ? "已复制" : "复制指令")
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor).opacity(0.8), lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(state.mcpStatus.vaultChanged)
+                        .help(mcpAgentPrompt)
+                    }
+
+                    Text(mcpAgentPrompt)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .lineSpacing(3)
+                        .textSelection(.enabled)
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.stoneBadgeBg))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor).opacity(0.4), lineWidth: 1))
+                }
             }
         }
         .padding(18)

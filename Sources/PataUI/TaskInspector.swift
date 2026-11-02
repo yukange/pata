@@ -190,8 +190,10 @@ public struct TaskInspector: View {
             Spacer()
 
             Menu {
-                Button("复制给 Agent") {
-                    copyForAgent(t)
+                if state.mcpStatus.running && !state.mcpStatus.vaultChanged {
+                    Button("复制给 Agent") {
+                        copyForAgent(t)
+                    }
                 }
 
                 if isTaskInTodayPlan {
@@ -851,13 +853,9 @@ public struct TaskInspector: View {
     }
 
     private func copyForAgent(_ t: Task) {
-        let text = """
-        [Pata 任务参考]
-        ID: \(t.id)
-        标题: \(t.title)
-        状态: \(t.status == .done ? "done" : "todo")
-        URI: pata://task/\(t.id)
-        """
+        flushTitleAutoSave()
+        flushDescriptionAutoSave()
+        let text = "处理这个任务：pata://task/\(t.id)"
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }

@@ -118,6 +118,11 @@ public final class AppState: ObservableObject {
     private let preferencesSaveQueue = DispatchQueue(label: "com.pata.preferences-io", qos: .utility)
 
     public init(loadPreferences: Bool = true) {
+        MCPServer.shared.onStatusChange = { [weak self] status in
+            DispatchQueue.main.async {
+                self?.mcpStatus = status
+            }
+        }
         if loadPreferences {
             self.loadPreferences()
             checkASRKey()
@@ -153,9 +158,15 @@ public final class AppState: ObservableObject {
             openVault(path: vPath, persist: false)
         }
 
-        if let mcpEnabled = json["mcp_enabled"] as? Bool, mcpEnabled, let v = vault {
-            try? MCPServer.shared.start(vault: v)
-            self.mcpStatus = MCPServer.shared.getStatus()
+        if let mcpEnabled = json["mcp_enabled"] as? Bool, mcpEnabled {
+            if let v = vault {
+                try? MCPServer.shared.start(vault: v)
+                self.mcpStatus = MCPServer.shared.getStatus()
+            } else {
+                self.mcpStatus = MCPServer.shared.getStatus()
+                self.mcpStatus.enabled = true
+                self.mcpStatus.error = "请先选择并打开资料库"
+            }
         }
     }
 
@@ -338,5 +349,42 @@ public final class AppState: ObservableObject {
         self.selectedTag = tag
         self.currentNav = .tags
         self.showSearch = false
+    }
+
+    // MARK: - MCP Management
+
+    public func startMCPServer() {
+        guard let v = vault else {
+            mcpStatus.enabled = true
+            mcpStatus.error = "请先选择并打开资料库"
+            savePreferences()
+            return
+        }
+        do {
+            try MCPServer.shared.start(vault: v)
+            mcpStatus = MCPServer.shared.getStatus()
+            savePreferences()
+        } catch {
+            mcpStatus = MCPServer.shared.getStatus()
+            mcpStatus.enabled = true
+            mcpStatus.error = "无法启动 MCP：\(error.localizedDescription)"
+            savePreferences()
+        }
+    }
+
+    public func stopMCPServer() {
+        MCPServer.shared.stop()
+        mcpStatus = MCPServer.shared.getStatus()
+        savePreferences()
+    }
+
+    public func cancelMCPAutoStart() {
+        MCPServer.shared.cancelAutoStart()
+        mcpStatus = MCPServer.shared.getStatus()
+        savePreferences()
+    }
+
+    public func refreshMCPStatus() {
+        mcpStatus = MCPServer.shared.getStatus()
     }
 }

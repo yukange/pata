@@ -32,14 +32,37 @@ public final class MCPServer: @unchecked Sendable {
     private var enabled = false
     private var errorMessage = ""
     private var vaultChanged = false
+    private var _onStatusChange: (@Sendable (MCPStatus) -> Void)?
+
+    public var onStatusChange: (@Sendable (MCPStatus) -> Void)? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _onStatusChange
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _onStatusChange = newValue
+        }
+    }
 
     public init() {}
 
     init(port: UInt16) { self.port = port }
 
+    private func statusLocked() -> MCPStatus {
+        MCPStatus(
+            enabled: enabled,
+            running: running,
+            endpoint: running ? endpointStr : "",
+            vaultChanged: vaultChanged,
+            error: errorMessage
+        )
+    }
+
     public func setVault(_ vault: Vault?) {
         lock.lock()
-        defer { lock.unlock() }
         if let currentVault, currentVault !== vault {
             listener?.cancel()
             listener = nil
@@ -50,36 +73,44 @@ public final class MCPServer: @unchecked Sendable {
         } else {
             currentVault = vault
         }
+        let status = statusLocked()
+        let callback = _onStatusChange
+        lock.unlock()
+        callback?(status)
     }
 
     public func getStatus() -> MCPStatus {
         lock.lock()
         defer { lock.unlock() }
-        return MCPStatus(
-            enabled: enabled,
-            running: running,
-            endpoint: running ? endpointStr : "",
-            vaultChanged: vaultChanged,
-            error: errorMessage
-        )
+        return statusLocked()
     }
 
     public func start(vault: Vault) throws {
         lock.lock()
-        defer { lock.unlock() }
 
-        if running { return }
+        if running {
+            lock.unlock()
+            return
+        }
         currentVault = vault
         errorMessage = ""
         vaultChanged = false
 
         let parameters = NWParameters.tcp
         guard let nwPort = NWEndpoint.Port(rawValue: port) else {
+            lock.unlock()
             throw NSError(domain: "MCP", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid port"])
         }
 
         parameters.requiredLocalEndpoint = .hostPort(host: NWEndpoint.Host(host), port: nwPort)
-        let newListener = try NWListener(using: parameters)
+        let newListener: NWListener
+        do {
+            newListener = try NWListener(using: parameters)
+        } catch {
+            lock.unlock()
+            throw error
+        }
+
         newListener.newConnectionHandler = { [weak self] connection in
             self?.handleConnection(connection)
         }
@@ -87,8 +118,10 @@ public final class MCPServer: @unchecked Sendable {
         newListener.stateUpdateHandler = { [weak self, weak newListener] state in
             guard let self, let newListener else { return }
             self.lock.lock()
-            defer { self.lock.unlock() }
-            guard self.listener === newListener else { return }
+            guard self.listener === newListener else {
+                self.lock.unlock()
+                return
+            }
             switch state {
             case .ready:
                 if let port = newListener.port { self.port = port.rawValue }
@@ -102,24 +135,44 @@ public final class MCPServer: @unchecked Sendable {
             default:
                 break
             }
+            let status = self.statusLocked()
+            let callback = self._onStatusChange
+            self.lock.unlock()
+            callback?(status)
         }
 
         newListener.start(queue: DispatchQueue.global(qos: .userInitiated))
         listener = newListener
         running = true
         enabled = true
+        let status = statusLocked()
+        let callback = _onStatusChange
+        lock.unlock()
+        callback?(status)
     }
 
     public func stop() {
         lock.lock()
-        defer { lock.unlock() }
-
         listener?.cancel()
         listener = nil
         running = false
         enabled = false
         currentVault = nil
         errorMessage = ""
+        vaultChanged = false
+        let status = statusLocked()
+        let callback = _onStatusChange
+        lock.unlock()
+        callback?(status)
+    }
+
+    public func cancelAutoStart() {
+        lock.lock()
+        enabled = false
+        let status = statusLocked()
+        let callback = _onStatusChange
+        lock.unlock()
+        callback?(status)
     }
 
     // MARK: - Connection & HTTP Handling

@@ -1,6 +1,7 @@
 import Testing
 @testable import PataMCP
 @testable import PataCore
+@testable import PataUI
 import Foundation
 
 @Suite("MCP Tests")
@@ -79,7 +80,7 @@ struct MCPTests {
         #expect(taskId.hasPrefix("t-"))
         let task = vault.index.getTask(taskId)
         #expect(task != nil)
-        #expect(task?.createdBy == SourceAgent) // Agent attribution verified!
+        #expect(task?.createdBy == SourceAgent)
 
         // 4. Add activity via pata_append_activity
         let addActRes = try sendRequest([
@@ -97,7 +98,7 @@ struct MCPTests {
         #expect(addActRes["error"] == nil)
         let updatedTask = vault.index.getTask(taskId)
         #expect(updatedTask?.activities.count == 1)
-        #expect(updatedTask?.activities.first?.by == SourceAgent) // Agent attribution verified!
+        #expect(updatedTask?.activities.first?.by == SourceAgent)
 
         // 5. Update task status via pata_set_task_status
         let updateStatusRes = try sendRequest([
@@ -115,7 +116,7 @@ struct MCPTests {
         #expect(updateStatusRes["error"] == nil)
         let doneTask = vault.index.getTask(taskId)
         #expect(doneTask?.status == TaskStatus.done)
-        #expect(doneTask?.statusEvents.last?.by == SourceAgent) // Agent attribution verified!
+        #expect(doneTask?.statusEvents.last?.by == SourceAgent)
 
         // 6. Read task by URI via pata_read
         let getUriRes = try sendRequest([
@@ -131,5 +132,44 @@ struct MCPTests {
             ]
         ])
         #expect(getUriRes["error"] == nil)
+    }
+
+    @MainActor
+    @Test("AppState MCP start, stop, cancel auto-start and status updates")
+    func appStateMCPControls() throws {
+        let appState = AppState(loadPreferences: false)
+
+        // 1. Starting without vault sets error
+        appState.startMCPServer()
+        #expect(!appState.mcpStatus.running)
+        #expect(appState.mcpStatus.error.contains("资料库"))
+
+        // 2. Starting with vault
+        let tempVaultDir = (NSTemporaryDirectory() as NSString).appendingPathComponent("pata_appstate_mcp_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(atPath: tempVaultDir, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(atPath: tempVaultDir)
+            appState.stopMCPServer()
+        }
+
+        appState.openVault(path: tempVaultDir, persist: false)
+        #expect(appState.vault != nil)
+
+        appState.startMCPServer()
+        #expect(appState.mcpStatus.enabled)
+        #expect(appState.mcpStatus.running)
+        #expect(appState.mcpStatus.endpoint.contains("127.0.0.1:17373/mcp"))
+        #expect(appState.mcpStatus.error.isEmpty)
+        #expect(!appState.mcpStatus.vaultChanged)
+
+        // 3. Stopping server
+        appState.stopMCPServer()
+        #expect(!appState.mcpStatus.running)
+        #expect(!appState.mcpStatus.enabled)
+
+        // 4. Cancel auto start
+        appState.cancelMCPAutoStart()
+        #expect(!appState.mcpStatus.enabled)
+        #expect(!appState.mcpStatus.running)
     }
 }
