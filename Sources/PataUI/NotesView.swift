@@ -42,6 +42,8 @@ public struct NotesView: View {
     @State private var scrollToAudioMs: Int? = nil
     @State private var showReloadConfirmation = false
     @State private var hoveredNoteId: String? = nil
+    @State private var notePendingDeletion: Note? = nil
+    @State private var showDeleteNoteConfirm: Bool = false
 
     public init(state: AppState) {
         self.state = state
@@ -130,6 +132,26 @@ public struct NotesView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("音频逐字稿生成依赖阿里云百炼 DashScope 语音服务。请先在「设置 - 语音转写」中配置 API Key。")
+        }
+        .alert(
+            notePendingDeletion?.draft == true ? "确认删除草稿？" : "确认删除笔记？",
+            isPresented: $showDeleteNoteConfirm,
+            presenting: notePendingDeletion
+        ) { note in
+            Button("删除", role: .destructive) {
+                deleteNote(note)
+                notePendingDeletion = nil
+            }
+            Button("取消", role: .cancel) {
+                notePendingDeletion = nil
+            }
+        } message: { note in
+            if note.draft {
+                Text("删除后无法恢复，确定要永久删除该草稿吗？")
+            } else {
+                let title = note.title.isEmpty ? "该笔记" : "笔记「\(note.title)」"
+                Text("删除后无法恢复，确定要永久删除\(title)吗？")
+            }
         }
     }
 
@@ -366,7 +388,8 @@ public struct NotesView: View {
             }
             Divider()
             Button("删除草稿", role: .destructive) {
-                deleteNote(draft)
+                notePendingDeletion = draft
+                showDeleteNoteConfirm = true
             }
         }
     }
@@ -419,7 +442,8 @@ public struct NotesView: View {
             }
             Divider()
             Button("删除笔记", role: .destructive) {
-                deleteNote(note)
+                notePendingDeletion = note
+                showDeleteNoteConfirm = true
             }
         }
     }
@@ -809,7 +833,8 @@ public struct NotesView: View {
             }
             Divider()
             Button(note.draft ? "删除草稿" : "删除笔记", role: .destructive) {
-                deleteNote(note)
+                notePendingDeletion = note
+                showDeleteNoteConfirm = true
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -824,20 +849,18 @@ public struct NotesView: View {
     // MARK: - Resizer Divider Handle
 
     private var dividerHandle: some View {
-        ZStack {
-            Color.clear
-                .frame(width: 8)
-
-            Rectangle()
-                .fill(
-                    isDividerDragging || isDividerHovered
-                        ? state.effectiveAccentColor.opacity(0.8)
-                        : Color(nsColor: .separatorColor).opacity(0.6)
-                )
-                .frame(width: 1)
-        }
-        .frame(width: 8)
-        .contentShape(Rectangle())
+        Rectangle()
+            .fill(
+                isDividerDragging || isDividerHovered
+                    ? state.effectiveAccentColor.opacity(0.8)
+                    : Color(nsColor: .separatorColor).opacity(0.6)
+            )
+            .frame(width: 1)
+            .overlay(
+                Color.clear
+                    .frame(width: 8)
+                    .contentShape(Rectangle())
+            )
         .onHover { hovering in
             isDividerHovered = hovering
             if hovering && !hasPushedCursor {
@@ -1043,12 +1066,19 @@ public struct NotesView: View {
     }
 
     private func deleteNote(_ note: Note) {
-        guard let v = state.vault, editor.save() else { return }
+        guard let v = state.vault else { return }
+        if editor.note?.id == note.id {
+            editor.discard()
+        } else {
+            _ = editor.save()
+        }
+        ASRManager.shared.cancelTask(noteId: note.id)
+        if state.selectedNoteId == note.id {
+            AudioPlayerManager.shared.stop()
+            state.selectedNoteId = nil
+        }
         do {
             try v.deleteNote(id: note.id)
-            if state.selectedNoteId == note.id {
-                state.selectedNoteId = nil
-            }
             state.rescanVault()
         } catch {
             print("Delete note error: \(error)")

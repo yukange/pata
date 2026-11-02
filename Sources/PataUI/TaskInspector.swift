@@ -8,6 +8,8 @@ public struct TaskInspector: View {
 
     @State private var newActivityBody: String = ""
     @State private var showDeleteConfirm: Bool = false
+    @State private var showDeleteActivityConfirm: Bool = false
+    @State private var activityPendingDeletionId: String? = nil
 
     // In-place title editing & auto-save
     @State private var titleDraft: String = ""
@@ -169,6 +171,19 @@ public struct TaskInspector: View {
                 Button("取消", role: .cancel) {}
             } message: {
                 Text("删除后无法恢复，确定要永久删除该任务吗？")
+            }
+            .alert("确认删除评论？", isPresented: $showDeleteActivityConfirm) {
+                Button("删除", role: .destructive) {
+                    if let id = activityPendingDeletionId {
+                        deleteActivity(id: id)
+                        activityPendingDeletionId = nil
+                    }
+                }
+                Button("取消", role: .cancel) {
+                    activityPendingDeletionId = nil
+                }
+            } message: {
+                Text("删除后无法恢复，确定要永久删除该评论吗？")
             }
         }
     }
@@ -688,7 +703,8 @@ public struct TaskInspector: View {
                                 .help("编辑评论")
 
                                 Button(action: {
-                                    deleteActivity(id: item.id)
+                                    activityPendingDeletionId = item.id
+                                    showDeleteActivityConfirm = true
                                 }) {
                                     Image(systemName: "trash")
                                         .font(.system(size: 11))
@@ -763,7 +779,8 @@ public struct TaskInspector: View {
                         editingActivityId = item.id
                     }
                     Button("删除", role: .destructive) {
-                        deleteActivity(id: item.id)
+                        activityPendingDeletionId = item.id
+                        showDeleteActivityConfirm = true
                     }
                 }
                 .padding(.vertical, 2)
