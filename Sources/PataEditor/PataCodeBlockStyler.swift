@@ -140,6 +140,129 @@ public final class PataCodeBlockStyler: @unchecked Sendable {
             return path
         }
     }
+
+    // MARK: - Super Draw IMP
+
+    typealias SuperDrawIMP = @convention(c) (AnyObject, Selector, CGPoint, CGContext) -> Void
+
+    static let superDrawIMP: SuperDrawIMP? = {
+        guard let method = class_getInstanceMethod(NSTextLayoutFragment.self, #selector(NSTextLayoutFragment.draw(at:in:))) else {
+            return nil
+        }
+        return unsafeBitCast(method_getImplementation(method), to: SuperDrawIMP.self)
+    }()
+
+    // MARK: - Selection Rects Calculation & Merging
+
+    public static func selectionRectsInDrawCoordinates(
+        layoutFragment: NSTextLayoutFragment,
+        textLayoutManager: NSTextLayoutManager,
+        drawPoint: CGPoint,
+        effectiveHeight: CGFloat,
+        snappedY: CGFloat,
+        snappedMaxY: CGFloat,
+        scale: CGFloat
+    ) -> [CGRect] {
+        var rects: [CGRect] = []
+        let dx = drawPoint.x - layoutFragment.layoutFragmentFrame.origin.x
+        let dy = drawPoint.y - layoutFragment.layoutFragmentFrame.origin.y
+        let myRange = layoutFragment.rangeInElement
+
+        let lineFragments = layoutFragment.textLineFragments
+        let lineCount = lineFragments.count
+
+        // Pre-calculate line vertical spans [top, bottom] in draw coordinates so adjacent lines
+        // share exact boundary seams without any gaps or overlapping pixels.
+        var lineSpans: [(top: CGFloat, bottom: CGFloat)] = []
+        if lineCount > 0 {
+            var seams: [CGFloat] = [snappedY]
+            if lineCount > 1 {
+                for i in 1..<lineCount {
+                    let rawSeam = drawPoint.y + lineFragments[i].typographicBounds.origin.y
+                    seams.append(round(rawSeam * scale) / scale)
+                }
+            }
+            seams.append(snappedMaxY)
+
+            for i in 0..<lineCount {
+                lineSpans.append((top: seams[i], bottom: seams[i + 1]))
+            }
+        }
+
+        for selection in textLayoutManager.textSelections {
+            for textRange in selection.textRanges {
+                let interStart = textRange.location.compare(myRange.location) == .orderedAscending
+                    ? myRange.location : textRange.location
+                let interEnd = textRange.endLocation.compare(myRange.endLocation) == .orderedDescending
+                    ? myRange.endLocation : textRange.endLocation
+                guard interStart.compare(interEnd) == .orderedAscending,
+                      let intersection = NSTextRange(location: interStart, end: interEnd) else { continue }
+
+                textLayoutManager.enumerateTextSegments(in: intersection, type: .selection, options: []) { _, segFrame, _, _ in
+                    let rawX = segFrame.origin.x + dx
+                    let rawMaxX = rawX + segFrame.width
+                    let snappedX = floor(rawX * scale) / scale
+                    let snappedMaxX = ceil(rawMaxX * scale) / scale
+                    let segWidth = max(0, snappedMaxX - snappedX)
+
+                    var segTop = snappedY
+                    var segBottom = snappedMaxY
+
+                    if lineCount > 1 {
+                        let segLocalY = segFrame.origin.y - layoutFragment.layoutFragmentFrame.origin.y
+                        var matchedIndex = -1
+                        var minDiff = CGFloat.greatestFiniteMagnitude
+                        for i in 0..<lineCount {
+                            let diff = abs(lineFragments[i].typographicBounds.origin.y - segLocalY)
+                            if diff < minDiff {
+                                minDiff = diff
+                                matchedIndex = i
+                            }
+                        }
+                        if matchedIndex >= 0 && minDiff < 4.0 {
+                            segTop = lineSpans[matchedIndex].top
+                            segBottom = lineSpans[matchedIndex].bottom
+                        } else {
+                            let rawY = segFrame.origin.y + dy
+                            segTop = floor(rawY * scale) / scale
+                            segBottom = ceil((rawY + segFrame.height) * scale) / scale
+                        }
+                    }
+
+                    let drawRect = CGRect(
+                        x: snappedX,
+                        y: segTop,
+                        width: segWidth,
+                        height: max(0, segBottom - segTop)
+                    )
+                    rects.append(drawRect)
+                    return true
+                }
+            }
+        }
+        return mergeOverlappingRects(rects)
+    }
+
+    public static func mergeOverlappingRects(_ rects: [CGRect]) -> [CGRect] {
+        guard rects.count > 1 else { return rects }
+        var result: [CGRect] = []
+        for rect in rects {
+            var merged = false
+            for (idx, existing) in result.enumerated() {
+                if abs(rect.minY - existing.minY) < 0.5 && abs(rect.maxY - existing.maxY) < 0.5 {
+                    if rect.minX <= existing.maxX && rect.maxX >= existing.minX {
+                        result[idx] = existing.union(rect)
+                        merged = true
+                        break
+                    }
+                }
+            }
+            if !merged {
+                result.append(rect)
+            }
+        }
+        return result
+    }
 }
 
 // MARK: - NSTextLayoutFragment Swizzled Drawing
@@ -219,11 +342,48 @@ extension NSTextLayoutFragment {
         context.addPath(clipPath)
         context.clip()
 
-        pata_codeBlock_draw(at: point, in: context)
+        // 1. Draw code block background with non-overlapping selection cutouts
+        let selectionRects = PataCodeBlockStyler.selectionRectsInDrawCoordinates(
+            layoutFragment: self,
+            textLayoutManager: tlm,
+            drawPoint: point,
+            effectiveHeight: effectiveHeight,
+            snappedY: snappedY,
+            snappedMaxY: snappedMaxY,
+            scale: scale
+        )
+
+        NSGraphicsContext.saveGraphicsState()
+        let nsContext = NSGraphicsContext(cgContext: context, flipped: true)
+        NSGraphicsContext.current = nsContext
+
+        color.setFill()
+        if selectionRects.isEmpty {
+            NSBezierPath(rect: bgRect).fill()
+        } else {
+            let path = NSBezierPath()
+            path.windingRule = .evenOdd
+            path.appendRect(bgRect)
+            for r in selectionRects {
+                let inter = r.intersection(bgRect)
+                if !inter.isNull && !inter.isEmpty {
+                    path.appendRect(inter)
+                }
+            }
+            path.fill()
+        }
+        NSGraphicsContext.restoreGraphicsState()
+
+        // 2. Draw text glyphs
+        if let imp = PataCodeBlockStyler.superDrawIMP {
+            imp(self, #selector(NSTextLayoutFragment.draw(at:in:)), point, context)
+        } else {
+            pata_codeBlock_draw(at: point, in: context)
+        }
 
         context.restoreGState()
 
-        // Draw subtle border around code block perimeter
+        // 3. Draw subtle border around code block perimeter
         context.saveGState()
         let isDark: Bool = {
             let appearance = (tlm.textContainer?.textView?.effectiveAppearance ?? NSApp.effectiveAppearance)
