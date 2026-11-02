@@ -184,9 +184,8 @@ public struct NotesView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-
-            Divider()
+            .padding(.top, 10)
+            .padding(.bottom, 2)
 
             // Scrollable Groups
             ScrollView {
@@ -583,8 +582,6 @@ public struct NotesView: View {
                 .padding(.horizontal, 24)
                 .padding(.top, 20)
                 .padding(.bottom, 12)
-
-                Divider()
             }
 
             // Audio Player Toolbar for audio transcript notes
@@ -675,7 +672,6 @@ public struct NotesView: View {
                     }
                 )
                 .id(note.id)
-                .padding(.horizontal, 16)
                 .padding(.top, note.draft && !isNamingDraft ? (state.isNotesListCollapsed ? 36 : 16) : 0)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onDrop(of: [.fileURL], isTargeted: nil) { providers in

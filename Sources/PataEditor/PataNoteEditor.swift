@@ -196,15 +196,18 @@ public struct PataNoteEditor: View {
     public var listFiles: (() -> [FileResource])?
 
     @State private var imageReloadVersion: Int = 0
+    @State private var codeBlockSelections: [CodeBlockSelection] = []
+    @State private var isHoveringCopyButton: Bool = false
 
     private static let defaultConfiguration: MarkdownEditorConfiguration = {
         var config = MarkdownEditorConfiguration.default
         config.extensions = [HighlightExtension(), StrikethroughExtension()]
         config.services.bus.findScrollToRange = .pataEditorScrollToRange
         config.services.bus.findClearHighlights = .pataEditorClearHighlights
+        config.textInsets = TextInsets(horizontal: 24, vertical: 8)
 
-        let lightBg = NSColor(calibratedRed: 237/255, green: 233/255, blue: 227/255, alpha: 1.0)
-        let darkBg = NSColor(calibratedRed: 40/255, green: 38/255, blue: 36/255, alpha: 1.0)
+        let lightBg = PataCodeBlockStyler.codeBlockLightBackground
+        let darkBg = PataCodeBlockStyler.codeBlockDarkBackground
 
         #if canImport(MarkdownEngineCodeBlocks)
         let bundleName = "MarkdownEngine_MarkdownEngineCodeBlocks"
@@ -299,33 +302,51 @@ public struct PataNoteEditor: View {
 
         PataEditorLinkHandler.installSwizzleIfNeeded()
         PataEditorLinkHandler.onSeekAudio = onSeekAudio
+        PataCodeBlockStyler.installSwizzleIfNeeded()
     }
 
     public var body: some View {
-        NativeTextViewWrapper(
-            text: $text,
-            configuration: editorConfiguration,
-            fontSize: 15,
-            documentId: noteId,
-            isEditable: !isReadOnlyTranscript,
-            isFocused: isFocused,
-            onPasteImage: effectiveOnPasteImage,
-            onLinkClick: { target in
-                handleLinkClick(target)
-            },
-            placeholder: NSAttributedString(
-                string: "开始记录内容...（支持 Markdown 语法、表格、代码块）",
-                attributes: [
-                    .font: NSFont.systemFont(ofSize: 15),
-                    .foregroundColor: NSColor.placeholderTextColor
-                ]
+        ZStack(alignment: .topLeading) {
+            NativeTextViewWrapper(
+                text: $text,
+                configuration: editorConfiguration,
+                fontSize: 15,
+                documentId: noteId,
+                isEditable: !isReadOnlyTranscript,
+                isFocused: isFocused,
+                onPasteImage: effectiveOnPasteImage,
+                onLinkClick: { target in
+                    handleLinkClick(target)
+                },
+                onCodeBlockSelectionChange: { selections in
+                    self.codeBlockSelections = selections
+                },
+                placeholder: NSAttributedString(
+                    string: "开始记录内容...（支持 Markdown 语法、表格、代码块）",
+                    attributes: [
+                        .font: NSFont.systemFont(ofSize: 15),
+                        .foregroundColor: NSColor.placeholderTextColor
+                    ]
+                ),
+                isCursorExcluded: { _ in
+                    isHoveringCopyButton
+                }
             )
-        )
+
+            ForEach(codeBlockSelections) { selection in
+                PataCodeBlockCopyButton(selection: selection) { hovering in
+                    self.isHoveringCopyButton = hovering
+                }
+            }
+        }
+        .clipped()
         .onAppear {
             PataEditorLinkHandler.onSeekAudio = onSeekAudio
         }
         .onChange(of: noteId) { _, _ in
             PataEditorLinkHandler.onSeekAudio = onSeekAudio
+            codeBlockSelections = []
+            isHoveringCopyButton = false
         }
         .onChange(of: text) { _, newText in
             onTextChange?(newText)
