@@ -335,7 +335,7 @@ public final class MemoryIndex: @unchecked Sendable {
                     id: tid,
                     title: task.title,
                     path: relPath(path),
-                    time: target == nil ? task.updatedAt : task.createdAt,
+                    time: task.updatedAt,
                     status: task.status,
                     snippet: task.description
                 ))

@@ -20,26 +20,24 @@ public struct TagView: View {
         return v.index.listAllEntities()
     }
 
-    private var taskCount: Int {
-        items.filter { $0.type == .task }.count
-    }
-
-    private var noteCount: Int {
-        items.filter { $0.type == .note }.count
-    }
-
-    private var activityCount: Int {
-        items.filter { $0.type == .activity }.count
-    }
-
     public var body: some View {
-        ScrollView {
+        let items = self.items
+        let counts = items.reduce(into: (task: 0, note: 0, activity: 0)) { acc, item in
+            switch item.type {
+            case .task: acc.task += 1
+            case .note: acc.note += 1
+            case .activity: acc.activity += 1
+            default: break
+            }
+        }
+
+        return ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // Header with Tag Chip & Counts
                 HStack(spacing: 8) {
                     tagFilter
 
-                    Text("共 \(items.count) 项（任务 \(taskCount) · 笔记 \(noteCount) · 记录 \(activityCount)）")
+                    Text("共 \(items.count) 项（任务 \(counts.task) · 笔记 \(counts.note) · 记录 \(counts.activity)）")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
 
@@ -98,6 +96,7 @@ public struct TagView: View {
             HStack(spacing: 6) {
                 Image(systemName: "number")
                 Text(activeTag ?? "全部").lineLimit(1)
+                    .frame(maxWidth: 220, alignment: .leading)
             }
             .font(.system(size: 14, weight: .semibold))
             .padding(.horizontal, 10).padding(.vertical, 4)
@@ -279,7 +278,8 @@ public struct TagView: View {
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                     } else {
-                        Text("今日计划")
+                        // 所属计划：path 为 plans/YYYY-MM-DD.md，可能是任意一天，不一定是今天。
+                        Text("计划 \(URL(fileURLWithPath: item.path).deletingPathExtension().lastPathComponent)")
                             .font(.system(size: 11))
                             .foregroundColor(.secondary)
                     }
