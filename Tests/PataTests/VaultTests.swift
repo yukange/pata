@@ -90,6 +90,42 @@ struct VaultTests {
         #expect(sharedSummary?.activityCount == 1) // Activity inherited parent task tag!
     }
 
+    @Test("Tag page shows all untagged content but no drafts, files or DayPlan containers")
+    func tagPageAllEntities() throws {
+        let tempVaultDir = (NSTemporaryDirectory() as NSString).appendingPathComponent("pata_vault_test_\(UUID().uuidString)")
+        try FileManager.default.createDirectory(atPath: tempVaultDir, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(atPath: tempVaultDir)
+        }
+
+        let vault = try Vault(rootPath: tempVaultDir)
+
+        let tagged = try vault.createTask(title: "Tagged task", tags: ["工作"])
+        let taggedAct = try vault.createActivity(taskId: tagged.id, body: "Task activity")
+        let untagged = try vault.createTask(title: "Untagged task", tags: [])
+        _ = try vault.createNote(title: "Draft", body: "Body", draft: true)
+        let formalUntagged = try vault.createNote(title: "Formal untagged", body: "Body", tags: [])
+        let formalTagged = try vault.createNote(title: "Formal tagged", body: "Body", tags: ["工作"])
+        let planAct = try vault.createActivity(date: "2026-10-15", body: "Plan activity")
+
+        let all = vault.index.listAllEntities()
+        let ids = all.map(\.id)
+
+        #expect(Set(ids).count == ids.count) // multi-tag content never duplicated
+        #expect(all.allSatisfy { $0.type == .task || $0.type == .note || $0.type == .activity })
+        #expect(!all.contains { $0.title == "Draft" })
+        #expect(all.contains { $0.id == untagged.id })
+        #expect(all.contains { $0.id == formalUntagged.id })
+        #expect(all.contains { $0.id == planAct.id })
+        #expect(all.contains { $0.id == taggedAct.id })
+
+        let taggedRefs = vault.index.findByTag("工作")
+        #expect(!taggedRefs.contains { $0.id == untagged.id })
+        #expect(taggedRefs.contains { $0.id == formalTagged.id })
+        #expect(taggedRefs.first { $0.id == taggedAct.id }?.inherited == true)
+        #expect(taggedRefs.first { $0.id == tagged.id }?.inherited == false)
+    }
+
     @Test("Search all entities and content")
     func searchAll() throws {
         let tempVaultDir = (NSTemporaryDirectory() as NSString).appendingPathComponent("pata_vault_test_\(UUID().uuidString)")

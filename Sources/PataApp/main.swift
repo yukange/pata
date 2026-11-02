@@ -258,7 +258,7 @@ if let idx = CommandLine.arguments.firstIndex(of: "--snapshot"), idx + 1 < Comma
     capture(name: "note_editor", width: 1440, height: 940)
 
     state.currentNav = .tags
-    state.selectedTag = "架构设计"
+    state.selectedTag = state.vault?.index.listTags().first?.name
     capture(name: "tags", width: 1440, height: 940)
 
     state.showSettings = true
