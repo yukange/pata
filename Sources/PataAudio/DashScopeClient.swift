@@ -155,13 +155,16 @@ public struct DashScopeClient: Sendable {
             }
             if bytesRead == 0 { break }
 
-            var written = 0
-            while written < bytesRead {
-                let res = stream.write(&buffer[written], maxLength: bytesRead - written)
-                if res < 0 {
-                    throw stream.streamError ?? NSError(domain: "DashScope", code: 500, userInfo: [NSLocalizedDescriptionKey: "写入上传流失败"])
+            // 必须用 withUnsafeBufferPointer 固定指针：`&buffer[i]` 的临时指针在 CFStream 写过程中会失效（EFAULT）。
+            try buffer.withUnsafeBufferPointer { buf in
+                var written = 0
+                while written < bytesRead {
+                    let res = stream.write(buf.baseAddress!.advanced(by: written), maxLength: bytesRead - written)
+                    if res < 0 {
+                        throw stream.streamError ?? NSError(domain: "DashScope", code: 500, userInfo: [NSLocalizedDescriptionKey: "写入上传流失败"])
+                    }
+                    written += res
                 }
-                written += res
             }
         }
 
@@ -188,6 +191,7 @@ public struct DashScopeClient: Sendable {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("enable", forHTTPHeaderField: "X-DashScope-OssResourceResolve")
+        request.setValue("enable", forHTTPHeaderField: "X-DashScope-Async")
 
         let body: [String: Any] = [
             "model": model,
