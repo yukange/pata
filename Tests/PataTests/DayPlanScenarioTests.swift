@@ -284,4 +284,71 @@ struct DayPlanScenarioTests {
         let diskPlan = reloadedVault.getDayPlan(date: dateStr)
         #expect(diskPlan.taskIds == [t3.id, t1.id, t2.id])
     }
+
+    @Test("Given app opened on a day, when crossing midnight, then today plan automatically advances to the next day")
+    @MainActor
+    func dayPlanAutoAdvancesToNextDayOnRolloverScenario() {
+        // Given: AppState with today date as 2026-11-03
+        let state = AppState(loadPreferences: false, watchDayRollover: false)
+        state.checkDateRollover(nowDateString: "2026-11-03")
+        state.todayDateString = "2026-11-03"
+        #expect(state.todayDateString == "2026-11-03")
+        #expect(state.lastKnownTodayDateString == "2026-11-03")
+
+        // When: Midnight passes and date rolls over to 2026-11-04
+        let didAdvance = state.checkDateRollover(nowDateString: "2026-11-04")
+
+        // Then: Today plan automatically advances to the next day
+        #expect(didAdvance == true)
+        #expect(state.todayDateString == "2026-11-04")
+        #expect(state.lastKnownTodayDateString == "2026-11-04")
+
+        // And: Calling checkDateRollover again on the same day is a no-op
+        let didAdvanceAgain = state.checkDateRollover(nowDateString: "2026-11-04")
+        #expect(didAdvanceAgain == false)
+        #expect(state.todayDateString == "2026-11-04")
+    }
+
+    @Test("Given user explicitly navigated to a historical past day, when day rollover occurs, then historical view is preserved")
+    @MainActor
+    func historicalDayPlanPreservedOnRolloverScenario() {
+        // Given: User was browsing a past date (2026-10-20) while current day was 2026-11-03
+        let state = AppState(loadPreferences: false, watchDayRollover: false)
+        state.checkDateRollover(nowDateString: "2026-11-03")
+        state.todayDateString = "2026-10-20"
+        #expect(state.todayDateString == "2026-10-20")
+        #expect(state.lastKnownTodayDateString == "2026-11-03")
+
+        // When: Day rolls over to 2026-11-04
+        let didAdvance = state.checkDateRollover(nowDateString: "2026-11-04")
+
+        // Then: Historical reading view is preserved
+        #expect(didAdvance == false)
+        #expect(state.todayDateString == "2026-10-20")
+        #expect(state.lastKnownTodayDateString == "2026-11-04")
+
+        // When: User clicks navigation to today
+        state.navigateToToday()
+
+        // Then: Date resets to current actual day
+        #expect(state.currentNav == .today)
+        #expect(state.todayDateString == AppState.currentDateString())
+    }
+
+    @Test("Given app kept open across multiple days, when day rollover is checked, then today plan advances to current day")
+    @MainActor
+    func multiDaySpanRolloverScenario() {
+        // Given: App left open on Friday 2026-11-01
+        let state = AppState(loadPreferences: false, watchDayRollover: false)
+        state.checkDateRollover(nowDateString: "2026-11-01")
+        state.todayDateString = "2026-11-01"
+
+        // When: User re-activates app on Monday 2026-11-04
+        let didAdvance = state.checkDateRollover(nowDateString: "2026-11-04")
+
+        // Then: Date advances across multiple days to 2026-11-04
+        #expect(didAdvance == true)
+        #expect(state.todayDateString == "2026-11-04")
+        #expect(state.lastKnownTodayDateString == "2026-11-04")
+    }
 }

@@ -45,11 +45,16 @@ public final class AppState: ObservableObject {
     @Published public var inspectorWidth: CGFloat = 400
 
     // Today Context
-    @Published public var todayDateString: String = {
+    public static func currentDateString() -> String {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         return f.string(from: Date())
-    }()
+    }
+
+    /// 记录最近一次已知的实际今天日期，用于判断跨天前用户是否停留在“今日”
+    public var lastKnownTodayDateString: String = AppState.currentDateString()
+
+    @Published public var todayDateString: String = AppState.currentDateString()
 
     // Notes Context
     public let noteEditor = NoteEditingSession()
@@ -117,7 +122,7 @@ public final class AppState: ObservableObject {
     private var savePreferencesWorkItem: DispatchWorkItem? = nil
     private let preferencesSaveQueue = DispatchQueue(label: "com.pata.preferences-io", qos: .utility)
 
-    public init(loadPreferences: Bool = true) {
+    public init(loadPreferences: Bool = true, watchDayRollover: Bool = true) {
         MCPServer.shared.onStatusChange = { [weak self] status in
             DispatchQueue.main.async {
                 self?.mcpStatus = status
@@ -126,6 +131,9 @@ public final class AppState: ObservableObject {
         if loadPreferences {
             self.loadPreferences()
             checkASRKey()
+        }
+        if watchDayRollover {
+            self.startDayRolloverWatcher()
         }
     }
 
@@ -304,6 +312,14 @@ public final class AppState: ObservableObject {
     }
 
     // Navigation Helper
+    public func navigateToToday() {
+        self.showSettings = false
+        self.currentNav = .today
+        checkDateRollover()
+        self.todayDateString = AppState.currentDateString()
+        self.showSearch = false
+    }
+
     public func navigateToNote(noteId: String) {
         self.currentNav = .notes
         self.selectedNoteId = noteId
@@ -386,5 +402,149 @@ public final class AppState: ObservableObject {
 
     public func refreshMCPStatus() {
         mcpStatus = MCPServer.shared.getStatus()
+    }
+
+    // MARK: - Day Rollover & Auto-Refresh
+
+    private var midnightTimer: Timer?
+    private var periodicCheckTimer: Timer?
+    private var rolloverNotificationTokens: [NSObjectProtocol] = []
+
+    /// 检查并在跨天时自动刷新今日计划
+    /// - Parameter nowDateString: 目标当前日期（默认使用实时系统日期，测试时可指定）
+    /// - Returns: 若今日计划发生日期推进刷新则返回 true，否则返回 false
+    @discardableResult
+    public func checkDateRollover(nowDateString: String = AppState.currentDateString()) -> Bool {
+        guard nowDateString != lastKnownTodayDateString else {
+            return false
+        }
+        let previousToday = lastKnownTodayDateString
+        lastKnownTodayDateString = nowDateString
+
+        // 若用户当前处于“今日”视图（即 todayDateString 等于跨天前的当天），自动刷新推进到新的下一天
+        var didAdvance = false
+        if todayDateString == previousToday {
+            todayDateString = nowDateString
+            didAdvance = true
+        } else if todayDateString > nowDateString {
+            // 异常防御：若当前选择的日期由于某种原因超过了新的当天，回退到新的当天
+            todayDateString = nowDateString
+            didAdvance = true
+        }
+
+        objectWillChange.send()
+        return didAdvance
+    }
+
+    public func startDayRolloverWatcher() {
+        stopDayRolloverWatcher()
+
+        let center = NotificationCenter.default
+        let dayChangedToken = center.addObserver(
+            forName: .NSCalendarDayChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            _ = MainActor.assumeIsolated {
+                self?.checkDateRollover()
+            }
+        }
+        rolloverNotificationTokens.append(dayChangedToken)
+
+        // 2. 监听系统时钟和时区改变通知
+        let clockChangeToken = center.addObserver(
+            forName: Notification.Name.NSSystemClockDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            _ = MainActor.assumeIsolated {
+                self?.checkDateRollover()
+            }
+        }
+        rolloverNotificationTokens.append(clockChangeToken)
+
+        let timeZoneChangeToken = center.addObserver(
+            forName: Notification.Name.NSSystemTimeZoneDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            _ = MainActor.assumeIsolated {
+                self?.checkDateRollover()
+            }
+        }
+        rolloverNotificationTokens.append(timeZoneChangeToken)
+
+        let activeToken = center.addObserver(
+            forName: NSApplication.didBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            _ = MainActor.assumeIsolated {
+                self?.checkDateRollover()
+            }
+        }
+        rolloverNotificationTokens.append(activeToken)
+
+        let wakeToken = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            _ = MainActor.assumeIsolated {
+                self?.checkDateRollover()
+            }
+        }
+        rolloverNotificationTokens.append(wakeToken)
+
+        scheduleMidnightTimer()
+        startPeriodicDayCheck()
+    }
+
+    public func stopDayRolloverWatcher() {
+        midnightTimer?.invalidate()
+        midnightTimer = nil
+        periodicCheckTimer?.invalidate()
+        periodicCheckTimer = nil
+
+        for token in rolloverNotificationTokens {
+            NotificationCenter.default.removeObserver(token)
+            NSWorkspace.shared.notificationCenter.removeObserver(token)
+        }
+        rolloverNotificationTokens.removeAll()
+    }
+
+    private func scheduleMidnightTimer() {
+        midnightTimer?.invalidate()
+        midnightTimer = nil
+
+        let calendar = Calendar.current
+        let now = Date()
+        guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: now),
+              let nextMidnight = calendar.date(bySettingHour: 0, minute: 0, second: 1, of: tomorrow) else {
+            return
+        }
+
+        let timer = Timer(fire: nextMidnight, interval: 0, repeats: false) { [weak self] _ in
+            _Concurrency.Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.checkDateRollover()
+                self.scheduleMidnightTimer()
+            }
+        }
+        timer.tolerance = 1.0
+        RunLoop.main.add(timer, forMode: .common)
+        self.midnightTimer = timer
+    }
+
+    private func startPeriodicDayCheck() {
+        periodicCheckTimer?.invalidate()
+        let timer = Timer(timeInterval: 60, repeats: true) { [weak self] _ in
+            _Concurrency.Task { @MainActor [weak self] in
+                self?.checkDateRollover()
+            }
+        }
+        timer.tolerance = 10.0
+        RunLoop.main.add(timer, forMode: .common)
+        self.periodicCheckTimer = timer
     }
 }

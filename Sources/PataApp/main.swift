@@ -116,18 +116,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TitlebarCustomizer.install()
         installKeyMonitor()
         dockIconAnimator.play()
+        AppState.shared.checkDateRollover()
         NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeKeyNotification,
             object: nil,
             queue: .main
         ) { _ in
             MainActor.assumeIsolated {
+                AppState.shared.checkDateRollover()
                 for window in NSApp.windows {
                     Self.configureWindow(window)
                 }
             }
         }
         DispatchQueue.main.async {
+            AppState.shared.checkDateRollover()
             for window in NSApp.windows {
                 Self.configureWindow(window)
             }

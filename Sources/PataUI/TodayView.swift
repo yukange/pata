@@ -80,9 +80,7 @@ public struct TodayView: View {
     }
 
     private var todayStr: String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
+        AppState.currentDateString()
     }
 
     private var isToday: Bool {
@@ -311,6 +309,7 @@ public struct TodayView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
+            state.checkDateRollover()
             isInputFocused = false
             isDropdownVisible = false
             DispatchQueue.main.async {
@@ -359,7 +358,7 @@ public struct TodayView: View {
 
             if !isToday {
                 Button(action: {
-                    state.todayDateString = todayStr
+                    state.navigateToToday()
                 }) {
                     HStack(spacing: 5) {
                         Image(systemName: "arrow.counterclockwise")
@@ -939,9 +938,7 @@ public struct TodayToolbarDateBar: View {
     }
 
     private var todayStr: String {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        return f.string(from: Date())
+        AppState.currentDateString()
     }
 
     private var isToday: Bool {
@@ -1000,7 +997,7 @@ public struct TodayToolbarDateBar: View {
 
             if !isToday {
                 Button(action: {
-                    state.todayDateString = todayStr
+                    state.navigateToToday()
                 }) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.counterclockwise")

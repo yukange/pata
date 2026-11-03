@@ -133,6 +133,7 @@ public struct AppShell: View {
         .frame(minWidth: 1000, minHeight: 650)
         .ignoresSafeArea()
         .onAppear {
+            state.checkDateRollover()
             LogoAnimationCoordinator.shared.playLaunch()
         }
     }
@@ -205,8 +206,7 @@ public struct AppShell: View {
             // Center: Segmented Navigation Tabs
             HStack(spacing: 4) {
                 TopNavTabButton(title: "Today", icon: "calendar", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .today) {
-                    state.showSettings = false
-                    state.currentNav = .today
+                    state.navigateToToday()
                 }
                 TopNavTabButton(title: "Tasks", icon: "checkmark.square", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .tasks) {
                     state.showSettings = false
@@ -302,8 +302,7 @@ public struct AppShell: View {
             // Navigation Items
             VStack(spacing: 2) {
                 SidebarNavRowButton(title: "Today", icon: "calendar", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .today) {
-                    state.showSettings = false
-                    state.currentNav = .today
+                    state.navigateToToday()
                 }
                 SidebarNavRowButton(title: "Tasks", icon: "checkmark.square", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .tasks) {
                     state.showSettings = false
