@@ -109,11 +109,13 @@ final class TitlebarCustomizer {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var keyEventMonitor: Any?
+    private let dockIconAnimator = DockIconAnimator()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         TitlebarCustomizer.install()
         installKeyMonitor()
+        dockIconAnimator.play()
         NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeKeyNotification,
             object: nil,
@@ -183,6 +185,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        dockIconAnimator.play()
+        return true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        dockIconAnimator.stop()
     }
 }
 
