@@ -5,8 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 APP_SRC="build/bin/Pata.app"
-if [ ! -d "$APP_SRC" ]; then
-    echo "==> Application bundle not found. Building release bundle first..."
+if [ "${1:-}" != "--skip-build" ] || [ ! -d "$APP_SRC" ]; then
     ./scripts/build_swift_app.sh release
 fi
 
