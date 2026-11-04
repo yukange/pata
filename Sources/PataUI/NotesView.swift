@@ -3,7 +3,6 @@ import AppKit
 import UniformTypeIdentifiers
 import PataCore
 import PataAudio
-import PataKeychain
 import PataEditor
 
 public struct NotesView: View {
@@ -36,6 +35,7 @@ public struct NotesView: View {
     @State private var newTagInput: String = ""
     @State private var showTagPopover: Bool = false
     @State private var isNamingDraft: Bool = false
+    @State private var isHoveringDraftActions = false
     @FocusState private var isTitleFocused: Bool
     @State private var backlinksOpen: Bool = false
     @State private var isEditorFocused: Bool = false
@@ -131,7 +131,7 @@ public struct NotesView: View {
             }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("音频逐字稿生成依赖阿里云百炼 DashScope 语音服务。请先在「设置 - 语音转写」中配置 API Key。")
+            Text(state.asrKeyError ?? "音频逐字稿生成依赖阿里云百炼 DashScope 语音服务。请先在「设置 - 语音转写」中配置 API Key。")
         }
         .alert(
             notePendingDeletion?.draft == true ? "确认删除草稿？" : "确认删除笔记？",
@@ -693,6 +693,9 @@ public struct NotesView: View {
                     },
                     onOpenLink: { target in
                         handleOpenLink(target)
+                    },
+                    isCursorExcluded: { _ in
+                        note.draft && !isNamingDraft && isHoveringDraftActions
                     }
                 )
                 .id(note.id)
@@ -769,19 +772,11 @@ public struct NotesView: View {
                     .buttonStyle(.plain)
 
                     moreMenu(note)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 2)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color(nsColor: .separatorColor).opacity(0.8), lineWidth: 1)
-                        )
                 }
                 .padding(.trailing, 24)
                 .padding(.top, 16)
+                .onHover { isHoveringDraftActions = $0 }
+                .onDisappear { isHoveringDraftActions = false }
             }
         }
         .overlay(alignment: .topLeading) {
@@ -910,10 +905,7 @@ public struct NotesView: View {
             state.savePreferences()
         }
 
-        let apiKey = (try? DefaultKeychainStore.shared.get(
-            service: ASRConstants.keychainService,
-            account: ASRConstants.keychainAccount
-        ))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = state.readASRKey()
 
         guard let key = apiKey, !key.isEmpty else {
             showMissingKeyAlert = true
@@ -962,10 +954,7 @@ public struct NotesView: View {
     private func triggerTranscription(for note: Note, isRetranscribe: Bool) {
         guard let v = state.vault, let audioRelPath = note.audioFile else { return }
 
-        let apiKey = (try? DefaultKeychainStore.shared.get(
-            service: ASRConstants.keychainService,
-            account: ASRConstants.keychainAccount
-        ))?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let apiKey = state.readASRKey()
 
         guard let key = apiKey, !key.isEmpty else {
             showMissingKeyAlert = true

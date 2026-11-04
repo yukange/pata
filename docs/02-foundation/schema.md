@@ -166,6 +166,8 @@ note_refs:
 
 ## Note
 
+Note（含草稿）保存时原样保留正文的末尾空白：不自动补末尾换行，不删除用户已有的换行或空格。Frontmatter 与正文之间的分隔空行不属于正文。
+
 ~~~markdown
 ---
 type: note

@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import PataCore
-import PataKeychain
 import PataAudio
 import PataMCP
 
@@ -500,7 +499,7 @@ public struct SettingsView: View {
                                 .font(.system(size: 13))
                                 .foregroundColor(state.isASRConfigured ? Color(red: 4/255, green: 120/255, blue: 87/255) : .orange)
 
-                            Text(state.isASRConfigured ? "已配置 · 存储于 macOS Keychain" : "未配置 API Key")
+                            Text(state.isASRConfigured ? "已配置 · 保存在本机" : "未配置 API Key")
                                 .font(.system(size: 12))
                                 .foregroundColor(.secondary)
                         }
@@ -517,6 +516,12 @@ public struct SettingsView: View {
                         .padding(.vertical, 4)
                         .background(RoundedRectangle(cornerRadius: 6).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
                     }
+                }
+                if let error = state.asrKeyError {
+                    Text(error)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
                 }
             }
         }
@@ -560,7 +565,12 @@ public struct SettingsView: View {
     private func saveAPIKey() {
         let key = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else { return }
-        try? state.setASRKey(key)
+        do {
+            try state.setASRKey(key)
+        } catch {
+            return
+        }
+        apiKeyInput = ""
         isEditingKey = false
     }
 }

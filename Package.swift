@@ -10,7 +10,6 @@ let package = Package(
     products: [
         .executable(name: "Pata", targets: ["PataApp"]),
         .library(name: "PataCore", targets: ["PataCore"]),
-        .library(name: "PataKeychain", targets: ["PataKeychain"]),
         .library(name: "PataAudio", targets: ["PataAudio"]),
         .library(name: "PataMCP", targets: ["PataMCP"]),
         .library(name: "PataEditor", targets: ["PataEditor"]),
@@ -29,14 +28,9 @@ let package = Package(
             path: "Sources/PataCore"
         ),
         .target(
-            name: "PataKeychain",
-            path: "Sources/PataKeychain"
-        ),
-        .target(
             name: "PataAudio",
             dependencies: [
-                "PataCore",
-                "PataKeychain"
+                "PataCore"
             ],
             path: "Sources/PataAudio"
         ),
@@ -60,7 +54,6 @@ let package = Package(
             name: "PataUI",
             dependencies: [
                 "PataCore",
-                "PataKeychain",
                 "PataAudio",
                 "PataMCP",
                 "PataEditor"
@@ -78,7 +71,6 @@ let package = Package(
             name: "PataTests",
             dependencies: [
                 "PataCore",
-                "PataKeychain",
                 "PataAudio",
                 "PataMCP",
                 "PataEditor",

@@ -17,7 +17,7 @@
 | 7 | [`07-note-links`](07-note-links/) · 笔记引用闭环 | 笔记正文 / 任务描述 / 活动记录统一 `[[` 引用、点击跳转、自动被引用来源 | [idea](07-note-links/idea.md) · [proposal](07-note-links/proposal.md) |
 | 8 | [`08-activity-storage`](08-activity-storage/) · Activity 归属式存储重构 | 统一内嵌 Activity，Task/DayPlan 新格式、删除生命周期、搜索/时间线/链接回归 | [idea](08-activity-storage/idea.md) · [proposal](08-activity-storage/proposal.md) · [Schema](02-foundation/schema.md) |
 | 9 | [`09-vault-files`](09-vault-files/) · 专属 Vault 与统一资源引用 | Vault 目录边界、拖入文件与 `[[` 复用、文件名搜索和系统预览 | [idea](09-vault-files/idea.md) · [proposal](09-vault-files/proposal.md) |
-| 10 | [`10-settings`](10-settings/) · 统一应用设置 | 主窗口单页「外观 / 存储 / 语音转写」，迁移主题与 Vault 管理，Keychain 保存北京地域 API Key | [idea](10-settings/idea.md) · [proposal](10-settings/proposal.md) |
+| 10 | [`10-settings`](10-settings/) · 统一应用设置 | 主窗口单页「外观 / 存储 / 语音转写」，迁移主题与 Vault 管理，Vault 外的本机私有文件保存北京地域 API Key | [idea](10-settings/idea.md) · [proposal](10-settings/proposal.md) |
 | 11 | [`11-audio-transcription`](11-audio-transcription/) · 本地音频转写为 Note | MP3 导入后创建只读逐字稿 Note、句级毫秒时间戳、音频双向定位、确认后重新转写 | [idea](11-audio-transcription/idea.md) · [proposal](11-audio-transcription/proposal.md) |
 | 12 | [`12-frontend-foundation`](12-frontend-foundation/) · 前端基础设施与设计系统整理 | 保留 Pata 现有视觉，按需统一 Design Tokens/基础组件/键盘交互与拖拽体验，系统强调色优先（**已验收**） | [idea](12-frontend-foundation/idea.md) · [proposal](12-frontend-foundation/proposal.md) |
 | 13 | [`13-app-shell-activity`](13-app-shell-activity/) · App Shell 与 Activity 体验统一 | 应用级三栏与可调任务详情、Today/Task 统一 Activity 展示/输入/编辑（**已验收**） | [idea](13-app-shell-activity/idea.md) · [proposal](13-app-shell-activity/proposal.md) · [三栏设计](13-app-shell-activity/app-shell-inspector.md) |

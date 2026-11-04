@@ -194,6 +194,7 @@ public struct PataNoteEditor: View {
     public var onOpenLink: ((String) -> Void)?
     public var listNoteRefs: (() -> [NoteRef])?
     public var listFiles: (() -> [FileResource])?
+    public var isCursorExcluded: ((CGPoint) -> Bool)?
 
     @State private var imageReloadVersion: Int = 0
     @State private var codeBlockSelections: [CodeBlockSelection] = []
@@ -285,7 +286,8 @@ public struct PataNoteEditor: View {
         onTextChange: ((String) -> Void)? = nil,
         onOpenLink: ((String) -> Void)? = nil,
         listNoteRefs: (() -> [NoteRef])? = nil,
-        listFiles: (() -> [FileResource])? = nil
+        listFiles: (() -> [FileResource])? = nil,
+        isCursorExcluded: ((CGPoint) -> Bool)? = nil
     ) {
         self.noteId = noteId
         self._text = text
@@ -299,6 +301,7 @@ public struct PataNoteEditor: View {
         self.onOpenLink = onOpenLink
         self.listNoteRefs = listNoteRefs
         self.listFiles = listFiles
+        self.isCursorExcluded = isCursorExcluded
 
         PataEditorLinkHandler.installSwizzleIfNeeded()
         PataEditorLinkHandler.onSeekAudio = onSeekAudio
@@ -328,8 +331,8 @@ public struct PataNoteEditor: View {
                         .foregroundColor: NSColor.placeholderTextColor
                     ]
                 ),
-                isCursorExcluded: { _ in
-                    isHoveringCopyButton
+                isCursorExcluded: { point in
+                    isHoveringCopyButton || (isCursorExcluded?(point) ?? false)
                 }
             )
 

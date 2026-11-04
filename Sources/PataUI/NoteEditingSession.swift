@@ -62,6 +62,9 @@ public final class NoteEditingSession: ObservableObject {
 
     public func acceptSavedNote(_ note: Note, in vault: Vault) {
         guard isEditing(noteId: note.id, in: vault), !isDirty else { return }
+        // A watcher echo of already-saved bytes is not an external edit. Keep the
+        // editor state intact so the duplicate notification cannot interrupt IME.
+        if let baseline = self.note?.baseline, baseline == note.baseline { return }
         self.note = note
     }
 

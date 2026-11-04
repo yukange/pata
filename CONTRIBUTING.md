@@ -25,6 +25,8 @@ Build the native macOS application:
 ./scripts/build_swift_app.sh
 ```
 
+Local builds default to ad-hoc signing. Set `PATA_SIGNING_IDENTITY` to a certificate name when needed; the installer verifies and preserves the signature. ASR credentials use a private local file outside the Vault, independent of code signing.
+
 Run the unit tests:
 
 ```bash
@@ -81,8 +83,7 @@ Keep comments focused on behavior and non-obvious constraints. Review the projec
 Place new files in the relevant SwiftPM target under `Sources/`:
 - `PataCore`: Business models, schema, vault file storage, links, indexing, search.
 - `PataEditor`: AppKit/TextKit note editor.
-- `PataAudio`: Qwen ASR client, audio player, transcript models.
-- `PataKeychain`: macOS Keychain integration.
+- `PataAudio`: Qwen ASR client, audio player, transcript models and local credential storage.
 - `PataMCP`: Local JSON-RPC 2.0 MCP server.
 - `PataUI`: SwiftUI views and view models.
 - `PataApp`: App entry point and system commands.

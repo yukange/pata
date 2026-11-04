@@ -63,7 +63,7 @@ vault/
 
 备份时保留整个文件夹，包括 `plans/` 和 `files/`。笔记可在其他 Markdown 工具中阅读；任务和日计划包含结构化数据，日常操作通过 Pata 完成。
 
-任务和笔记可离线使用。可选的音频转写会将所选录音发送到阿里云百炼，需要自备 API Key，密钥保存在 macOS Keychain。外部 Agent 如何处理数据，取决于你接入的客户端和模型。
+任务和笔记可离线使用。可选的音频转写会将所选录音发送到阿里云百炼，需要自备 API Key，密钥保存在 Vault 外的本机私有文件 `~/Library/Application Support/pata/asr.json`（权限 `0600`）。外部 Agent 如何处理数据，取决于你接入的客户端和模型。
 
 ### 从源码运行
 
@@ -74,6 +74,8 @@ git clone https://github.com/yukange/pata.git
 cd pata
 ./scripts/build_swift_app.sh
 ```
+
+本机构建默认使用 ad-hoc 签名，可用 `PATA_SIGNING_IDENTITY` 指定证书名称；安装保留构建签名，正式分发仍须 Developer ID 签名和公证。ASR 不再访问钥匙串：从旧版切换后，在设置里重新保存一次 API Key；旧钥匙串条目保留不动。
 
 运行单元测试：
 

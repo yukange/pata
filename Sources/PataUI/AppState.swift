@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import PataCore
-import PataKeychain
 import PataAudio
 import PataMCP
 
@@ -82,8 +81,10 @@ public final class AppState: ObservableObject {
     // MCP
     @Published public var mcpStatus: MCPStatus = MCPStatus()
 
-    // Audio & Keychain
+    // Audio credentials
     @Published public var isASRConfigured: Bool = false
+    @Published public private(set) var asrKeyError: String?
+    private let asrCredentials: ASRCredentialStore
 
     // App Preferences
     @Published public var themePreference: String = "system" // "system", "light", "dark"
@@ -122,7 +123,9 @@ public final class AppState: ObservableObject {
     private var savePreferencesWorkItem: DispatchWorkItem? = nil
     private let preferencesSaveQueue = DispatchQueue(label: "com.pata.preferences-io", qos: .utility)
 
-    public init(loadPreferences: Bool = true, watchDayRollover: Bool = true) {
+    public init(loadPreferences: Bool = true, watchDayRollover: Bool = true,
+                asrCredentials: ASRCredentialStore = .shared) {
+        self.asrCredentials = asrCredentials
         MCPServer.shared.onStatusChange = { [weak self] status in
             DispatchQueue.main.async {
                 self?.mcpStatus = status
@@ -281,24 +284,31 @@ public final class AppState: ObservableObject {
             self.isASRConfigured = true
             return
         }
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let key = try? DefaultKeychainStore.shared.get(
-                service: ASRConstants.keychainService,
-                account: ASRConstants.keychainAccount
-            )
-            DispatchQueue.main.async {
-                self?.isASRConfigured = (key != nil && !(key?.isEmpty ?? true))
-            }
-        }
+        _ = readASRKey()
     }
 
     public func setASRKey(_ key: String) throws {
-        try DefaultKeychainStore.shared.set(
-            service: ASRConstants.keychainService,
-            account: ASRConstants.keychainAccount,
-            secret: key
-        )
-        checkASRKey()
+        do {
+            try asrCredentials.save(key)
+            isASRConfigured = true
+            asrKeyError = nil
+        } catch {
+            asrKeyError = "保存 API Key 失败：\(error.localizedDescription)"
+            throw error
+        }
+    }
+
+    public func readASRKey() -> String? {
+        do {
+            let key = try asrCredentials.load()
+            isASRConfigured = key != nil
+            asrKeyError = nil
+            return key
+        } catch {
+            isASRConfigured = false
+            asrKeyError = "读取 API Key 失败：\(error.localizedDescription)"
+            return nil
+        }
     }
 
     // Inspector Control

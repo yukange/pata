@@ -19,7 +19,7 @@
 - 本机 MCP 功能见 [阶段 10](docs/10-settings/proposal.md#mcp)。CLI 和内置 AI 仍不在当前范围。
 - 阶段 8 的 DayPlan **目标路径**为根 `plans/`（须备份）；阶段 9 的 `files/` 亦为用户数据、不可当缓存清理。
 - 阶段 9 仅在 Today/Task Activity 与 Note 中导入、引用文件，`[[` 候选同时支持 Note 与 File；原生预览、按文件名搜索，不做 Files 导航、File 实体或自动清理。
-- **阶段 10（已完成）**：主窗口单页设置包含「外观 / 存储 / 语音转写」；侧边栏底部主题三按钮与 Vault 配置菜单收敛为单个设置齿轮。主题三态迁入设置并持久化；Vault 更换/重扫/Finder 打开迁入设置，但首次缺 Vault 仍直接引导、健康异常仍在主界面可见。API Key 存 macOS Keychain，地域固定北京、模型固定 `qwen-audio-3.1-asr-flash-filetrans`；不做地域/供应商/模型选择。文档见 [10 proposal](docs/10-settings/proposal.md)。
+- **阶段 10（已完成）**：主窗口单页设置包含「外观 / 存储 / 语音转写」；侧边栏底部主题三按钮与 Vault 配置菜单收敛为单个设置齿轮。主题三态迁入设置并持久化；Vault 更换/重扫/Finder 打开迁入设置，但首次缺 Vault 仍直接引导、健康异常仍在主界面可见。API Key 存 Vault 外的 `~/Library/Application Support/pata/asr.json`（目录 `0700`、文件 `0600`，原子写入），地域固定北京、模型固定 `qwen-audio-3.1-asr-flash-filetrans`；不做地域/供应商/模型选择。文档见 [10 proposal](docs/10-settings/proposal.md)。
 - **阶段 11（已完成）**：在 Notes 从 MP3 创建存储格式为普通 Markdown Note、**正文在 Pata 内只读**的逐字稿；原 MP3 存 `files/`，导入后立即建 Note，标题/标签可编辑，逐字稿可选择/复制/搜索。支持毫秒时间戳、说话人、顶部播放器、时间戳点击跳播、拖动结束定位逐字稿、确认后替换旧逐字稿；普通 Note 即便含 MP3 也保持可编辑。不做专用 Transcript 类型、JSON 侧车、会议摘要或多供应商。文档见 [11 proposal](docs/11-audio-transcription/proposal.md)。
 
 ## 产品不可破坏的规则
@@ -40,9 +40,9 @@
 ## 阶段 17 · 纯 Swift 原生重构（主体完成，更新与正式发布待完成）
 
 - 目标与验收单一入口：[017 idea](docs/17-swift-native-rewrite/idea.md) / [017 proposal](docs/17-swift-native-rewrite/proposal.md)。**已全量迁移为纯 Swift 原生应用，旧版 Go / Wails / React 栈已退出维护并移除**。
-- 架构全面采用 SwiftUI/AppKit + Swift Core（PataCore、PataEditor、PataAudio、PataKeychain、PataMCP、PataUI、PataApp），以 SwiftPM 构建管理。
+- 架构全面采用 SwiftUI/AppKit + Swift Core（PataCore、PataEditor、PataAudio、PataMCP、PataUI、PataApp），以 SwiftPM 构建管理。
 - [schema.md](docs/02-foundation/schema.md) 仍是唯一生效存储协议。**Note 正文**使用标准 Markdown 相对链接；**Task/Activity** 内 `[[名称]]` 为纯文本且通过本作用域 `note_refs` 绑定 ID。
-- 保留 MCP Tools/Task URI、Agent 来源、MP3 逐字稿/Keychain 以及草稿/文件冲突保护。原生应用内更新尚未恢复，无效更新开关已移除；CI 仅上传开发产物，正式发布须另经 Developer ID 签名、公证和 Gatekeeper 验证。
+- 保留 MCP Tools/Task URI、Agent 来源、MP3 逐字稿/本机密钥文件 以及草稿/文件冲突保护。原生应用内更新尚未恢复，无效更新开关已移除；CI 仅上传开发产物，正式发布须另经 Developer ID 签名、公证和 Gatekeeper 验证。
 - 自动化测试与构建单一入口为 `swift test` 与 `scripts/build_swift_app.sh`。
 ## 前端工程约束（阶段 12）
 

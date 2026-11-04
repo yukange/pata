@@ -5,6 +5,26 @@ import Yams
 
 @Suite("Frontmatter Tests")
 struct FrontmatterTests {
+    @Test(arguments: [true, false], ["", "正文", "正文\n", "正文\n\n", "\n", "\n\n", "正文  "])
+    func noteBodyWhitespaceRoundtrip(draft: Bool, body: String) throws {
+        let note = Note(id: "n-01roundtrip", draft: draft, title: draft ? "" : "笔记", body: body)
+        let markdown = try Frontmatter.serializeMarkdown(note)
+        #expect(try Frontmatter.splitFrontmatter(markdown).body == body)
+        #expect(try Frontmatter.parseMarkdown(content: markdown).body == body)
+    }
+
+    @Test(arguments: [true, false])
+    func repeatedNoteSavesPreserveBody(draft: Bool) throws {
+        let fixture = try AuditVaultFixture()
+        let note = try fixture.vault.createNote(title: draft ? "" : "笔记", body: "中文正文", draft: draft)
+        for _ in 0..<3 {
+            let current = try #require(fixture.vault.index.getNote(note.id))
+            _ = try fixture.vault.updateNote(current)
+            try fixture.vault.rescan()
+            #expect(fixture.vault.index.getNote(note.id)?.body == "中文正文")
+        }
+    }
+
     @Test("Task roundtrip serialization and deserialization")
     func taskRoundtrip() throws {
         let task = Task(

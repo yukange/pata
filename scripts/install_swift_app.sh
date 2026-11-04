@@ -9,6 +9,8 @@ if [ "${1:-}" != "--skip-build" ] || [ ! -d "$APP_SRC" ]; then
     ./scripts/build_swift_app.sh release
 fi
 
+codesign --verify --deep --strict "$APP_SRC"
+
 echo "==> Stopping running pata instances..."
 killall pata 2>/dev/null || true
 sleep 0.5
@@ -18,8 +20,7 @@ echo "==> Installing to $DEST..."
 rm -rf "$DEST" "/Applications/pata.app"
 cp -R "$APP_SRC" "$DEST"
 
-echo "==> Signing installed app bundle..."
-codesign --force --deep --sign - "$DEST"
+echo "==> Verifying preserved app signature..."
 codesign --verify --deep --strict "$DEST"
 
 echo "==> Registering with macOS LaunchServices..."

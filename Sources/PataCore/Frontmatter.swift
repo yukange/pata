@@ -444,7 +444,7 @@ public struct Frontmatter {
 
         if !finalBody.isEmpty {
             result.append("\n\(finalBody)")
-            if !finalBody.hasSuffix("\n") {
+            if entity.type != .note && !finalBody.hasSuffix("\n") {
                 result.append("\n")
             }
         }

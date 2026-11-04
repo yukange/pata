@@ -5,6 +5,11 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 CONFIG="${1:-release}"
+SIGNING_IDENTITY="${PATA_SIGNING_IDENTITY:--}"
+if [ "$SIGNING_IDENTITY" != "-" ] && ! security find-identity -v -p codesigning | grep -Fq "\"$SIGNING_IDENTITY\""; then
+    echo "Error: signing identity '$SIGNING_IDENTITY' not found. Set PATA_SIGNING_IDENTITY to an available certificate name."
+    exit 1
+fi
 echo "==> Building Pata Native macOS App with Swift ($CONFIG mode)..."
 
 DEV_DIR="$(xcode-select -p 2>/dev/null || echo "")"
@@ -64,8 +69,8 @@ for bundle in "$BIN_DIR"/*.bundle; do
 done
 shopt -u nullglob
 
-echo "==> Ad-hoc signing App Bundle..."
-codesign --force --deep --sign - "$APP_DIR"
+echo "==> Signing App Bundle with $SIGNING_IDENTITY..."
+codesign --force --deep --sign "$SIGNING_IDENTITY" "$APP_DIR"
 codesign --verify --deep --strict "$APP_DIR"
 
 echo "==> Done! App bundle successfully built at $APP_DIR ($(du -sh "$APP_DIR" | cut -f1))"

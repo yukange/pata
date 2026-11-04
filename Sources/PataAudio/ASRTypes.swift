@@ -6,8 +6,6 @@ public struct ASRConstants {
     public static let defaultRegion = "华北2（北京）"
     public static let defaultBaseURL = "https://dashscope.aliyuncs.com"
 
-    public static let keychainService = "pata.asr"
-    public static let keychainAccount = "aliyun_bailian_api_key"
 }
 
 public struct ASRSentence: Codable, Sendable, Equatable {

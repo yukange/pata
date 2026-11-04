@@ -63,7 +63,7 @@ vault/
 
 Back up the whole folder, including `plans/` and `files/`. Notes remain readable in other Markdown tools; use Pata to manage the structured task and day-plan files.
 
-Tasks and notes work offline. Optional audio transcription sends the selected recording to Alibaba Cloud Bailian and requires your own API key, stored in macOS Keychain. An external agent's data handling depends on the client and model you connect.
+Tasks and notes work offline. Optional audio transcription sends the selected recording to Alibaba Cloud Bailian and requires your own API key, stored in a private local file outside your Vault (`~/Library/Application Support/pata/asr.json`, mode `0600`). An external agent's data handling depends on the client and model you connect.
 
 ### Run from source
 
@@ -74,6 +74,8 @@ git clone https://github.com/yukange/pata.git
 cd pata
 ./scripts/build_swift_app.sh
 ```
+
+Local builds use ad-hoc signing by default. Set `PATA_SIGNING_IDENTITY` to a certificate name to override it. Installation preserves the build's signature; official distribution still requires Developer ID signing and notarization. ASR no longer reads Keychain: after switching from an older build, save your API key once in Settings. The old Keychain entry is left untouched.
 
 Run tests:
 ```bash
