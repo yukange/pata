@@ -14,7 +14,6 @@ public struct NotesView: View {
     @State private var isNotesCollapsed: Bool = false
     @State private var isDividerHovered: Bool = false
     @State private var isDividerDragging: Bool = false
-    @State private var hasPushedCursor: Bool = false
     @State private var dragStartWidth: CGFloat? = nil
     @State private var isAudioNote: Bool = false
     @State private var showMissingKeyAlert: Bool = false
@@ -103,6 +102,7 @@ public struct NotesView: View {
             .background(Color(nsColor: .textBackgroundColor))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .coordinateSpace(.named(Self.splitSpace))
         .onAppear {
             syncCurrentNoteState()
         }
@@ -112,10 +112,6 @@ public struct NotesView: View {
         .onDisappear {
             editor.save()
             AudioPlayerManager.shared.stop()
-            if hasPushedCursor {
-                NSCursor.pop()
-                hasPushedCursor = false
-            }
         }
         .confirmationDialog("放弃未保存的本地修改？", isPresented: $showReloadConfirmation) {
             Button("放弃修改并重新载入", role: .destructive) { editor.reload() }
@@ -843,6 +839,8 @@ public struct NotesView: View {
 
     // MARK: - Resizer Divider Handle
 
+    private static let splitSpace = "notesSplit"
+
     private var dividerHandle: some View {
         Rectangle()
             .fill(
@@ -851,48 +849,38 @@ public struct NotesView: View {
                     : Color(nsColor: .separatorColor).opacity(0.6)
             )
             .frame(width: 1)
-            .overlay(
+            // 用 overlay 撑命中区：改 padding 会占布局，分隔条会变成三条线
+            .overlay {
                 Color.clear
                     .frame(width: 8)
                     .contentShape(Rectangle())
-            )
-        .onHover { hovering in
-            isDividerHovered = hovering
-            if hovering && !hasPushedCursor {
-                NSCursor.resizeLeftRight.push()
-                hasPushedCursor = true
-            } else if !hovering && hasPushedCursor && !isDividerDragging {
-                NSCursor.pop()
-                hasPushedCursor = false
             }
-        }
-        .gesture(
-            DragGesture(minimumDistance: 1)
-                .onChanged { value in
-                    isDividerDragging = true
-                    if dragStartWidth == nil {
-                        dragStartWidth = state.notesListWidth
+            .onHover { hovering in
+                isDividerHovered = hovering
+                (hovering ? NSCursor.resizeLeftRight : NSCursor.arrow).set()
+            }
+            .gesture(
+                // 取父坐标系位移：.local 随手柄自身移动，位移反馈回自己会抖动
+                DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.splitSpace))
+                    .onChanged { value in
+                        isDividerDragging = true
+                        let base = dragStartWidth ?? state.notesListWidth
+                        dragStartWidth = base
+                        let target = base + (value.location.x - value.startLocation.x)
+                        state.notesListWidth = min(max(target, 200), 500)
                     }
-                    let base = dragStartWidth ?? state.notesListWidth
-                    let target = base + value.translation.width
-                    state.notesListWidth = min(max(target, 200), 500)
-                }
-                .onEnded { _ in
-                    isDividerDragging = false
-                    dragStartWidth = nil
-                    if !isDividerHovered && hasPushedCursor {
-                        NSCursor.pop()
-                        hasPushedCursor = false
+                    .onEnded { _ in
+                        isDividerDragging = false
+                        dragStartWidth = nil
+                        state.savePreferences()
                     }
+            )
+            .onTapGesture(count: 2) {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    state.notesListWidth = 280
                     state.savePreferences()
                 }
-        )
-        .onTapGesture(count: 2) {
-            withAnimation(.easeInOut(duration: 0.15)) {
-                state.notesListWidth = 280
-                state.savePreferences()
             }
-        }
     }
 
     // MARK: - Actions
