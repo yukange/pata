@@ -71,18 +71,25 @@ struct AutoSizingTextViewRepresentable: NSViewRepresentable {
         scrollView.textView.onEscape = { [weak scrollView] in
             scrollView?.window?.makeFirstResponder(nil)
         }
+        // 高度随宽度变化（换行数变了），宽度只在 layout 里才能得知
+        scrollView.onWidthChange = { [weak scrollView, weak coordinator = context.coordinator] in
+            guard let scrollView, let coordinator else { return }
+            coordinator.updateHeight(for: scrollView)
+        }
         scrollView.textView.string = text
         context.coordinator.updateHeight(for: scrollView)
         return scrollView
     }
 
     func updateNSView(_ scrollView: DescriptionScrollView, context: Context) {
+        context.coordinator.parent = self
         scrollView.textView.placeholderText = placeholder
-        if scrollView.textView.string != text {
+        // 组字中不要用绑定值覆盖：输入法未上屏的内容只在 NSTextView 里，覆盖会直接打断输入
+        if !scrollView.textView.hasMarkedText(), scrollView.textView.string != text {
             scrollView.textView.string = text
             scrollView.textView.needsDisplay = true
-            context.coordinator.updateHeight(for: scrollView)
         }
+        context.coordinator.updateHeight(for: scrollView)
     }
 
     @MainActor
@@ -99,10 +106,10 @@ struct AutoSizingTextViewRepresentable: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
+            // 拼音/候选未上屏，不写回绑定，避免半成品被自保存
+            guard !tv.hasMarkedText(), let scrollView = tv.enclosingScrollView as? DescriptionScrollView else { return }
+            updateHeight(for: scrollView)
             let newText = tv.string
-            if let scrollView = tv.enclosingScrollView as? DescriptionScrollView {
-                updateHeight(for: scrollView)
-            }
             self.parent.text = newText
             self.parent.onTextChange?(newText)
         }
@@ -114,7 +121,10 @@ struct AutoSizingTextViewRepresentable: NSViewRepresentable {
 
         func updateHeight(for scrollView: DescriptionScrollView) {
             let finalHeight = scrollView.calculateHeight(minHeight: parent.minHeight)
-            if abs(parent.contentHeight - finalHeight) > 1.0 {
+            guard abs(parent.contentHeight - finalHeight) > 1.0 else { return }
+            // 在 SwiftUI 更新循环内直接写 @State 会被丢弃（外部载入多行描述时高度就不展开）
+            DispatchQueue.main.async { [weak self] in
+                guard let self, abs(self.parent.contentHeight - finalHeight) > 1.0 else { return }
                 self.parent.contentHeight = finalHeight
             }
         }
@@ -125,6 +135,10 @@ struct AutoSizingTextViewRepresentable: NSViewRepresentable {
 
 public final class DescriptionScrollView: NSScrollView {
     public let textView = DescriptionNSTextView()
+
+    /// 宽度变化（换行数变化）时回调，用于重新测量高度
+    public var onWidthChange: (() -> Void)?
+    private var lastLayoutWidth: CGFloat = -1
 
     public init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 200, height: 22))
@@ -141,6 +155,13 @@ public final class DescriptionScrollView: NSScrollView {
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    public override func layout() {
+        super.layout()
+        guard abs(bounds.width - lastLayoutWidth) > 0.5 else { return }
+        lastLayoutWidth = bounds.width
+        onWidthChange?()
     }
 
     public override func mouseDown(with event: NSEvent) {

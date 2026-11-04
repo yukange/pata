@@ -67,6 +67,53 @@ struct DescriptionEditorTests {
         #expect(multiLineHeight > singleLineHeight * 2)
     }
 
+    @Test("Test DescriptionScrollView re-measures height on width change")
+    @MainActor
+    func testDescriptionHeightRemeasureOnWidthChange() {
+        let scrollView = DescriptionScrollView()
+        var remeasureCount = 0
+        scrollView.onWidthChange = { remeasureCount += 1 }
+
+        scrollView.frame = NSRect(x: 0, y: 0, width: 300, height: 22)
+        scrollView.layoutSubtreeIfNeeded()
+        #expect(remeasureCount >= 1)
+
+        let afterFirstLayout = remeasureCount
+        scrollView.layoutSubtreeIfNeeded()
+        #expect(remeasureCount == afterFirstLayout)
+    }
+
+    @Test("Test description editor keeps IME marked text out of the binding until commit")
+    @MainActor
+    func testDescriptionIMEMarkedTextNotCommitted() {
+        final class Box { var text = "" }
+        let box = Box()
+        let scrollView = DescriptionScrollView()
+        let tv = scrollView.textView
+
+        let representable = AutoSizingTextViewRepresentable(
+            text: Binding(get: { box.text }, set: { box.text = $0 }),
+            placeholder: "",
+            isFocused: .constant(false),
+            contentHeight: .constant(22),
+            minHeight: 22,
+            maxHeight: 180
+        )
+        let coordinator = AutoSizingTextViewRepresentable.Coordinator(representable)
+
+        // 1. 拼音组字中：拼音不能写回绑定
+        tv.setMarkedText("nihao", selectedRange: NSRange(location: 5, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        #expect(tv.hasMarkedText())
+        coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: tv))
+        #expect(box.text == "")
+
+        // 2. 上屏后：写回绑定
+        tv.insertText("你好", replacementRange: tv.markedRange())
+        #expect(!tv.hasMarkedText())
+        coordinator.textDidChange(Notification(name: NSText.didChangeNotification, object: tv))
+        #expect(box.text == "你好")
+    }
+
     @Test("Test auto save lifecycle on task switch and flush")
     @MainActor
     func testAutoSaveLifecycleOnTaskSwitch() throws {
