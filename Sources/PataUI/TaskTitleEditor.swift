@@ -82,7 +82,7 @@ struct TitleTextViewRepresentable: NSViewRepresentable {
         if textView.isDone != isDone {
             textView.isDone = isDone
         }
-        if textView.string != text {
+        if !textView.hasMarkedText(), textView.string != text {
             textView.string = text
             textView.updateTextColor()
             textView.needsDisplay = true
@@ -104,6 +104,8 @@ struct TitleTextViewRepresentable: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? TitleNSTextView else { return }
+            // 组字中不写回绑定：拼音未上屏，写了会覆盖输入法内容、也会被自动保存
+            guard !tv.hasMarkedText() else { return }
             let raw = tv.string
             // Sanitize newlines to preserve single-line semantic
             let sanitized = raw.replacingOccurrences(of: "\r\n", with: " ")

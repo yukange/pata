@@ -133,7 +133,7 @@ struct CommentTextViewRepresentable: NSViewRepresentable {
         if scrollView.textView.fontSize != fontSize {
             scrollView.textView.fontSize = fontSize
         }
-        if scrollView.textView.string != text {
+        if !scrollView.textView.hasMarkedText(), scrollView.textView.string != text {
             scrollView.textView.string = text
             scrollView.textView.needsDisplay = true
         }
@@ -149,6 +149,8 @@ struct CommentTextViewRepresentable: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let tv = notification.object as? NSTextView else { return }
+            // 组字中不写回绑定：拼音未上屏
+            guard !tv.hasMarkedText() else { return }
             self.parent.text = tv.string
         }
     }
