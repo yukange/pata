@@ -97,17 +97,6 @@ public struct ActivityParser {
                         }
                     }
 
-                    var tags: [String] = []
-                    if let rawTags = loaded["tags"] as? [Any] {
-                        for (idx, t) in rawTags.enumerated() {
-                            let tagStr = String(describing: t)
-                            if tagStr.contains("#") {
-                                throw SchemaError.validationError(field: "activities.tags[\(idx)]", reason: "activity \(id) tag must not contain '#': '\(tagStr)'")
-                            }
-                            tags.append(tagStr)
-                        }
-                    }
-
                     var noteRefs: [String: String] = [:]
                     if let rawRefs = loaded["note_refs"] as? [String: Any] {
                         for (k, v) in rawRefs {
@@ -141,7 +130,6 @@ public struct ActivityParser {
                         id: id,
                         at: at,
                         by: by,
-                        tags: tags,
                         noteRefs: noteRefs,
                         body: unescapedBody.joined(separator: "\n"),
                         extra: extra
@@ -177,9 +165,6 @@ public struct ActivityParser {
             ]
             if let by = act.by, !by.isEmpty {
                 metaDict["by"] = by
-            }
-            if !act.tags.isEmpty {
-                metaDict["tags"] = act.tags
             }
             if !act.noteRefs.isEmpty {
                 metaDict["note_refs"] = act.noteRefs

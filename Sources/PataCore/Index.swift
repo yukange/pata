@@ -6,7 +6,6 @@ public struct EntityRef: Codable, Sendable, Identifiable, Equatable {
     public var id: String
     public var title: String?
     public var path: String
-    public var inherited: Bool
     public var time: Date
     public var status: TaskStatus?
     public var snippet: String?
@@ -17,7 +16,6 @@ public struct EntityRef: Codable, Sendable, Identifiable, Equatable {
         id: String,
         title: String? = nil,
         path: String,
-        inherited: Bool = false,
         time: Date,
         status: TaskStatus? = nil,
         snippet: String? = nil,
@@ -27,7 +25,6 @@ public struct EntityRef: Codable, Sendable, Identifiable, Equatable {
         self.id = id
         self.title = title
         self.path = path
-        self.inherited = inherited
         self.time = time
         self.status = status
         self.snippet = snippet
@@ -80,14 +77,12 @@ public struct TagSummary: Codable, Sendable, Identifiable, Equatable {
     public var name: String
     public var taskCount: Int
     public var noteCount: Int
-    public var activityCount: Int
     public var totalCount: Int
 
-    public init(name: String, taskCount: Int, noteCount: Int, activityCount: Int, totalCount: Int) {
+    public init(name: String, taskCount: Int, noteCount: Int, totalCount: Int) {
         self.name = name
         self.taskCount = taskCount
         self.noteCount = noteCount
-        self.activityCount = activityCount
         self.totalCount = totalCount
     }
 }
@@ -243,7 +238,6 @@ public final class MemoryIndex: @unchecked Sendable {
         var displayCase: [String: String] = [:]
         var taskSets: [String: Set<String>] = [:]
         var noteSets: [String: Set<String>] = [:]
-        var actSets: [String: Set<String>] = [:]
 
         // Tasks
         for (tid, task) in tasks {
@@ -251,21 +245,6 @@ public final class MemoryIndex: @unchecked Sendable {
                 let lower = tag.lowercased()
                 if displayCase[lower] == nil { displayCase[lower] = tag }
                 taskSets[lower, default: []].insert(tid)
-            }
-            // Task activities inherit task tags
-            for act in task.activities {
-                var effective = Set(act.tags.map { $0.lowercased() })
-                for t in task.tags {
-                    effective.insert(t.lowercased())
-                }
-                for lower in effective {
-                    if displayCase[lower] == nil {
-                        if let orig = act.tags.first(where: { $0.lowercased() == lower }) ?? task.tags.first(where: { $0.lowercased() == lower }) {
-                            displayCase[lower] = orig
-                        }
-                    }
-                    actSets[lower, default: []].insert(act.id)
-                }
             }
         }
 
@@ -278,29 +257,16 @@ public final class MemoryIndex: @unchecked Sendable {
             }
         }
 
-        // Today activities
-        for (_, plan) in dayPlans {
-            for act in plan.activities {
-                for tag in act.tags {
-                    let lower = tag.lowercased()
-                    if displayCase[lower] == nil { displayCase[lower] = tag }
-                    actSets[lower, default: []].insert(act.id)
-                }
-            }
-        }
-
         var summaries: [TagSummary] = []
         for (lower, name) in displayCase {
             let tCount = taskSets[lower]?.count ?? 0
             let nCount = noteSets[lower]?.count ?? 0
-            let aCount = actSets[lower]?.count ?? 0
-            let total = tCount + nCount + aCount
+            let total = tCount + nCount
             if total > 0 {
                 summaries.append(TagSummary(
                     name: name,
                     taskCount: tCount,
                     noteCount: nCount,
-                    activityCount: aCount,
                     totalCount: total
                 ))
             }
@@ -340,24 +306,6 @@ public final class MemoryIndex: @unchecked Sendable {
                     snippet: task.description
                 ))
             }
-
-            // Task Activities
-            let taskHasTag = task.tags.contains(where: { $0.lowercased() == target })
-            for act in task.activities {
-                let actHasTag = act.tags.contains(where: { $0.lowercased() == target })
-                if target == nil || actHasTag || taskHasTag {
-                    results.append(EntityRef(
-                        type: .activity,
-                        id: act.id,
-                        title: task.title,
-                        path: relPath(path),
-                        inherited: target != nil && !actHasTag && taskHasTag,
-                        time: act.at,
-                        snippet: act.body,
-                        taskId: tid
-                    ))
-                }
-            }
         }
 
         // Notes
@@ -372,23 +320,6 @@ public final class MemoryIndex: @unchecked Sendable {
                     time: note.updatedAt,
                     snippet: note.body
                 ))
-            }
-        }
-
-        // Today Activities
-        for (_, plan) in dayPlans {
-            let path = idToFile[plan.date] ?? ""
-            for act in plan.activities {
-                if target == nil || act.tags.contains(where: { $0.lowercased() == target }) {
-                    results.append(EntityRef(
-                        type: .activity,
-                        id: act.id,
-                        title: nil,
-                        path: relPath(path),
-                        time: act.at,
-                        snippet: act.body
-                    ))
-                }
             }
         }
 

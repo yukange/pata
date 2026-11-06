@@ -65,14 +65,6 @@ public struct AppShell: View {
         }
     }
 
-    private var allTagsWithCounts: [(tag: String, count: Int)] {
-        guard let v = state.vault else { return [] }
-        return v.index.listTags().map { t in
-            let c = v.index.findByTag(t.name).count
-            return (tag: t.name, count: c)
-        }.sorted { $0.tag.localizedStandardCompare($1.tag) == .orderedAscending }
-    }
-
     public var body: some View {
         ZStack {
             if state.vault == nil {
@@ -312,53 +304,13 @@ public struct AppShell: View {
                     state.showSettings = false
                     state.currentNav = .notes
                 }
+                SidebarNavRowButton(title: "Tags", icon: "number", accentColor: state.effectiveAccentColor, isSelected: !state.showSettings && state.currentNav == .tags) {
+                    state.showSettings = false
+                    state.currentNav = .tags
+                }
             }
             .padding(.horizontal, 8)
             .padding(.top, 4)
-
-            // Global Tags Section
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text("全局标签")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(allTagsWithCounts.count)")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 16)
-                .padding(.bottom, 4)
-
-                ScrollView {
-                    VStack(spacing: 1) {
-                        // All virtual tag
-                        SidebarTagRowButton(
-                            tag: "全部",
-                            count: nil,
-                            isSelected: !state.showSettings && state.currentNav == .tags && state.selectedTag == nil
-                        ) {
-                            state.showSettings = false
-                            state.currentNav = .tags
-                            state.selectedTag = nil
-                        }
-
-                        ForEach(allTagsWithCounts, id: \.tag) { item in
-                            SidebarTagRowButton(
-                                tag: item.tag,
-                                count: item.count,
-                                isSelected: !state.showSettings && state.currentNav == .tags && state.selectedTag?.caseInsensitiveCompare(item.tag) == .orderedSame
-                            ) {
-                                state.showSettings = false
-                                state.currentNav = .tags
-                                state.selectedTag = item.tag
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                }
-            }
 
             Spacer()
 
@@ -467,6 +419,36 @@ public struct SidebarToggleButton: View {
             isHovered = hovering
         }
         .help(collapsed ? "展开侧栏 (⌃⌘S)" : "收起侧栏 (⌃⌘S)")
+    }
+}
+
+public struct ListSidebarToggleButton: View {
+    let collapsed: Bool
+    let listName: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    public init(collapsed: Bool, listName: String, action: @escaping () -> Void) {
+        self.collapsed = collapsed
+        self.listName = listName
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isHovered ? .primary : .secondary)
+                .frame(width: 24, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(collapsed ? "展开\(listName)" : "收起\(listName)")
     }
 }
 
@@ -591,44 +573,6 @@ struct SidebarNavRowButton: View {
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isSelected ? accentColor : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovered = hovering
-        }
-    }
-}
-
-struct SidebarTagRowButton: View {
-    let tag: String
-    let count: Int?
-    let isSelected: Bool
-    let action: () -> Void
-    @State private var isHovered = false
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Text("#")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-                Text(tag)
-                    .font(.system(size: 13))
-                    .foregroundColor(isSelected ? .primary : .secondary)
-                Spacer()
-                if let c = count {
-                    Text("\(c)")
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.horizontal, 10)
-            .frame(height: 28)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.primary.opacity(0.08) : (isHovered ? Color.primary.opacity(0.04) : Color.black.opacity(0.0001)))
             )
             .contentShape(Rectangle())
         }

@@ -451,8 +451,7 @@ public final class MCPServer: @unchecked Sendable {
                         "properties": [
                             "task_id": ["type": "string"],
                             "date": ["type": "string"],
-                            "body": ["type": "string"],
-                            "tags": ["type": "array", "items": ["type": "string"]]
+                            "body": ["type": "string"]
                         ],
                         "required": ["body"]
                     ]
@@ -629,8 +628,7 @@ public final class MCPServer: @unchecked Sendable {
             let taskId = args["task_id"] as? String
             let date = args["date"] as? String
             let body = try requiredString("body", in: args)
-            let tags = (args["tags"] as? [String]) ?? []
-            let act = try vault.createActivity(taskId: taskId, date: date, body: body, tags: tags, source: SourceAgent)
+            let act = try vault.createActivity(taskId: taskId, date: date, body: body, source: SourceAgent)
             return try encodeData(act)
 
         case "pata_set_task_status":

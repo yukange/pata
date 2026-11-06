@@ -42,7 +42,6 @@ public struct Activity: Codable, Sendable, Identifiable, Equatable {
     public var id: String
     public var at: Date
     public var by: String?
-    public var tags: [String]
     public var noteRefs: [String: String]
     public var body: String
     public var taskId: String?
@@ -52,7 +51,6 @@ public struct Activity: Codable, Sendable, Identifiable, Equatable {
         id: String,
         at: Date,
         by: String? = nil,
-        tags: [String] = [],
         noteRefs: [String: String] = [:],
         body: String = "",
         taskId: String? = nil,
@@ -61,7 +59,6 @@ public struct Activity: Codable, Sendable, Identifiable, Equatable {
         self.id = id
         self.at = at
         self.by = by
-        self.tags = tags
         self.noteRefs = noteRefs
         self.body = body
         self.taskId = taskId

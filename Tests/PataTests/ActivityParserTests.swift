@@ -25,11 +25,11 @@ struct ActivityParserTests {
         let act = acts[0]
         #expect(act.id == "a-01test")
         #expect(act.by == SourceAgent)
-        #expect(act.tags == ["设计"])
         #expect(act.noteRefs["技术方案"] == "n-002")
         #expect(act.body == "完成基础设计，参考 [[技术方案]]。")
 
         let formatted = try ActivityParser.formatActivities(acts)
+        #expect(!formatted.contains("tags:"))
         let reParsed = try ActivityParser.parseActivities(formatted)
         #expect(reParsed.count == 1)
         #expect(reParsed[0].id == act.id)

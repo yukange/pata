@@ -12,9 +12,6 @@ public struct NotesView: View {
 
     @State private var isDraftsCollapsed: Bool = false
     @State private var isNotesCollapsed: Bool = false
-    @State private var isDividerHovered: Bool = false
-    @State private var isDividerDragging: Bool = false
-    @State private var dragStartWidth: CGFloat? = nil
     @State private var isAudioNote: Bool = false
     @State private var showMissingKeyAlert: Bool = false
 
@@ -197,7 +194,7 @@ public struct NotesView: View {
                 Spacer()
 
                 // Collapse sidebar button
-                NotesSidebarToggleButton(collapsed: false) {
+                ListSidebarToggleButton(collapsed: false, listName: "笔记列表") {
                     state.toggleNotesList()
                 }
             }
@@ -460,7 +457,7 @@ public struct NotesView: View {
         VStack(spacing: 0) {
             if state.isNotesListCollapsed {
                 HStack {
-                    NotesSidebarToggleButton(collapsed: true) {
+                    ListSidebarToggleButton(collapsed: true, listName: "笔记列表") {
                         state.toggleNotesList()
                     }
                     Spacer()
@@ -509,7 +506,7 @@ public struct NotesView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .center, spacing: 10) {
                         if state.isNotesListCollapsed {
-                            NotesSidebarToggleButton(collapsed: true) {
+                            ListSidebarToggleButton(collapsed: true, listName: "笔记列表") {
                                 state.toggleNotesList()
                             }
                         }
@@ -777,7 +774,7 @@ public struct NotesView: View {
         }
         .overlay(alignment: .topLeading) {
             if note.draft && !isNamingDraft && state.isNotesListCollapsed {
-                NotesSidebarToggleButton(collapsed: true) {
+                ListSidebarToggleButton(collapsed: true, listName: "笔记列表") {
                     state.toggleNotesList()
                 }
                 .padding(4)
@@ -842,45 +839,14 @@ public struct NotesView: View {
     private static let splitSpace = "notesSplit"
 
     private var dividerHandle: some View {
-        Rectangle()
-            .fill(
-                isDividerDragging || isDividerHovered
-                    ? state.effectiveAccentColor.opacity(0.8)
-                    : Color(nsColor: .separatorColor).opacity(0.6)
-            )
-            .frame(width: 1)
-            // 用 overlay 撑命中区：改 padding 会占布局，分隔条会变成三条线
-            .overlay {
-                Color.clear
-                    .frame(width: 8)
-                    .contentShape(Rectangle())
-            }
-            .onHover { hovering in
-                isDividerHovered = hovering
-                (hovering ? NSCursor.resizeLeftRight : NSCursor.arrow).set()
-            }
-            .gesture(
-                // 取父坐标系位移：.local 随手柄自身移动，位移反馈回自己会抖动
-                DragGesture(minimumDistance: 1, coordinateSpace: .named(Self.splitSpace))
-                    .onChanged { value in
-                        isDividerDragging = true
-                        let base = dragStartWidth ?? state.notesListWidth
-                        dragStartWidth = base
-                        let target = base + (value.location.x - value.startLocation.x)
-                        state.notesListWidth = min(max(target, 200), 500)
-                    }
-                    .onEnded { _ in
-                        isDividerDragging = false
-                        dragStartWidth = nil
-                        state.savePreferences()
-                    }
-            )
-            .onTapGesture(count: 2) {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    state.notesListWidth = 280
-                    state.savePreferences()
-                }
-            }
+        ResizableDivider(
+            width: $state.notesListWidth,
+            allowedWidth: 200...500,
+            defaultWidth: 280,
+            coordinateSpaceName: Self.splitSpace,
+            accentColor: state.effectiveAccentColor,
+            onCommit: state.savePreferences
+        )
     }
 
     // MARK: - Actions
@@ -1169,36 +1135,6 @@ public struct NotesView: View {
             }
         }
         return handled
-    }
-}
-
-// MARK: - Notes Sidebar Toggle Button
-
-public struct NotesSidebarToggleButton: View {
-    let collapsed: Bool
-    let action: () -> Void
-    @State private var isHovered = false
-
-    public init(collapsed: Bool, action: @escaping () -> Void) {
-        self.collapsed = collapsed
-        self.action = action
-    }
-
-    public var body: some View {
-        Button(action: action) {
-            Image(systemName: "sidebar.left")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(isHovered ? .primary : .secondary)
-                .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help(collapsed ? "展开笔记列表" : "收起笔记列表")
     }
 }
 

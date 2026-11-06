@@ -441,6 +441,76 @@ public final class Vault: @unchecked Sendable {
         onEvent?(VaultEvent(op: "delete", path: path, entityId: id, type: .note))
     }
 
+    /// Renames a tag across notes and tasks.
+    /// - Parameters:
+    ///   - oldTag: The existing tag name (case-insensitive match)
+    ///   - newTag: The new tag name
+    /// - Returns: The count of modified entities
+    @discardableResult
+    public func renameTag(from oldTag: String, to newTag: String) throws -> Int {
+        let trimmedOld = oldTag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        let trimmedNew = newTag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        guard !trimmedOld.isEmpty else {
+            throw SchemaError.validationError(field: "oldTag", reason: "原标签名不能为空")
+        }
+        guard !trimmedNew.isEmpty else {
+            throw SchemaError.validationError(field: "newTag", reason: "新标签名不能为空")
+        }
+        guard trimmedOld != trimmedNew else {
+            return 0
+        }
+
+        let oldLower = trimmedOld.lowercased()
+        return try rewriteTags { tags in
+            var seen = Set<String>()
+            return tags.compactMap { tag in
+                let replacement = tag.lowercased() == oldLower ? trimmedNew : tag
+                return seen.insert(replacement.lowercased()).inserted ? replacement : nil
+            }
+        }
+    }
+
+    /// Removes a tag from all notes and tasks.
+    /// - Parameter tag: The tag name (case-insensitive match)
+    /// - Returns: The count of modified entities
+    @discardableResult
+    public func removeTag(named tag: String) throws -> Int {
+        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        guard !trimmed.isEmpty else {
+            throw SchemaError.validationError(field: "tag", reason: "标签名不能为空")
+        }
+
+        let lower = trimmed.lowercased()
+        return try rewriteTags { tags in
+            tags.filter { $0.lowercased() != lower }
+        }
+    }
+
+    private func rewriteTags(_ transform: ([String]) -> [String]) throws -> Int {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
+
+        var modifiedCount = 0
+
+        for note in index.listNotes() {
+            var updated = note
+            updated.tags = transform(note.tags)
+            guard updated.tags != note.tags else { continue }
+            _ = try updateNote(updated)
+            modifiedCount += 1
+        }
+
+        for task in index.listTasks() {
+            var updated = task
+            updated.tags = transform(task.tags)
+            guard updated.tags != task.tags else { continue }
+            _ = try updateTask(updated)
+            modifiedCount += 1
+        }
+
+        return modifiedCount
+    }
+
     // MARK: - DayPlan CRUD
 
     public func getDayPlan(date: String) -> DayPlan {
@@ -494,7 +564,6 @@ public final class Vault: @unchecked Sendable {
         taskId: String? = nil,
         date: String? = nil,
         body: String,
-        tags: [String] = [],
         noteRefs: [String: String] = [:],
         source: String? = nil
     ) throws -> Activity {
@@ -503,12 +572,10 @@ public final class Vault: @unchecked Sendable {
 
         let activityId = ULID.generateActivityID()
         let now = Date()
-
         var act = Activity(
             id: activityId,
             at: now,
             by: source,
-            tags: tags,
             noteRefs: noteRefs,
             body: body,
             taskId: taskId
@@ -572,7 +639,6 @@ public final class Vault: @unchecked Sendable {
     public func updateActivity(
         id: String,
         body: String,
-        tags: [String]? = nil,
         noteRefs: [String: String]? = nil
     ) throws -> Activity {
         mutationLock.lock()
@@ -594,7 +660,6 @@ public final class Vault: @unchecked Sendable {
             }
 
             task.activities[idx].body = body
-            if let t = tags { task.activities[idx].tags = t }
             if let r = noteRefs { task.activities[idx].noteRefs = r }
             task.updatedAt = now
 
@@ -617,7 +682,6 @@ public final class Vault: @unchecked Sendable {
             }
 
             plan.activities[idx].body = body
-            if let t = tags { plan.activities[idx].tags = t }
             if let r = noteRefs { plan.activities[idx].noteRefs = r }
 
             let updatedAct = plan.activities[idx]
