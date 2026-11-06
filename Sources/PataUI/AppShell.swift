@@ -422,6 +422,36 @@ public struct SidebarToggleButton: View {
     }
 }
 
+public struct ListSidebarToggleButton: View {
+    let collapsed: Bool
+    let listName: String
+    let action: () -> Void
+    @State private var isHovered = false
+
+    public init(collapsed: Bool, listName: String, action: @escaping () -> Void) {
+        self.collapsed = collapsed
+        self.listName = listName
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isHovered ? .primary : .secondary)
+                .frame(width: 24, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(collapsed ? "展开\(listName)" : "收起\(listName)")
+    }
+}
+
 struct TopNavTabButton: View {
     let title: String
     let icon: String

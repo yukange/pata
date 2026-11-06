@@ -194,7 +194,7 @@ public struct NotesView: View {
                 Spacer()
 
                 // Collapse sidebar button
-                NotesSidebarToggleButton(collapsed: false) {
+                ListSidebarToggleButton(collapsed: false, listName: "笔记列表") {
                     state.toggleNotesList()
                 }
             }
@@ -457,7 +457,7 @@ public struct NotesView: View {
         VStack(spacing: 0) {
             if state.isNotesListCollapsed {
                 HStack {
-                    NotesSidebarToggleButton(collapsed: true) {
+                    ListSidebarToggleButton(collapsed: true, listName: "笔记列表") {
                         state.toggleNotesList()
                     }
                     Spacer()
@@ -506,7 +506,7 @@ public struct NotesView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .center, spacing: 10) {
                         if state.isNotesListCollapsed {
-                            NotesSidebarToggleButton(collapsed: true) {
+                            ListSidebarToggleButton(collapsed: true, listName: "笔记列表") {
                                 state.toggleNotesList()
                             }
                         }
@@ -774,7 +774,7 @@ public struct NotesView: View {
         }
         .overlay(alignment: .topLeading) {
             if note.draft && !isNamingDraft && state.isNotesListCollapsed {
-                NotesSidebarToggleButton(collapsed: true) {
+                ListSidebarToggleButton(collapsed: true, listName: "笔记列表") {
                     state.toggleNotesList()
                 }
                 .padding(4)
@@ -1135,36 +1135,6 @@ public struct NotesView: View {
             }
         }
         return handled
-    }
-}
-
-// MARK: - Notes Sidebar Toggle Button
-
-public struct NotesSidebarToggleButton: View {
-    let collapsed: Bool
-    let action: () -> Void
-    @State private var isHovered = false
-
-    public init(collapsed: Bool, action: @escaping () -> Void) {
-        self.collapsed = collapsed
-        self.action = action
-    }
-
-    public var body: some View {
-        Button(action: action) {
-            Image(systemName: "sidebar.left")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(isHovered ? .primary : .secondary)
-                .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help(collapsed ? "展开笔记列表" : "收起笔记列表")
     }
 }
 

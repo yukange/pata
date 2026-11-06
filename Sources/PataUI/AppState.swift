@@ -390,20 +390,19 @@ public final class AppState: ObservableObject {
 
     /// Renames a tag across the entire vault, updating in-memory selection,
     /// flushing the active note editor session, and refreshing UI state.
-    @discardableResult
-    public func renameTag(from oldTag: String, to newTag: String) throws -> Int {
+    public func renameTag(from oldTag: String, to newTag: String) throws {
         guard let vault = vault else {
             throw SchemaError.validationError(field: "vault", reason: "资料库未准备就绪")
         }
 
         let cleanOld = oldTag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
         let cleanNew = newTag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
-        guard cleanOld != cleanNew else { return 0 }
+        guard cleanOld != cleanNew else { return }
 
         // Save current note editing session before mutating tags on disk
         _ = noteEditor.save()
 
-        let count = try vault.renameTag(from: oldTag, to: newTag)
+        try vault.renameTag(from: oldTag, to: newTag)
 
         // If current selected tag was the old tag, update it
         if let selected = selectedTag, selected.caseInsensitiveCompare(cleanOld) == .orderedSame {
@@ -417,13 +416,11 @@ public final class AppState: ObservableObject {
 
         LogoAnimationCoordinator.shared.playSuccess()
         objectWillChange.send()
-        return count
     }
 
     /// Removes a tag across the entire vault, clearing the selection when needed
     /// and refreshing any active note that was modified on disk.
-    @discardableResult
-    public func removeTag(named tag: String) throws -> Int {
+    public func removeTag(named tag: String) throws {
         guard let vault = vault else {
             throw SchemaError.validationError(field: "vault", reason: "资料库未准备就绪")
         }
@@ -433,7 +430,7 @@ public final class AppState: ObservableObject {
         // Save current note editing session before mutating tags on disk
         _ = noteEditor.save()
 
-        let count = try vault.removeTag(named: tag)
+        try vault.removeTag(named: tag)
 
         if let selected = selectedTag, selected.caseInsensitiveCompare(cleanTag) == .orderedSame {
             selectedTag = nil
@@ -445,7 +442,6 @@ public final class AppState: ObservableObject {
 
         LogoAnimationCoordinator.shared.playSuccess()
         objectWillChange.send()
-        return count
     }
 
     // MARK: - MCP Management

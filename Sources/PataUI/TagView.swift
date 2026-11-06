@@ -27,11 +27,8 @@ public struct TagView: View {
         return tag
     }
 
-    private var allTagsWithCounts: [(tag: String, count: Int)] {
-        guard let v = state.vault else { return [] }
-        return v.index.listTags().map { t in
-            (tag: t.name, count: t.totalCount)
-        }
+    private var tagSummaries: [TagSummary] {
+        state.vault?.index.listTags() ?? []
     }
 
     private var totalEntitiesCount: Int {
@@ -85,7 +82,7 @@ public struct TagView: View {
     // MARK: - Left Column (Tag List Sidebar)
 
     private var leftColumn: some View {
-        let tags = allTagsWithCounts
+        let tags = tagSummaries
 
         return VStack(spacing: 0) {
             // Top Action Bar
@@ -103,7 +100,7 @@ public struct TagView: View {
                 Spacer()
 
                 // Collapse sidebar button
-                TagSidebarToggleButton(collapsed: false) {
+                ListSidebarToggleButton(collapsed: false, listName: "标签列表") {
                     state.toggleTagList()
                 }
             }
@@ -133,17 +130,17 @@ public struct TagView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
                     } else {
-                        ForEach(tags, id: \.tag) { item in
-                            if editingTag == item.tag {
-                                inlineRenameRow(name: item.tag)
+                        ForEach(tags) { tag in
+                            if editingTag == tag.name {
+                                inlineRenameRow(name: tag.name)
                             } else {
                                 tagRow(
-                                    name: item.tag,
-                                    count: item.count,
-                                    isSelected: activeTag?.caseInsensitiveCompare(item.tag) == .orderedSame,
+                                    name: tag.name,
+                                    count: tag.totalCount,
+                                    isSelected: activeTag?.caseInsensitiveCompare(tag.name) == .orderedSame,
                                     isAll: false
                                 ) {
-                                    state.selectedTag = item.tag
+                                    state.selectedTag = tag.name
                                 }
                             }
                         }
@@ -333,7 +330,7 @@ public struct TagView: View {
                 // Header with Tag Chip & Counts
                 HStack(spacing: 8) {
                     if state.isTagListCollapsed {
-                        TagSidebarToggleButton(collapsed: true) {
+                        ListSidebarToggleButton(collapsed: true, listName: "标签列表") {
                             state.toggleTagList()
                         }
                     }
@@ -599,35 +596,5 @@ public struct TagView: View {
         editingTag = nil
         inlineTagName = ""
         focusedTag = nil
-    }
-}
-
-// MARK: - Tag Sidebar Toggle Button
-
-public struct TagSidebarToggleButton: View {
-    let collapsed: Bool
-    let action: () -> Void
-    @State private var isHovered = false
-
-    public init(collapsed: Bool, action: @escaping () -> Void) {
-        self.collapsed = collapsed
-        self.action = action
-    }
-
-    public var body: some View {
-        Button(action: action) {
-            Image(systemName: "sidebar.left")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(isHovered ? .primary : .secondary)
-                .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
-                )
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .help(collapsed ? "展开标签列表" : "收起标签列表")
     }
 }

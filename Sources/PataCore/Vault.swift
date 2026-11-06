@@ -460,53 +460,14 @@ public final class Vault: @unchecked Sendable {
             return 0
         }
 
-        mutationLock.lock()
-        defer { mutationLock.unlock() }
-
         let oldLower = trimmedOld.lowercased()
-        var modifiedCount = 0
-
-        // Helper to replace tag in an array of tags preserving order and deduplicating
-        func updateTags(_ tags: [String]) -> (updated: [String], changed: Bool) {
-            var newTags: [String] = []
+        return try rewriteTags { tags in
             var seen = Set<String>()
-            for t in tags {
-                if t.lowercased() == oldLower {
-                    if !seen.contains(trimmedNew.lowercased()) {
-                        newTags.append(trimmedNew)
-                        seen.insert(trimmedNew.lowercased())
-                    }
-                } else {
-                    if !seen.contains(t.lowercased()) {
-                        newTags.append(t)
-                        seen.insert(t.lowercased())
-                    }
-                }
+            return tags.compactMap { tag in
+                let replacement = tag.lowercased() == oldLower ? trimmedNew : tag
+                return seen.insert(replacement.lowercased()).inserted ? replacement : nil
             }
-            return (newTags, newTags != tags)
         }
-
-        // 1. Update Notes
-        for note in index.listNotes() {
-            let (updatedTags, changed) = updateTags(note.tags)
-            guard changed else { continue }
-            var n = note
-            n.tags = updatedTags
-            _ = try updateNote(n)
-            modifiedCount += 1
-        }
-
-        // 2. Update Tasks
-        for task in index.listTasks() {
-            let (updatedTags, changed) = updateTags(task.tags)
-            guard changed else { continue }
-            var t = task
-            t.tags = updatedTags
-            _ = try updateTask(t)
-            modifiedCount += 1
-        }
-
-        return modifiedCount
     }
 
     /// Removes a tag from all notes and tasks.
@@ -519,32 +480,31 @@ public final class Vault: @unchecked Sendable {
             throw SchemaError.validationError(field: "tag", reason: "标签名不能为空")
         }
 
+        let lower = trimmed.lowercased()
+        return try rewriteTags { tags in
+            tags.filter { $0.lowercased() != lower }
+        }
+    }
+
+    private func rewriteTags(_ transform: ([String]) -> [String]) throws -> Int {
         mutationLock.lock()
         defer { mutationLock.unlock() }
 
-        let lower = trimmed.lowercased()
         var modifiedCount = 0
 
-        func removingTag(_ tags: [String]) -> (updated: [String], changed: Bool) {
-            let updated = tags.filter { $0.lowercased() != lower }
-            return (updated, updated != tags)
-        }
-
         for note in index.listNotes() {
-            let (updatedTags, changed) = removingTag(note.tags)
-            guard changed else { continue }
-            var n = note
-            n.tags = updatedTags
-            _ = try updateNote(n)
+            var updated = note
+            updated.tags = transform(note.tags)
+            guard updated.tags != note.tags else { continue }
+            _ = try updateNote(updated)
             modifiedCount += 1
         }
 
         for task in index.listTasks() {
-            let (updatedTags, changed) = removingTag(task.tags)
-            guard changed else { continue }
-            var t = task
-            t.tags = updatedTags
-            _ = try updateTask(t)
+            var updated = task
+            updated.tags = transform(task.tags)
+            guard updated.tags != task.tags else { continue }
+            _ = try updateTask(updated)
             modifiedCount += 1
         }
 
