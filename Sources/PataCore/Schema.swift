@@ -155,12 +155,6 @@ public struct SchemaValidator {
                 throw SchemaError.validationError(field: "activities[\(idx)].id", reason: "duplicate activity ID '\(id)' in same entity", path: path)
             }
             seen.insert(id)
-
-            for (tagIdx, tag) in act.tags.enumerated() {
-                if tag.contains("#") {
-                    throw SchemaError.validationError(field: "activities[\(idx)].tags[\(tagIdx)]", reason: "must not contain '#'; got '\(tag)'", path: path)
-                }
-            }
         }
     }
 }

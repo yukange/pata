@@ -81,4 +81,21 @@ struct ThemeTests {
         state.accentColorHex = ""
         #expect(state.customAccentColor == nil)
     }
+
+    @Test("AppState tag list sidebar width and toggle collapse")
+    @MainActor
+    func appStateTagListSidebar() {
+        let state = AppState(loadPreferences: false)
+        #expect(state.tagListWidth == 220)
+        #expect(state.isTagListCollapsed == false)
+
+        state.toggleTagList()
+        #expect(state.isTagListCollapsed == true)
+
+        state.toggleTagList()
+        #expect(state.isTagListCollapsed == false)
+
+        state.tagListWidth = 300
+        #expect(state.tagListWidth == 300)
+    }
 }

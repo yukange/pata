@@ -5,6 +5,19 @@ import PataCore
 public struct TagView: View {
     @ObservedObject var state: AppState
 
+    @State private var hoveredTag: String? = nil
+
+    // In-place Tag Rename State
+    @State private var editingTag: String? = nil
+    @State private var inlineTagName: String = ""
+    @FocusState private var focusedTag: String?
+    @State private var tagErrorMessage: String? = nil
+    @State private var showTagErrorAlert: Bool = false
+    @State private var tagPendingRemoval: String? = nil
+    @State private var showRemoveTagConfirm: Bool = false
+
+    private static let splitSpace = "tagSplit"
+
     public init(state: AppState) {
         self.state = state
     }
@@ -14,6 +27,17 @@ public struct TagView: View {
         return tag
     }
 
+    private var allTagsWithCounts: [(tag: String, count: Int)] {
+        guard let v = state.vault else { return [] }
+        return v.index.listTags().map { t in
+            (tag: t.name, count: t.totalCount)
+        }
+    }
+
+    private var totalEntitiesCount: Int {
+        state.vault?.index.listAllEntities().count ?? 0
+    }
+
     private var items: [EntityRef] {
         guard let v = state.vault else { return [] }
         if let activeTag { return v.index.findByTag(activeTag) }
@@ -21,12 +45,285 @@ public struct TagView: View {
     }
 
     public var body: some View {
+        HStack(spacing: 0) {
+            // Left Column: Tag List (resizable width)
+            if !state.isTagListCollapsed {
+                leftColumn
+                    .frame(width: state.tagListWidth)
+                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.4))
+                    .transition(.move(edge: .leading))
+
+                // Resizer Divider
+                dividerHandle
+            }
+
+            // Right Column: Tag Items List
+            rightColumn
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .coordinateSpace(.named(Self.splitSpace))
+
+        .alert("标签操作失败", isPresented: $showTagErrorAlert) {
+            Button("确定", role: .cancel) {
+                tagErrorMessage = nil
+            }
+        } message: {
+            Text(tagErrorMessage ?? "无法完成标签操作")
+        }
+        .confirmationDialog("移除标签", isPresented: $showRemoveTagConfirm, presenting: tagPendingRemoval) { tag in
+            Button("移除「#\(tag)」", role: .destructive) {
+                removeTag(tag)
+            }
+            Button("取消", role: .cancel) {
+                tagPendingRemoval = nil
+            }
+        } message: { tag in
+            Text("将从所有任务和笔记中移除「#\(tag)」，此操作不可撤销。")
+        }
+    }
+
+    // MARK: - Left Column (Tag List Sidebar)
+
+    private var leftColumn: some View {
+        let tags = allTagsWithCounts
+
+        return VStack(spacing: 0) {
+            // Top Action Bar
+            HStack {
+                HStack(spacing: 6) {
+                    Text("全部标签")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.primary)
+
+                    Text("\(tags.count)")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                // Collapse sidebar button
+                TagSidebarToggleButton(collapsed: false) {
+                    state.toggleTagList()
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
+            // Scrollable Tag List
+            ScrollView {
+                VStack(spacing: 2) {
+                    // "全部" virtual entry
+                    tagRow(
+                        name: "全部",
+                        count: totalEntitiesCount,
+                        isSelected: activeTag == nil,
+                        isAll: true
+                    ) {
+                        state.selectedTag = nil
+                    }
+
+                    if tags.isEmpty {
+                        Text("暂无标签")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .italic()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                    } else {
+                        ForEach(tags, id: \.tag) { item in
+                            if editingTag == item.tag {
+                                inlineRenameRow(name: item.tag)
+                            } else {
+                                tagRow(
+                                    name: item.tag,
+                                    count: item.count,
+                                    isSelected: activeTag?.caseInsensitiveCompare(item.tag) == .orderedSame,
+                                    isAll: false
+                                ) {
+                                    state.selectedTag = item.tag
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+            }
+        }
+    }
+
+    private func tagRow(
+        name: String,
+        count: Int,
+        isSelected: Bool,
+        isAll: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        let isHovered = hoveredTag == name
+
+        return HStack(spacing: 4) {
+            Button(action: action) {
+                HStack(spacing: 6) {
+                    if !isAll {
+                        Text("#")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(isSelected ? state.effectiveAccentColor : .secondary)
+                    } else {
+                        Image(systemName: "number")
+                            .font(.system(size: 11))
+                            .foregroundColor(isSelected ? state.effectiveAccentColor : .secondary)
+                    }
+
+                    Text(name)
+                        .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                        .foregroundColor(isSelected ? .primary : Color(nsColor: .labelColor).opacity(0.85))
+                        .lineLimit(1)
+
+                    Spacer(minLength: 4)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isHovered && !isAll {
+                Menu {
+                    Button("修改名称") {
+                        startInlineRename(name)
+                    }
+                    Divider()
+                    Button("复制标签名") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(name, forType: .string)
+                    }
+                    Divider()
+                    Button("移除标签", role: .destructive) {
+                        tagPendingRemoval = name
+                        showRemoveTagConfirm = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.secondary)
+                        .frame(width: 18, height: 18)
+                        .background(
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.primary.opacity(0.08))
+                        )
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("标签操作")
+            } else {
+                Text("\(count)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isSelected ? Color.stoneSelectedBg : (isHovered ? Color.primary.opacity(0.04) : Color.clear))
+        )
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            if hovering {
+                hoveredTag = name
+            } else if hoveredTag == name {
+                hoveredTag = nil
+            }
+        }
+    }
+
+    private func inlineRenameRow(name: String) -> some View {
+        HStack(spacing: 4) {
+            Text("#")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(state.effectiveAccentColor)
+
+            TextField("标签名称", text: $inlineTagName)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, weight: .medium))
+                .focused($focusedTag, equals: name)
+                .onSubmit {
+                    commitInlineRename(from: name)
+                }
+                .onExitCommand {
+                    cancelInlineRename()
+                }
+
+            Spacer(minLength: 2)
+
+            Button(action: {
+                commitInlineRename(from: name)
+            }) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(state.effectiveAccentColor)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(state.effectiveAccentColor.opacity(0.12))
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("保存 (Enter)")
+
+            Button(action: {
+                cancelInlineRename()
+            }) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 18, height: 18)
+                    .background(
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.primary.opacity(0.06))
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("取消 (Esc)")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(state.effectiveAccentColor, lineWidth: 1.5)
+        )
+    }
+
+    // MARK: - Resizer Divider Handle
+
+    private var dividerHandle: some View {
+        ResizableDivider(
+            width: $state.tagListWidth,
+            allowedWidth: 160...450,
+            defaultWidth: 220,
+            coordinateSpaceName: Self.splitSpace,
+            accentColor: state.effectiveAccentColor,
+            onCommit: state.savePreferences
+        )
+    }
+
+    // MARK: - Right Column (Tag Items)
+
+    private var rightColumn: some View {
         let items = self.items
-        let counts = items.reduce(into: (task: 0, note: 0, activity: 0)) { acc, item in
+        let counts = items.reduce(into: (task: 0, note: 0)) { acc, item in
             switch item.type {
             case .task: acc.task += 1
             case .note: acc.note += 1
-            case .activity: acc.activity += 1
             default: break
             }
         }
@@ -35,9 +332,15 @@ public struct TagView: View {
             VStack(alignment: .leading, spacing: 16) {
                 // Header with Tag Chip & Counts
                 HStack(spacing: 8) {
-                    tagFilter
+                    if state.isTagListCollapsed {
+                        TagSidebarToggleButton(collapsed: true) {
+                            state.toggleTagList()
+                        }
+                    }
 
-                    Text("共 \(items.count) 项（任务 \(counts.task) · 笔记 \(counts.note) · 记录 \(counts.activity)）")
+                    activeTagDisplay
+
+                    Text("共 \(items.count) 项（任务 \(counts.task) · 笔记 \(counts.note)）")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
 
@@ -53,7 +356,7 @@ public struct TagView: View {
                         Image(systemName: "number")
                             .font(.system(size: 32))
                             .foregroundColor(.secondary.opacity(0.3))
-                        Text(activeTag == nil ? "暂无任务、笔记或记录" : "该标签下暂无内容")
+                        Text(activeTag == nil ? "暂无任务或笔记" : "该标签下暂无内容")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                         Spacer()
@@ -63,15 +366,10 @@ public struct TagView: View {
                 } else {
                     LazyVStack(spacing: 10) {
                         ForEach(items, id: \.id) { item in
-                            switch item.type {
-                            case .task:
+                            if item.type == .task {
                                 taskCard(item)
-                            case .note:
+                            } else {
                                 noteCard(item)
-                            case .activity:
-                                activityCard(item)
-                            default:
-                                EmptyView()
                             }
                         }
                     }
@@ -81,32 +379,23 @@ public struct TagView: View {
             .frame(maxWidth: 900)
             .frame(maxWidth: .infinity)
         }
+        .id(activeTag ?? "__all__")
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // 侧栏收起时仍可选择资料库中的真实标签。
-    private var tagFilter: some View {
-        Menu {
-            Button("全部") { state.selectedTag = nil }
-            Divider()
-            ForEach(state.vault?.index.listTags() ?? [], id: \.name) { tag in
-                Button("#\(tag.name)（\(tag.totalCount)）") { state.selectedTag = tag.name }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: "number")
-                Text(activeTag ?? "全部").lineLimit(1)
-                    .frame(maxWidth: 220, alignment: .leading)
-            }
-            .font(.system(size: 14, weight: .semibold))
-            .padding(.horizontal, 10).padding(.vertical, 4)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color.stoneTagBg))
-            .foregroundColor(.emeraldColor)
-            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.emeraldColor.opacity(0.3), lineWidth: 1))
+    private var activeTagDisplay: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "number")
+            Text(activeTag ?? "全部").lineLimit(1)
+                .frame(maxWidth: 220, alignment: .leading)
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .accessibilityLabel("筛选标签")
+        .font(.system(size: 14, weight: .semibold))
+        .padding(.horizontal, 10).padding(.vertical, 4)
+        .background(RoundedRectangle(cornerRadius: 6).fill(Color.stoneTagBg))
+        .foregroundColor(.emeraldColor)
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.emeraldColor.opacity(0.3), lineWidth: 1))
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityLabel("当前标签")
     }
 
     // MARK: - Task Card
@@ -244,80 +533,6 @@ public struct TagView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Activity Card
-
-    private func activityCard(_ item: EntityRef) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header Row
-            HStack {
-                HStack(spacing: 6) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "bubble.left")
-                            .font(.system(size: 10))
-                        Text("记录")
-                            .font(.system(size: 11, weight: .medium))
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(RoundedRectangle(cornerRadius: 4).fill(Color.orange.opacity(0.1)))
-                    .foregroundColor(.orange)
-                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.orange.opacity(0.3), lineWidth: 1))
-
-                    if item.inherited {
-                        Text("经父任务")
-                            .font(.system(size: 11, weight: .medium))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(RoundedRectangle(cornerRadius: 4).fill(Color.orange.opacity(0.15)))
-                            .foregroundColor(.orange)
-                    }
-
-                    if let taskId = item.taskId {
-                        Text("所属任务: \(item.title ?? taskId)")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    } else {
-                        // 所属计划：path 为 plans/YYYY-MM-DD.md，可能是任意一天，不一定是今天。
-                        Text("计划 \(URL(fileURLWithPath: item.path).deletingPathExtension().lastPathComponent)")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Spacer()
-
-                Text(formatItemTime(item.time))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.secondary)
-            }
-
-            Text(item.snippet ?? "（无正文内容）")
-                .font(.system(size: 14))
-                .foregroundColor(.primary)
-                .lineLimit(3)
-                .lineSpacing(2)
-
-            HStack {
-                Spacer()
-                Button(action: { state.openSearchResult(item) }) {
-                    HStack(spacing: 3) {
-                        Text(item.taskId == nil ? "查看当日记录" : "查看任务")
-                            .font(.system(size: 11))
-                        Image(systemName: "arrow.up.right")
-                            .font(.system(size: 9))
-                    }
-                    .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.top, 2)
-        }
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(nsColor: .separatorColor).opacity(0.6), lineWidth: 1))
-    }
-
     private func formatItemTime(_ date: Date) -> String {
         let cal = Calendar.current
         let formatter = DateFormatter()
@@ -331,5 +546,88 @@ public struct TagView: View {
             formatter.dateFormat = "yyyy-MM-dd HH:mm"
             return formatter.string(from: date)
         }
+    }
+
+    // MARK: - Inline Rename Tag Helpers
+
+    private func startInlineRename(_ tag: String) {
+        editingTag = tag
+        inlineTagName = tag
+        DispatchQueue.main.async {
+            focusedTag = tag
+        }
+    }
+
+    private func commitInlineRename(from oldTag: String) {
+        let submittedName = inlineTagName
+        NSApp.keyWindow?.makeFirstResponder(nil)
+
+        let cleanOld = oldTag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        let cleanNew = submittedName.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+
+        guard !cleanNew.isEmpty else {
+            tagErrorMessage = "标签名称不能为空"
+            showTagErrorAlert = true
+            return
+        }
+
+        if cleanOld == cleanNew {
+            cancelInlineRename()
+            return
+        }
+
+        do {
+            try state.renameTag(from: cleanOld, to: cleanNew)
+            cancelInlineRename()
+        } catch {
+            tagErrorMessage = error.localizedDescription
+            showTagErrorAlert = true
+        }
+    }
+
+    private func removeTag(_ tag: String) {
+        defer { tagPendingRemoval = nil }
+        do {
+            try state.removeTag(named: tag)
+        } catch {
+            tagErrorMessage = error.localizedDescription
+            showTagErrorAlert = true
+        }
+    }
+
+    private func cancelInlineRename() {
+        editingTag = nil
+        inlineTagName = ""
+        focusedTag = nil
+    }
+}
+
+// MARK: - Tag Sidebar Toggle Button
+
+public struct TagSidebarToggleButton: View {
+    let collapsed: Bool
+    let action: () -> Void
+    @State private var isHovered = false
+
+    public init(collapsed: Bool, action: @escaping () -> Void) {
+        self.collapsed = collapsed
+        self.action = action
+    }
+
+    public var body: some View {
+        Button(action: action) {
+            Image(systemName: "sidebar.left")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(isHovered ? .primary : .secondary)
+                .frame(width: 24, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .help(collapsed ? "展开标签列表" : "收起标签列表")
     }
 }

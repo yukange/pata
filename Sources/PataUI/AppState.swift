@@ -72,6 +72,8 @@ public final class AppState: ObservableObject {
 
     // Tag View Context
     @Published public var selectedTag: String?
+    @Published public var tagListWidth: CGFloat = 220
+    @Published public var isTagListCollapsed: Bool = false
 
     // Vault
     @Published public private(set) var vault: Vault?
@@ -164,6 +166,12 @@ public final class AppState: ObservableObject {
         if let nCollapsed = json["is_notes_list_collapsed"] as? Bool {
             self.isNotesListCollapsed = nCollapsed
         }
+        if let tWidth = json["tag_list_width"] as? CGFloat, tWidth >= 160, tWidth <= 450 {
+            self.tagListWidth = tWidth
+        }
+        if let tCollapsed = json["is_tag_list_collapsed"] as? Bool {
+            self.isTagListCollapsed = tCollapsed
+        }
 
         if let vPath = json["vault_path"] as? String, !vPath.isEmpty {
             openVault(path: vPath, persist: false)
@@ -193,6 +201,8 @@ public final class AppState: ObservableObject {
             "is_sidebar_visible": isSidebarVisible,
             "notes_list_width": notesListWidth,
             "is_notes_list_collapsed": isNotesListCollapsed,
+            "tag_list_width": tagListWidth,
+            "is_tag_list_collapsed": isTagListCollapsed,
             "mcp_enabled": mcpStatus.enabled
         ]
         if let v = vault {
@@ -220,6 +230,13 @@ public final class AppState: ObservableObject {
     public func toggleNotesList() {
         withAnimation(.easeInOut(duration: 0.2)) {
             self.isNotesListCollapsed.toggle()
+        }
+        self.savePreferences()
+    }
+
+    public func toggleTagList() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            self.isTagListCollapsed.toggle()
         }
         self.savePreferences()
     }
@@ -371,10 +388,64 @@ public final class AppState: ObservableObject {
         }
     }
 
-    public func navigateToTag(_ tag: String) {
-        self.selectedTag = tag
-        self.currentNav = .tags
-        self.showSearch = false
+    /// Renames a tag across the entire vault, updating in-memory selection,
+    /// flushing the active note editor session, and refreshing UI state.
+    @discardableResult
+    public func renameTag(from oldTag: String, to newTag: String) throws -> Int {
+        guard let vault = vault else {
+            throw SchemaError.validationError(field: "vault", reason: "资料库未准备就绪")
+        }
+
+        let cleanOld = oldTag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        let cleanNew = newTag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+        guard cleanOld != cleanNew else { return 0 }
+
+        // Save current note editing session before mutating tags on disk
+        _ = noteEditor.save()
+
+        let count = try vault.renameTag(from: oldTag, to: newTag)
+
+        // If current selected tag was the old tag, update it
+        if let selected = selectedTag, selected.caseInsensitiveCompare(cleanOld) == .orderedSame {
+            selectedTag = cleanNew
+        }
+
+        // If active note being edited was modified on disk, reload its updated tags into session
+        if let noteId = selectedNoteId, let updatedNote = vault.index.getNote(noteId) {
+            noteEditor.acceptSavedNote(updatedNote, in: vault)
+        }
+
+        LogoAnimationCoordinator.shared.playSuccess()
+        objectWillChange.send()
+        return count
+    }
+
+    /// Removes a tag across the entire vault, clearing the selection when needed
+    /// and refreshing any active note that was modified on disk.
+    @discardableResult
+    public func removeTag(named tag: String) throws -> Int {
+        guard let vault = vault else {
+            throw SchemaError.validationError(field: "vault", reason: "资料库未准备就绪")
+        }
+
+        let cleanTag = tag.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: "#", with: "")
+
+        // Save current note editing session before mutating tags on disk
+        _ = noteEditor.save()
+
+        let count = try vault.removeTag(named: tag)
+
+        if let selected = selectedTag, selected.caseInsensitiveCompare(cleanTag) == .orderedSame {
+            selectedTag = nil
+        }
+
+        if let noteId = selectedNoteId, let updatedNote = vault.index.getNote(noteId) {
+            noteEditor.acceptSavedNote(updatedNote, in: vault)
+        }
+
+        LogoAnimationCoordinator.shared.playSuccess()
+        objectWillChange.send()
+        return count
     }
 
     // MARK: - MCP Management

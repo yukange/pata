@@ -136,7 +136,6 @@ public struct TodayView: View {
         let taskTitle: String?
         let taskId: String?
         let text: String
-        let tags: [String]
         var noteRefs: [String: String] = [:]
     }
 
@@ -159,7 +158,6 @@ public struct TodayView: View {
                 taskTitle: nil,
                 taskId: nil,
                 text: act.body,
-                tags: act.tags,
                 noteRefs: act.noteRefs
             ))
         }
@@ -178,7 +176,6 @@ public struct TodayView: View {
                         taskTitle: t.title,
                         taskId: t.id,
                         text: act.body,
-                        tags: act.tags,
                         noteRefs: act.noteRefs
                     ))
                 }
@@ -202,8 +199,7 @@ public struct TodayView: View {
                         author: authorStr,
                         taskTitle: t.title,
                         taskId: t.id,
-                        text: "",
-                        tags: []
+                        text: ""
                     ))
                 }
             }
@@ -218,8 +214,7 @@ public struct TodayView: View {
                         author: "由我完成",
                         taskTitle: t.title,
                         taskId: t.id,
-                        text: "",
-                        tags: []
+                        text: ""
                     ))
                 }
             }
@@ -234,8 +229,7 @@ public struct TodayView: View {
                     author: author,
                     taskTitle: t.title,
                     taskId: t.id,
-                    text: "",
-                    tags: []
+                    text: ""
                 ))
             }
         }
@@ -890,19 +884,6 @@ public struct TodayView: View {
                     .padding(.top, 2)
             }
 
-            if !item.tags.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(item.tags, id: \.self) { t in
-                        Button(action: { state.navigateToTag(t) }) {
-                            Text("#\(t)")
-                                .font(.system(size: 11))
-                                .foregroundColor(.accentColor)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.top, 2)
-            }
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
